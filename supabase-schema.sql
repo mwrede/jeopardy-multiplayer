@@ -40,8 +40,7 @@ CREATE TABLE players (
 
 CREATE INDEX idx_players_game_id ON players(game_id);
 
--- Add foreign key back-references now that players table exists
-ALTER TABLE games ADD CONSTRAINT fk_current_clue FOREIGN KEY (current_clue_id) REFERENCES clues(id) DEFERRABLE INITIALLY DEFERRED;
+-- Add player back-reference (players exists now)
 ALTER TABLE games ADD CONSTRAINT fk_current_player FOREIGN KEY (current_player_id) REFERENCES players(id) DEFERRABLE INITIALLY DEFERRED;
 
 -- Categories table
@@ -71,6 +70,9 @@ CREATE TABLE clues (
 );
 
 CREATE INDEX idx_clues_category ON clues(category_id);
+
+-- Add clue back-reference (clues exists now)
+ALTER TABLE games ADD CONSTRAINT fk_current_clue FOREIGN KEY (current_clue_id) REFERENCES clues(id) DEFERRABLE INITIALLY DEFERRED;
 
 -- Buzzes table
 CREATE TABLE buzzes (
