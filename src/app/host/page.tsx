@@ -54,8 +54,7 @@ export default function HostPage() {
     setCreating(true)
     try {
       const settings = mode === 'casual' ? DEFAULT_CASUAL_SETTINGS : DEFAULT_STRICT_SETTINGS
-      // Create game with a host name (the TV doesn't play, just displays)
-      const { game } = await createGame('TV-HOST', settings)
+      const { game } = await createGame(settings)
       // Redirect to the display view
       router.push(`/game/${game.room_code}/display`)
     } catch (e) {

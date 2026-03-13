@@ -11,10 +11,10 @@ function generateRoomCode(): string {
   return code
 }
 
-export async function createGame(playerName: string, settings: GameSettings) {
+export async function createGame(settings: GameSettings) {
   const roomCode = generateRoomCode()
 
-  // Create the game
+  // Create the game (no player — TV host is just a display)
   const { data: game, error: gameError } = await supabase
     .from('games')
     .insert({
@@ -29,21 +29,7 @@ export async function createGame(playerName: string, settings: GameSettings) {
 
   if (gameError) throw gameError
 
-  // Add the creating player
-  const { data: player, error: playerError } = await supabase
-    .from('players')
-    .insert({
-      game_id: game.id,
-      name: playerName,
-      join_order: 1,
-      is_ready: false,
-    })
-    .select()
-    .single()
-
-  if (playerError) throw playerError
-
-  return { game: game as Game, player: player as Player }
+  return { game: game as Game }
 }
 
 export async function joinGame(roomCode: string, playerName: string) {
