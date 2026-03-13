@@ -147,7 +147,7 @@ DECLARE
 BEGIN
     -- Pick 6 random categories from the pool for round 1
     FOR v_cat_record IN (
-        SELECT DISTINCT category
+        SELECT category
         FROM clue_pool
         WHERE round = 'Jeopardy Round'
         GROUP BY category
@@ -182,7 +182,7 @@ BEGIN
     v_position := 0;
     v_values := ARRAY[400, 800, 1200, 1600, 2000];
     FOR v_cat_record IN (
-        SELECT DISTINCT category
+        SELECT category
         FROM clue_pool
         WHERE round = 'Double Jeopardy'
         GROUP BY category
