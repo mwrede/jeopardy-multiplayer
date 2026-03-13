@@ -9,14 +9,9 @@ import { useState, useRef } from 'react'
 /**
  * PLAYER VIEW (Phone)
  *
- * Jackbox-style phone controller. Shows:
- * - Lobby: ready up button
- * - Board selection: miniature board for the active selector
- * - Clue active: buzzer button
- * - Buzzed in: answer input
- * - Daily Double: wager input
- * - Final Jeopardy: wager then answer
- * - Scores at all times
+ * Jackbox-style phone controller.
+ * All actions just write to the DB — the useGameChannel hook
+ * picks up changes via postgres_changes + polling and syncs all clients.
  */
 
 const ROUND_VALUES: Record<number, number[]> = {
@@ -36,52 +31,76 @@ export default function PlayerPage() {
     myPlayerId,
     isMyTurn,
     connected,
-    syncAndBroadcast,
+    refreshState,
   } = useGameChannel(roomCode)
 
   const [answer, setAnswer] = useState('')
   const [wager, setWager] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Wrap game actions: do the action, then sync everyone
+  // Actions: just write to DB, then trigger an immediate refresh
   async function handleReady() {
     if (!myPlayer) return
-    await setReady(myPlayer.id, !myPlayer.is_ready)
-    await syncAndBroadcast()
+    try {
+      await setReady(myPlayer.id, !myPlayer.is_ready)
+      await refreshState()
+    } catch (e) {
+      console.error('Ready failed:', e)
+    }
   }
 
   async function handleStartGame() {
     if (!game) return
-    await startGame(game.id)
-    await syncAndBroadcast()
+    try {
+      await startGame(game.id)
+      await refreshState()
+    } catch (e) {
+      console.error('Start game failed:', e)
+    }
   }
 
   async function handleSelectClue(clueId: string) {
     if (!game || !myPlayer) return
-    await selectClue(game.id, clueId, myPlayer.id)
-    await syncAndBroadcast()
+    try {
+      await selectClue(game.id, clueId, myPlayer.id)
+      await refreshState()
+    } catch (e) {
+      console.error('Select clue failed:', e)
+    }
   }
 
   async function handleBuzz() {
     if (!game || !myPlayer || !game.current_clue_id) return
-    await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
-    await syncAndBroadcast()
+    try {
+      await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
+      await refreshState()
+    } catch (e) {
+      console.error('Buzz failed:', e)
+    }
   }
 
   async function handleSubmitAnswer() {
     if (!game || !myPlayer || !game.current_clue_id || !answer.trim()) return
-    await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
-    setAnswer('')
-    await syncAndBroadcast()
+    try {
+      await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
+      setAnswer('')
+      await refreshState()
+    } catch (e) {
+      console.error('Submit answer failed:', e)
+    }
   }
 
   async function handleSubmitWager() {
     if (!game || !myPlayer) return
     const maxWager = Math.max(myPlayer.score, ROUND_VALUES[game.current_round]?.slice(-1)[0] || 1000)
     const w = parseInt(wager) || 5
-    await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
-    setWager('')
-    await syncAndBroadcast()
+    try {
+      await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
+      setWager('')
+      await refreshState()
+    } catch (e) {
+      console.error('Submit wager failed:', e)
+    }
   }
 
   // No game loaded yet
@@ -164,7 +183,6 @@ export default function PlayerPage() {
         </p>
 
         <div className="flex-1 grid grid-cols-6 gap-1">
-          {/* Category headers */}
           {roundCats.map((cat) => (
             <div key={cat.id} className="bg-jeopardy-blue rounded p-1 flex items-center justify-center">
               <span className="text-[8px] font-bold text-white uppercase text-center leading-tight">
@@ -173,7 +191,6 @@ export default function PlayerPage() {
             </div>
           ))}
 
-          {/* Cells */}
           {values.map((value) =>
             roundCats.map((cat) => {
               const clue = clues.find((c) => c.category_id === cat.id && c.value === value)
@@ -278,7 +295,6 @@ export default function PlayerPage() {
       )
     }
 
-    // Not the answering player
     const answerer = players.find((p) => p.id === game.current_player_id)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
@@ -330,7 +346,6 @@ export default function PlayerPage() {
   )
 }
 
-// Compact header for phone view
 function PlayerHeader({ myPlayer, game }: { myPlayer: { name: string; score: number }; game: { current_round: number } }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-black/30 rounded-b-xl">

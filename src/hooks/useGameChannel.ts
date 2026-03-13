@@ -14,20 +14,8 @@ interface GameState {
 }
 
 /**
- * Full game state snapshot broadcast to all clients.
- * This is the SINGLE source of truth for UI updates.
- * After any mutation, the acting client fetches state and broadcasts this.
- */
-interface FullSync {
-  type: 'full_sync'
-  game: Game
-  players: Player[]
-  categories: Category[]
-  clues: Clue[]
-}
-
-/**
- * Fetch the full game state from Supabase by game ID.
+ * Fetch the complete game state from the DB.
+ * This is the single source of truth.
  */
 async function fetchFullState(gameId: string) {
   const [gameRes, playersRes, categoriesRes, catIdsRes] = await Promise.all([
@@ -55,6 +43,15 @@ async function fetchFullState(gameId: string) {
   }
 }
 
+/**
+ * Core game state hook.
+ *
+ * Sync strategy (mirrors Jackbox's server-push model):
+ * 1. DB is the source of truth (like Jackbox's central server)
+ * 2. postgres_changes pushes DB updates to all subscribers automatically
+ * 3. Polling every 2s as a fallback to catch anything missed
+ * 4. Any client action = just write to DB, the push handles the rest
+ */
 export function useGameChannel(roomCode: string) {
   const [state, setState] = useState<GameState>({
     game: null,
@@ -66,14 +63,26 @@ export function useGameChannel(roomCode: string) {
   const [connected, setConnected] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const gameIdRef = useRef<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Load initial state + find the game ID from room code
+  // Full refresh from DB
+  const refreshState = useCallback(async () => {
+    const gameId = gameIdRef.current
+    if (!gameId) return
+
+    const fullState = await fetchFullState(gameId)
+    setState((s) => ({
+      ...s,
+      ...fullState,
+    }))
+  }, [])
+
+  // 1. Initial load: find the game by room code
   useEffect(() => {
     const playerId = localStorage.getItem('playerId')
     setState((s) => ({ ...s, myPlayerId: playerId }))
 
     async function loadState() {
-      // Find game by room code
       const { data: game } = await supabase
         .from('games')
         .select('*')
@@ -94,27 +103,79 @@ export function useGameChannel(roomCode: string) {
     loadState()
   }, [roomCode])
 
-  // Subscribe to the broadcast channel
+  // 2. Subscribe to postgres_changes (server-push, like Jackbox's WebSocket)
   useEffect(() => {
     if (!state.game?.id) return
 
     const gameId = state.game.id
 
-    const channel = supabase.channel(`game:${gameId}`, {
-      config: { broadcast: { self: true } },
-    })
+    const channel = supabase.channel(`game:${gameId}`)
 
-    // PRIMARY: Listen for full_sync broadcasts — this is how ALL clients stay in sync
-    channel.on('broadcast', { event: 'full_sync' }, ({ payload }) => {
-      const sync = payload as FullSync
-      setState((s) => ({
-        ...s,
-        game: sync.game,
-        players: sync.players,
-        categories: sync.categories,
-        clues: sync.clues,
-      }))
-    })
+    // Game row changes → refresh game state
+    channel.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'games',
+        filter: `id=eq.${gameId}`,
+      },
+      (payload) => {
+        setState((s) => ({
+          ...s,
+          game: s.game ? { ...s.game, ...payload.new } : null,
+        }))
+      }
+    )
+
+    // Player changes (join, ready up, score updates)
+    channel.on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'players',
+        filter: `game_id=eq.${gameId}`,
+      },
+      (payload) => {
+        setState((s) => ({
+          ...s,
+          players: [...s.players.filter((p) => p.id !== (payload.new as Player).id), payload.new as Player],
+        }))
+      }
+    )
+
+    channel.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'players',
+        filter: `game_id=eq.${gameId}`,
+      },
+      (payload) => {
+        setState((s) => ({
+          ...s,
+          players: s.players.map((p) =>
+            p.id === (payload.new as Player).id ? { ...p, ...payload.new } : p
+          ),
+        }))
+      }
+    )
+
+    // Clue changes (answered, etc.)
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'clues',
+      },
+      () => {
+        // For clue changes, do a full refresh since we need to filter by game
+        refreshState()
+      }
+    )
 
     channel.subscribe((status) => {
       setConnected(status === 'SUBSCRIBED')
@@ -125,31 +186,20 @@ export function useGameChannel(roomCode: string) {
     return () => {
       channel.unsubscribe()
     }
-  }, [state.game?.id])
+  }, [state.game?.id, refreshState])
 
-  /**
-   * Fetch latest state from DB and broadcast to ALL clients.
-   * Call this after any game mutation (ready up, start game, select clue, buzz, answer, etc.)
-   */
-  const syncAndBroadcast = useCallback(async () => {
-    const gameId = gameIdRef.current
-    if (!gameId || !channelRef.current) return
+  // 3. Polling fallback: refresh every 2 seconds to catch anything missed
+  useEffect(() => {
+    if (!state.game?.id) return
 
-    const fullState = await fetchFullState(gameId)
+    pollRef.current = setInterval(() => {
+      refreshState()
+    }, 2000)
 
-    // Broadcast to everyone (including self, since self: true is set)
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'full_sync',
-      payload: {
-        type: 'full_sync',
-        game: fullState.game,
-        players: fullState.players,
-        categories: fullState.categories,
-        clues: fullState.clues,
-      } satisfies FullSync,
-    })
-  }, [])
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [state.game?.id, refreshState])
 
   const myPlayer = state.players.find((p) => p.id === state.myPlayerId) || null
   const isMyTurn = state.game?.current_player_id === state.myPlayerId
@@ -159,6 +209,6 @@ export function useGameChannel(roomCode: string) {
     myPlayer,
     isMyTurn,
     connected,
-    syncAndBroadcast,
+    refreshState,
   }
 }
