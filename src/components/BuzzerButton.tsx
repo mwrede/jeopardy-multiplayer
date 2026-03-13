@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { submitBuzz } from '@/lib/game-api'
 
 type BuzzerState = 'disabled' | 'ready' | 'buzzed' | 'lockout' | 'answering'
 
@@ -12,7 +11,7 @@ interface BuzzerButtonProps {
   buzzWindowOpen: boolean
   isBuzzWinner: boolean
   isLockedOut: boolean
-  onBuzzed?: () => void
+  onBuzz: () => Promise<void>
 }
 
 export function BuzzerButton({
@@ -22,7 +21,7 @@ export function BuzzerButton({
   buzzWindowOpen,
   isBuzzWinner,
   isLockedOut,
-  onBuzzed,
+  onBuzz,
 }: BuzzerButtonProps) {
   const [state, setState] = useState<BuzzerState>('disabled')
   const [buzzing, setBuzzing] = useState(false)
@@ -44,14 +43,13 @@ export function BuzzerButton({
 
     setBuzzing(true)
     try {
-      await submitBuzz(gameId, clueId, playerId)
-      onBuzzed?.()
+      await onBuzz()
     } catch (e) {
       console.error('Buzz failed:', e)
     } finally {
       setBuzzing(false)
     }
-  }, [state, buzzing, gameId, clueId, playerId, onBuzzed])
+  }, [state, buzzing, onBuzz])
 
   // Keyboard support: spacebar to buzz
   useEffect(() => {

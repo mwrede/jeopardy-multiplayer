@@ -151,6 +151,7 @@ export function ClueDisplay({
             buzzWindowOpen={buzzWindowOpen}
             isBuzzWinner={false}
             isLockedOut={false}
+            onBuzz={async () => {}}
           />
         )}
       </div>

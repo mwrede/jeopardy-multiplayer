@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { RealtimeEvent, Game, Player, Category, Clue } from '@/types/game'
+import type { Game, Player, Category, Clue } from '@/types/game'
 
 interface GameState {
   game: Game | null
@@ -11,6 +11,48 @@ interface GameState {
   categories: Category[]
   clues: Clue[]
   myPlayerId: string | null
+}
+
+/**
+ * Full game state snapshot broadcast to all clients.
+ * This is the SINGLE source of truth for UI updates.
+ * After any mutation, the acting client fetches state and broadcasts this.
+ */
+interface FullSync {
+  type: 'full_sync'
+  game: Game
+  players: Player[]
+  categories: Category[]
+  clues: Clue[]
+}
+
+/**
+ * Fetch the full game state from Supabase by game ID.
+ */
+async function fetchFullState(gameId: string) {
+  const [gameRes, playersRes, categoriesRes, catIdsRes] = await Promise.all([
+    supabase.from('games').select('*').eq('id', gameId).single(),
+    supabase.from('players').select('*').eq('game_id', gameId).order('join_order'),
+    supabase.from('categories').select('*').eq('game_id', gameId).order('position'),
+    supabase.from('categories').select('id').eq('game_id', gameId),
+  ])
+
+  const catIds = catIdsRes.data?.map((c) => c.id) || []
+  let cluesData: Clue[] = []
+  if (catIds.length > 0) {
+    const { data } = await supabase
+      .from('clues')
+      .select('id, category_id, value, question, answer, is_daily_double, is_answered, answered_by')
+      .in('category_id', catIds)
+    cluesData = (data as Clue[]) || []
+  }
+
+  return {
+    game: gameRes.data as Game,
+    players: (playersRes.data as Player[]) || [],
+    categories: (categoriesRes.data as Category[]) || [],
+    clues: cluesData,
+  }
 }
 
 export function useGameChannel(roomCode: string) {
@@ -23,14 +65,15 @@ export function useGameChannel(roomCode: string) {
   })
   const [connected, setConnected] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const gameIdRef = useRef<string | null>(null)
 
-  // Load initial state
+  // Load initial state + find the game ID from room code
   useEffect(() => {
     const playerId = localStorage.getItem('playerId')
     setState((s) => ({ ...s, myPlayerId: playerId }))
 
     async function loadState() {
-      // Get game by room code
+      // Find game by room code
       const { data: game } = await supabase
         .from('games')
         .select('*')
@@ -39,104 +82,39 @@ export function useGameChannel(roomCode: string) {
 
       if (!game) return
 
-      const [playersRes, categoriesRes, cluesRes] = await Promise.all([
-        supabase.from('players').select('*').eq('game_id', game.id).order('join_order'),
-        supabase.from('categories').select('*').eq('game_id', game.id).order('position'),
-        supabase
-          .from('clues')
-          .select('id, category_id, value, question, answer, is_daily_double, is_answered, answered_by')
-          .in(
-            'category_id',
-            (await supabase.from('categories').select('id').eq('game_id', game.id)).data?.map((c) => c.id) || []
-          ),
-      ])
+      gameIdRef.current = game.id
 
+      const fullState = await fetchFullState(game.id)
       setState((s) => ({
         ...s,
-        game: game as Game,
-        players: playersRes.data as Player[] || [],
-        categories: categoriesRes.data as Category[] || [],
-        clues: cluesRes.data as Clue[] || [],
+        ...fullState,
       }))
     }
 
     loadState()
   }, [roomCode])
 
-  // Subscribe to realtime updates
+  // Subscribe to the broadcast channel
   useEffect(() => {
     if (!state.game?.id) return
 
-    const channel = supabase.channel(`game:${state.game.id}`, {
+    const gameId = state.game.id
+
+    const channel = supabase.channel(`game:${gameId}`, {
       config: { broadcast: { self: true } },
     })
 
-    // Listen for broadcast events (low-latency game events)
-    channel.on('broadcast', { event: 'game_event' }, ({ payload }) => {
-      const event = payload as RealtimeEvent
-      handleEvent(event)
+    // PRIMARY: Listen for full_sync broadcasts — this is how ALL clients stay in sync
+    channel.on('broadcast', { event: 'full_sync' }, ({ payload }) => {
+      const sync = payload as FullSync
+      setState((s) => ({
+        ...s,
+        game: sync.game,
+        players: sync.players,
+        categories: sync.categories,
+        clues: sync.clues,
+      }))
     })
-
-    // Listen for DB changes on the game row
-    channel.on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'games',
-        filter: `id=eq.${state.game.id}`,
-      },
-      (payload) => {
-        setState((s) => ({
-          ...s,
-          game: { ...s.game!, ...payload.new },
-        }))
-      }
-    )
-
-    // Listen for player changes
-    channel.on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'players',
-        filter: `game_id=eq.${state.game.id}`,
-      },
-      (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setState((s) => ({
-            ...s,
-            players: [...s.players, payload.new as Player],
-          }))
-        } else if (payload.eventType === 'UPDATE') {
-          setState((s) => ({
-            ...s,
-            players: s.players.map((p) =>
-              p.id === (payload.new as Player).id ? { ...p, ...payload.new } : p
-            ),
-          }))
-        }
-      }
-    )
-
-    // Listen for clue changes
-    channel.on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'clues',
-      },
-      (payload) => {
-        setState((s) => ({
-          ...s,
-          clues: s.clues.map((c) =>
-            c.id === (payload.new as Clue).id ? { ...c, ...payload.new } : c
-          ),
-        }))
-      }
-    )
 
     channel.subscribe((status) => {
       setConnected(status === 'SUBSCRIBED')
@@ -149,52 +127,29 @@ export function useGameChannel(roomCode: string) {
     }
   }, [state.game?.id])
 
-  function handleEvent(event: RealtimeEvent) {
-    switch (event.type) {
-      case 'game_state':
-        setState((s) => ({
-          ...s,
-          game: s.game ? { ...s.game, ...event.payload } : null,
-        }))
-        break
-      case 'player_joined':
-        setState((s) => ({
-          ...s,
-          players: [...s.players.filter((p) => p.id !== event.payload.id), event.payload],
-        }))
-        break
-      case 'score_update':
-        setState((s) => ({
-          ...s,
-          players: s.players.map((p) => {
-            const update = event.payload.players.find((u) => u.id === p.id)
-            return update ? { ...p, score: update.score } : p
-          }),
-        }))
-        break
-      case 'answer_result':
-        setState((s) => ({
-          ...s,
-          players: s.players.map((p) =>
-            p.id === event.payload.player_id
-              ? { ...p, score: event.payload.new_score }
-              : p
-          ),
-        }))
-        break
-    }
-  }
+  /**
+   * Fetch latest state from DB and broadcast to ALL clients.
+   * Call this after any game mutation (ready up, start game, select clue, buzz, answer, etc.)
+   */
+  const syncAndBroadcast = useCallback(async () => {
+    const gameId = gameIdRef.current
+    if (!gameId || !channelRef.current) return
 
-  const broadcast = useCallback(
-    (event: RealtimeEvent) => {
-      channelRef.current?.send({
-        type: 'broadcast',
-        event: 'game_event',
-        payload: event,
-      })
-    },
-    []
-  )
+    const fullState = await fetchFullState(gameId)
+
+    // Broadcast to everyone (including self, since self: true is set)
+    channelRef.current.send({
+      type: 'broadcast',
+      event: 'full_sync',
+      payload: {
+        type: 'full_sync',
+        game: fullState.game,
+        players: fullState.players,
+        categories: fullState.categories,
+        clues: fullState.clues,
+      } satisfies FullSync,
+    })
+  }, [])
 
   const myPlayer = state.players.find((p) => p.id === state.myPlayerId) || null
   const isMyTurn = state.game?.current_player_id === state.myPlayerId
@@ -204,6 +159,6 @@ export function useGameChannel(roomCode: string) {
     myPlayer,
     isMyTurn,
     connected,
-    broadcast,
+    syncAndBroadcast,
   }
 }

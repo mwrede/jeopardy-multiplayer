@@ -3,9 +3,8 @@
 import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { BuzzerButton } from '@/components/BuzzerButton'
-import { setReady, startGame, selectClue, submitAnswer, submitWager } from '@/lib/game-api'
-import { useState, useEffect, useRef } from 'react'
-import type { Clue } from '@/types/game'
+import { setReady, startGame, selectClue, submitAnswer, submitWager, submitBuzz } from '@/lib/game-api'
+import { useState, useRef } from 'react'
 
 /**
  * PLAYER VIEW (Phone)
@@ -37,13 +36,53 @@ export default function PlayerPage() {
     myPlayerId,
     isMyTurn,
     connected,
+    syncAndBroadcast,
   } = useGameChannel(roomCode)
 
   const [answer, setAnswer] = useState('')
   const [wager, setWager] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [timeLeft, setTimeLeft] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Wrap game actions: do the action, then sync everyone
+  async function handleReady() {
+    if (!myPlayer) return
+    await setReady(myPlayer.id, !myPlayer.is_ready)
+    await syncAndBroadcast()
+  }
+
+  async function handleStartGame() {
+    if (!game) return
+    await startGame(game.id)
+    await syncAndBroadcast()
+  }
+
+  async function handleSelectClue(clueId: string) {
+    if (!game || !myPlayer) return
+    await selectClue(game.id, clueId, myPlayer.id)
+    await syncAndBroadcast()
+  }
+
+  async function handleBuzz() {
+    if (!game || !myPlayer || !game.current_clue_id) return
+    await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
+    await syncAndBroadcast()
+  }
+
+  async function handleSubmitAnswer() {
+    if (!game || !myPlayer || !game.current_clue_id || !answer.trim()) return
+    await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
+    setAnswer('')
+    await syncAndBroadcast()
+  }
+
+  async function handleSubmitWager() {
+    if (!game || !myPlayer) return
+    const maxWager = Math.max(myPlayer.score, ROUND_VALUES[game.current_round]?.slice(-1)[0] || 1000)
+    const w = parseInt(wager) || 5
+    await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
+    setWager('')
+    await syncAndBroadcast()
+  }
 
   // No game loaded yet
   if (!game || !myPlayer) {
@@ -87,7 +126,7 @@ export default function PlayerPage() {
         </div>
 
         <button
-          onClick={() => setReady(myPlayer.id, !myPlayer.is_ready)}
+          onClick={handleReady}
           className={`w-full max-w-sm py-5 rounded-2xl font-bold text-xl transition-all ${
             myPlayer.is_ready
               ? 'bg-gray-700 text-gray-300'
@@ -97,11 +136,10 @@ export default function PlayerPage() {
           {myPlayer.is_ready ? 'Cancel Ready' : 'Ready Up'}
         </button>
 
-        {myPlayer.join_order === 1 && (
+        {players.every((p) => p.is_ready) && players.length >= 1 && (
           <button
-            onClick={() => startGame(game.id)}
-            disabled={players.length < 2 || !players.every((p) => p.is_ready)}
-            className="w-full max-w-sm mt-3 py-5 rounded-2xl font-bold text-xl bg-jeopardy-gold text-jeopardy-dark disabled:opacity-30"
+            onClick={handleStartGame}
+            className="w-full max-w-sm mt-3 py-5 rounded-2xl font-bold text-xl bg-jeopardy-gold text-jeopardy-dark"
           >
             Start Game
           </button>
@@ -143,7 +181,7 @@ export default function PlayerPage() {
               return (
                 <button
                   key={`${cat.id}-${value}`}
-                  onClick={() => clue && !answered && selectClue(game.id, clue.id, myPlayer.id)}
+                  onClick={() => clue && !answered && handleSelectClue(clue.id)}
                   disabled={answered}
                   className={`board-cell text-sm py-2 ${answered ? 'board-cell-answered' : ''}`}
                 >
@@ -193,6 +231,7 @@ export default function PlayerPage() {
             buzzWindowOpen={game.phase === 'buzz_window'}
             isBuzzWinner={false}
             isLockedOut={false}
+            onBuzz={handleBuzz}
           />
         </div>
       </div>
@@ -218,9 +257,7 @@ export default function PlayerPage() {
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    submitAnswer(game.id, currentClue.id, myPlayer.id, answer.trim())
-                  }
+                  if (e.key === 'Enter') handleSubmitAnswer()
                 }}
                 placeholder="Type your answer..."
                 maxLength={200}
@@ -229,7 +266,7 @@ export default function PlayerPage() {
                 autoComplete="off"
               />
               <button
-                onClick={() => submitAnswer(game.id, currentClue.id, myPlayer.id, answer.trim())}
+                onClick={handleSubmitAnswer}
                 disabled={!answer.trim()}
                 className="w-full bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl disabled:opacity-50"
               >
@@ -271,10 +308,7 @@ export default function PlayerPage() {
           autoFocus
         />
         <button
-          onClick={() => {
-            const w = parseInt(wager) || 5
-            submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
-          }}
+          onClick={handleSubmitWager}
           className="w-full max-w-xs mt-4 bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl"
         >
           Lock In Wager
