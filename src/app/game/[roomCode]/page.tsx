@@ -36,72 +36,59 @@ export default function PlayerPage() {
 
   const [answer, setAnswer] = useState('')
   const [wager, setWager] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Actions: just write to DB, then trigger an immediate refresh
-  async function handleReady() {
+  // Wrap actions: write to DB, refresh, show errors
+  async function doAction(fn: () => Promise<void>) {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await fn()
+      await refreshState()
+    } catch (e: any) {
+      setError(e.message || 'Something went wrong')
+      console.error(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleReady = () => doAction(async () => {
     if (!myPlayer) return
-    try {
-      await setReady(myPlayer.id, !myPlayer.is_ready)
-      await refreshState()
-    } catch (e) {
-      console.error('Ready failed:', e)
-    }
-  }
+    await setReady(myPlayer.id, !myPlayer.is_ready)
+  })
 
-  async function handleStartGame() {
+  const handleStartGame = () => doAction(async () => {
     if (!game) return
-    try {
-      await startGame(game.id)
-      await refreshState()
-    } catch (e) {
-      console.error('Start game failed:', e)
-    }
-  }
+    await startGame(game.id)
+  })
 
-  async function handleSelectClue(clueId: string) {
+  const handleSelectClue = (clueId: string) => doAction(async () => {
     if (!game || !myPlayer) return
-    try {
-      await selectClue(game.id, clueId, myPlayer.id)
-      await refreshState()
-    } catch (e) {
-      console.error('Select clue failed:', e)
-    }
-  }
+    await selectClue(game.id, clueId, myPlayer.id)
+  })
 
-  async function handleBuzz() {
+  const handleBuzz = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id) return
-    try {
-      await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
-      await refreshState()
-    } catch (e) {
-      console.error('Buzz failed:', e)
-    }
-  }
+    await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
+  })
 
-  async function handleSubmitAnswer() {
+  const handleSubmitAnswer = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id || !answer.trim()) return
-    try {
-      await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
-      setAnswer('')
-      await refreshState()
-    } catch (e) {
-      console.error('Submit answer failed:', e)
-    }
-  }
+    await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
+    setAnswer('')
+  })
 
-  async function handleSubmitWager() {
+  const handleSubmitWager = () => doAction(async () => {
     if (!game || !myPlayer) return
     const maxWager = Math.max(myPlayer.score, ROUND_VALUES[game.current_round]?.slice(-1)[0] || 1000)
     const w = parseInt(wager) || 5
-    try {
-      await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
-      setWager('')
-      await refreshState()
-    } catch (e) {
-      console.error('Submit wager failed:', e)
-    }
-  }
+    await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
+    setWager('')
+  })
 
   // No game loaded yet
   if (!game || !myPlayer) {
@@ -146,7 +133,8 @@ export default function PlayerPage() {
 
         <button
           onClick={handleReady}
-          className={`w-full max-w-sm py-5 rounded-2xl font-bold text-xl transition-all ${
+          disabled={busy}
+          className={`w-full max-w-sm py-5 rounded-2xl font-bold text-xl transition-all disabled:opacity-50 ${
             myPlayer.is_ready
               ? 'bg-gray-700 text-gray-300'
               : 'bg-green-600 text-white'
@@ -158,11 +146,14 @@ export default function PlayerPage() {
         {players.every((p) => p.is_ready) && players.length >= 1 && (
           <button
             onClick={handleStartGame}
-            className="w-full max-w-sm mt-3 py-5 rounded-2xl font-bold text-xl bg-jeopardy-gold text-jeopardy-dark"
+            disabled={busy}
+            className="w-full max-w-sm mt-3 py-5 rounded-2xl font-bold text-xl bg-jeopardy-gold text-jeopardy-dark disabled:opacity-50"
           >
-            Start Game
+            {busy ? 'Starting...' : 'Start Game'}
           </button>
         )}
+
+        {error && <p className="text-red-400 text-center text-sm mt-4 max-w-sm">{error}</p>}
       </div>
     )
   }

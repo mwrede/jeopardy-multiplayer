@@ -3,7 +3,8 @@
 import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
 import type { Player } from '@/types/game'
 
 /**
@@ -29,6 +30,35 @@ export default function DisplayPage() {
     clues,
     connected,
   } = useGameChannel(roomCode)
+
+  // Auto-transition: clue_reading → buzz_window after reading period
+  const transitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'clue_reading') {
+      if (transitionRef.current) {
+        clearTimeout(transitionRef.current)
+        transitionRef.current = null
+      }
+      return
+    }
+
+    const delay = game.settings?.reading_period_ms ?? 0
+    transitionRef.current = setTimeout(async () => {
+      await supabase
+        .from('games')
+        .update({
+          phase: 'buzz_window',
+          buzz_window_open: true,
+          buzz_window_start: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', game.id)
+    }, delay)
+
+    return () => {
+      if (transitionRef.current) clearTimeout(transitionRef.current)
+    }
+  }, [game?.phase, game?.id, game?.settings?.reading_period_ms])
 
   if (!game) {
     return (
