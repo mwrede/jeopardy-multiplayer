@@ -88,10 +88,157 @@ export async function setReady(playerId: string, isReady: boolean) {
   if (error) throw error
 }
 
+/**
+ * Start the game: pick random categories from clue_pool, create board, set daily doubles.
+ * Replaces the server-side start_game RPC with client-side logic.
+ */
 export async function startGame(gameId: string) {
-  const { error } = await supabase.rpc('start_game', {
-    p_game_id: gameId,
-  })
+  const ROUND_1_VALUES = [200, 400, 600, 800, 1000]
+  const ROUND_2_VALUES = [400, 800, 1200, 1600, 2000]
+
+  // Helper: pick N random categories that have at least 5 clues
+  async function pickCategories(roundName: string, count: number) {
+    const { data: allCats } = await supabase
+      .from('clue_pool')
+      .select('category')
+      .eq('round', roundName)
+
+    if (!allCats || allCats.length === 0) throw new Error(`No clues found for round: ${roundName}`)
+
+    // Count clues per category
+    const counts: Record<string, number> = {}
+    for (const row of allCats) {
+      counts[row.category] = (counts[row.category] || 0) + 1
+    }
+
+    // Filter to categories with >= 5 clues, then shuffle and pick
+    const eligible = Object.keys(counts).filter(c => counts[c] >= 5)
+    if (eligible.length < count) throw new Error(`Not enough categories for ${roundName} (need ${count}, found ${eligible.length})`)
+
+    // Fisher-Yates shuffle
+    for (let i = eligible.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [eligible[i], eligible[j]] = [eligible[j], eligible[i]]
+    }
+
+    return eligible.slice(0, count)
+  }
+
+  // Helper: pick 5 random clues from a category
+  async function pickClues(categoryName: string, roundName: string) {
+    const { data: pool } = await supabase
+      .from('clue_pool')
+      .select('question, answer')
+      .eq('category', categoryName)
+      .eq('round', roundName)
+      .limit(50)
+
+    if (!pool || pool.length < 5) throw new Error(`Not enough clues for category: ${categoryName}`)
+
+    // Shuffle and take 5
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]]
+    }
+
+    return pool.slice(0, 5)
+  }
+
+  // --- Round 1 ---
+  const round1Cats = await pickCategories('Jeopardy Round', 6)
+  const round1ClueIds: string[] = []
+
+  for (let pos = 0; pos < round1Cats.length; pos++) {
+    // Create category
+    const { data: cat, error: catErr } = await supabase
+      .from('categories')
+      .insert({ game_id: gameId, name: round1Cats[pos], round_number: 1, position: pos })
+      .select('id')
+      .single()
+    if (catErr || !cat) throw catErr || new Error('Failed to create category')
+
+    // Create 5 clues
+    const clueData = await pickClues(round1Cats[pos], 'Jeopardy Round')
+    for (let i = 0; i < 5; i++) {
+      const { data: clue, error: clueErr } = await supabase
+        .from('clues')
+        .insert({
+          category_id: cat.id,
+          value: ROUND_1_VALUES[i],
+          question: clueData[i].question,
+          answer: clueData[i].answer,
+          is_daily_double: false,
+        })
+        .select('id')
+        .single()
+      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
+      round1ClueIds.push(clue.id)
+    }
+  }
+
+  // --- Round 2 ---
+  const round2Cats = await pickCategories('Double Jeopardy', 6)
+  const round2ClueIds: string[] = []
+
+  for (let pos = 0; pos < round2Cats.length; pos++) {
+    const { data: cat, error: catErr } = await supabase
+      .from('categories')
+      .insert({ game_id: gameId, name: round2Cats[pos], round_number: 2, position: pos })
+      .select('id')
+      .single()
+    if (catErr || !cat) throw catErr || new Error('Failed to create category')
+
+    const clueData = await pickClues(round2Cats[pos], 'Double Jeopardy')
+    for (let i = 0; i < 5; i++) {
+      const { data: clue, error: clueErr } = await supabase
+        .from('clues')
+        .insert({
+          category_id: cat.id,
+          value: ROUND_2_VALUES[i],
+          question: clueData[i].question,
+          answer: clueData[i].answer,
+          is_daily_double: false,
+        })
+        .select('id')
+        .single()
+      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
+      round2ClueIds.push(clue.id)
+    }
+  }
+
+  // --- Daily Doubles ---
+  // 1 in round 1
+  const dd1 = round1ClueIds[Math.floor(Math.random() * round1ClueIds.length)]
+  await supabase.from('clues').update({ is_daily_double: true }).eq('id', dd1)
+
+  // 2 in round 2 (different clues)
+  const dd2idx = Math.floor(Math.random() * round2ClueIds.length)
+  await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd2idx])
+
+  let dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+  while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+  await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
+
+  // --- Pick random first player ---
+  const { data: players } = await supabase
+    .from('players')
+    .select('id')
+    .eq('game_id', gameId)
+
+  if (!players || players.length === 0) throw new Error('No players in game')
+  const firstPlayer = players[Math.floor(Math.random() * players.length)]
+
+  // --- Activate game ---
+  const { error } = await supabase
+    .from('games')
+    .update({
+      status: 'active',
+      phase: 'board_selection',
+      current_round: 1,
+      current_player_id: firstPlayer.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
 
   if (error) throw error
 }
