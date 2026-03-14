@@ -9,8 +9,10 @@ export type GamePhase =
   | 'daily_double_wager'
   | 'daily_double_answering'
   | 'clue_result'
+  | 'round_end'
   | 'final_category'
   | 'final_wager'
+  | 'final_clue'
   | 'final_answering'
   | 'final_reveal'
   | 'game_over'
@@ -27,6 +29,10 @@ export interface Game {
   buzz_window_start: string | null
   settings: GameSettings
   created_at: string
+  updated_at: string
+  final_category_name: string | null
+  final_clue_text: string | null
+  final_answer: string | null
 }
 
 export interface GameSettings {

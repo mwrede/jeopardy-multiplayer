@@ -14,7 +14,10 @@ CREATE TABLE games (
     buzz_window_start TIMESTAMPTZ,
     settings        JSONB NOT NULL DEFAULT '{}',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    final_category_name VARCHAR(200),
+    final_clue_text     TEXT,
+    final_answer        TEXT
 );
 
 CREATE UNIQUE INDEX idx_games_room_code ON games(room_code);

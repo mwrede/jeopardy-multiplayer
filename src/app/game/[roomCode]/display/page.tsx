@@ -5,6 +5,14 @@ import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import {
+  advanceFromRoundEnd,
+  advanceToFinalWager,
+  advanceToFinalClue,
+  advanceToFinalAnswering,
+  startFinalReveal,
+  advanceToGameOver,
+} from '@/lib/game-api'
 import type { Player } from '@/types/game'
 
 /**
@@ -13,8 +21,9 @@ import type { Player } from '@/types/game'
  * This is the "Jackbox-style" display meant to be shown on a TV or large monitor.
  * It shows:
  * - The room code for players to join
- * - The game board
+ * - The game board (6 categories per round)
  * - Clue text (full screen)
+ * - Round transitions (Jeopardy! → Double Jeopardy! → Final Jeopardy!)
  * - Scores
  * - Dramatic reveals
  *
@@ -59,6 +68,66 @@ export default function DisplayPage() {
       if (transitionRef.current) clearTimeout(transitionRef.current)
     }
   }, [game?.phase, game?.id, game?.settings?.reading_period_ms])
+
+  // Auto-transition: round_end → board_selection after 4 seconds
+  const roundEndRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'round_end') {
+      if (roundEndRef.current) {
+        clearTimeout(roundEndRef.current)
+        roundEndRef.current = null
+      }
+      return
+    }
+
+    roundEndRef.current = setTimeout(async () => {
+      await advanceFromRoundEnd(game.id)
+    }, 4000)
+
+    return () => {
+      if (roundEndRef.current) clearTimeout(roundEndRef.current)
+    }
+  }, [game?.phase, game?.id])
+
+  // Auto-transition: final_category → final_wager after 5 seconds
+  const finalCatRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'final_category') {
+      if (finalCatRef.current) {
+        clearTimeout(finalCatRef.current)
+        finalCatRef.current = null
+      }
+      return
+    }
+
+    finalCatRef.current = setTimeout(async () => {
+      await advanceToFinalWager(game.id)
+    }, 5000)
+
+    return () => {
+      if (finalCatRef.current) clearTimeout(finalCatRef.current)
+    }
+  }, [game?.phase, game?.id])
+
+  // Auto-transition: final_reveal → game_over after showing reveals (8 seconds)
+  const revealRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'final_reveal') {
+      if (revealRef.current) {
+        clearTimeout(revealRef.current)
+        revealRef.current = null
+      }
+      return
+    }
+
+    revealRef.current = setTimeout(async () => {
+      await advanceToGameOver(game.id)
+    }, 8000)
+
+    return () => {
+      if (revealRef.current) clearTimeout(revealRef.current)
+    }
+  }, [game?.phase, game?.id])
 
   if (!game) {
     return (
@@ -116,7 +185,190 @@ export default function DisplayPage() {
     )
   }
 
-  // ACTIVE GAME
+  // ROUND END: Dramatic transition splash
+  if (game.phase === 'round_end') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark">
+        <div className="animate-pulse">
+          <h1 className="text-6xl md:text-8xl font-bold text-jeopardy-gold text-center mb-6">
+            {game.current_round === 2 ? 'Double Jeopardy!' : 'Final Jeopardy!'}
+          </h1>
+          <p className="text-2xl text-blue-300 text-center">
+            Get ready...
+          </p>
+        </div>
+
+        {/* Show scores during transition */}
+        <div className="flex gap-4 mt-12">
+          {players
+            .sort((a, b) => b.score - a.score)
+            .map((p) => (
+              <div key={p.id} className="px-6 py-3 rounded-xl bg-white/5 text-center">
+                <p className="text-sm text-gray-400">{p.name}</p>
+                <p className={`text-2xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
+                  ${p.score.toLocaleString()}
+                </p>
+              </div>
+            ))}
+        </div>
+      </div>
+    )
+  }
+
+  // FINAL JEOPARDY: Category reveal
+  if (game.phase === 'final_category') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark">
+        <h1 className="text-5xl md:text-7xl font-bold text-jeopardy-gold mb-12">
+          Final Jeopardy!
+        </h1>
+        <p className="text-gray-400 text-xl mb-4">The category is...</p>
+        <div className="bg-jeopardy-blue rounded-2xl px-12 py-8 border-2 border-jeopardy-gold">
+          <p className="text-4xl md:text-6xl font-bold text-white text-center uppercase">
+            {game.final_category_name}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // FINAL JEOPARDY: Wager phase (waiting for players to wager)
+  if (game.phase === 'final_wager') {
+    const wagered = players.filter((p) => p.final_wager != null)
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark">
+        <h1 className="text-5xl font-bold text-jeopardy-gold mb-4">Final Jeopardy!</h1>
+        <div className="bg-jeopardy-blue rounded-2xl px-8 py-4 mb-8">
+          <p className="text-2xl font-bold text-white uppercase">{game.final_category_name}</p>
+        </div>
+        <p className="text-xl text-gray-400 mb-8">Place your wagers on your phones...</p>
+
+        <div className="flex gap-4">
+          {players.map((p) => (
+            <div key={p.id} className={`px-6 py-4 rounded-xl text-center min-w-[120px] ${
+              p.final_wager != null
+                ? 'bg-green-600/20 border border-green-500'
+                : 'bg-white/5 border border-white/10'
+            }`}>
+              <p className="text-sm text-gray-400">{p.name}</p>
+              <p className="text-lg font-bold mt-1">
+                {p.final_wager != null ? (
+                  <span className="text-green-400">Locked In</span>
+                ) : (
+                  <span className="text-gray-500">Wagering...</span>
+                )}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-6 text-gray-500">
+          {wagered.length}/{players.length} wagers placed
+        </p>
+      </div>
+    )
+  }
+
+  // FINAL JEOPARDY: Clue display (read the clue)
+  if (game.phase === 'final_clue') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark px-12">
+        <p className="text-jeopardy-gold text-2xl font-bold mb-4 uppercase">
+          {game.final_category_name}
+        </p>
+        <p className="text-4xl md:text-6xl text-white text-center leading-relaxed font-serif max-w-5xl">
+          {game.final_clue_text}
+        </p>
+        <p className="text-gray-500 text-xl mt-12 animate-pulse">
+          Answer on your phones...
+        </p>
+      </div>
+    )
+  }
+
+  // FINAL JEOPARDY: Answering phase (waiting for answers)
+  if (game.phase === 'final_answering') {
+    const answered = players.filter((p) => p.final_answer != null && p.final_answer !== '')
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark px-12">
+        <p className="text-jeopardy-gold text-2xl font-bold mb-4 uppercase">
+          {game.final_category_name}
+        </p>
+        <p className="text-3xl md:text-5xl text-white text-center leading-relaxed font-serif max-w-5xl mb-12">
+          {game.final_clue_text}
+        </p>
+
+        <div className="flex gap-4">
+          {players.map((p) => (
+            <div key={p.id} className={`px-6 py-4 rounded-xl text-center min-w-[120px] ${
+              p.final_answer
+                ? 'bg-green-600/20 border border-green-500'
+                : 'bg-white/5 border border-white/10'
+            }`}>
+              <p className="text-sm text-gray-400">{p.name}</p>
+              <p className="text-lg font-bold mt-1">
+                {p.final_answer ? (
+                  <span className="text-green-400">Answered</span>
+                ) : (
+                  <span className="text-gray-500 animate-pulse">Thinking...</span>
+                )}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-6 text-gray-500">
+          {answered.length}/{players.length} answers submitted
+        </p>
+      </div>
+    )
+  }
+
+  // FINAL JEOPARDY: Reveal
+  if (game.phase === 'final_reveal') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark px-8">
+        <h1 className="text-4xl font-bold text-jeopardy-gold mb-4">Final Jeopardy!</h1>
+        <p className="text-gray-400 text-lg mb-2 uppercase">{game.final_category_name}</p>
+        <p className="text-xl text-blue-300 mb-8">
+          Correct answer: <span className="text-white font-bold">{game.final_answer}</span>
+        </p>
+
+        <div className="w-full max-w-3xl space-y-4">
+          {players
+            .sort((a, b) => b.score - a.score)
+            .map((p) => (
+              <div
+                key={p.id}
+                className={`flex items-center justify-between px-8 py-5 rounded-2xl ${
+                  p.final_correct
+                    ? 'bg-green-600/10 border border-green-500/50'
+                    : 'bg-red-600/10 border border-red-500/50'
+                }`}
+              >
+                <div>
+                  <p className="text-xl font-bold text-white">{p.name}</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Answered: <span className="text-white">{p.final_answer || '(no answer)'}</span>
+                    {' · '}Wagered: <span className="text-white">${(p.final_wager ?? 0).toLocaleString()}</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-2xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
+                    ${p.score.toLocaleString()}
+                  </p>
+                  <p className={`text-sm font-semibold ${p.final_correct ? 'text-green-400' : 'text-red-400'}`}>
+                    {p.final_correct ? '✓ Correct' : '✗ Wrong'}
+                  </p>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ACTIVE GAME (board + clue display)
   const currentClue = game.current_clue_id
     ? clues.find((c) => c.id === game.current_clue_id)
     : null
@@ -236,7 +488,7 @@ export default function DisplayPage() {
                 >
                   <div className="flex items-center gap-4">
                     <span className="text-4xl">
-                      {i === 0 ? '🏆' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
+                      {i === 0 ? '\u{1F3C6}' : i === 1 ? '\u{1F948}' : i === 2 ? '\u{1F949}' : `${i + 1}.`}
                     </span>
                     <span className="font-bold text-3xl">{p.name}</span>
                   </div>

@@ -90,7 +90,7 @@ export async function setReady(playerId: string, isReady: boolean) {
 
 /**
  * Start the game: pick random categories from clue_pool, create board, set daily doubles.
- * Replaces the server-side start_game RPC with client-side logic.
+ * Also picks a Final Jeopardy clue and stores it on the game row.
  */
 export async function startGame(gameId: string) {
   const ROUND_1_VALUES = [200, 400, 600, 800, 1000]
@@ -219,6 +219,25 @@ export async function startGame(gameId: string) {
   while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
   await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
 
+  // --- Final Jeopardy ---
+  // Pick a random Final Jeopardy clue from the pool
+  let finalCategoryName = 'Final Jeopardy'
+  let finalClueText = 'No Final Jeopardy clue available.'
+  let finalAnswerText = ''
+
+  const { data: fjCats } = await supabase
+    .from('clue_pool')
+    .select('category, question, answer')
+    .eq('round', 'Final Jeopardy')
+    .limit(50)
+
+  if (fjCats && fjCats.length > 0) {
+    const pick = fjCats[Math.floor(Math.random() * fjCats.length)]
+    finalCategoryName = pick.category
+    finalClueText = pick.question
+    finalAnswerText = pick.answer
+  }
+
   // --- Pick random first player ---
   const { data: players } = await supabase
     .from('players')
@@ -236,11 +255,232 @@ export async function startGame(gameId: string) {
       phase: 'board_selection',
       current_round: 1,
       current_player_id: firstPlayer.id,
+      final_category_name: finalCategoryName,
+      final_clue_text: finalClueText,
+      final_answer: finalAnswerText,
       updated_at: new Date().toISOString(),
     })
     .eq('id', gameId)
 
   if (error) throw error
+}
+
+/**
+ * Check if the current round is complete (all clues answered).
+ * If so, advance to the next round or Final Jeopardy.
+ */
+async function checkRoundComplete(gameId: string, currentRound: number) {
+  // Get all categories for the current round
+  const { data: roundCats } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('game_id', gameId)
+    .eq('round_number', currentRound)
+
+  if (!roundCats || roundCats.length === 0) return false
+
+  const catIds = roundCats.map((c) => c.id)
+
+  // Count unanswered clues
+  const { count } = await supabase
+    .from('clues')
+    .select('*', { count: 'exact', head: true })
+    .in('category_id', catIds)
+    .eq('is_answered', false)
+
+  if ((count ?? 1) > 0) return false
+
+  // All clues answered — advance!
+  if (currentRound === 1) {
+    // Move to round_end, then Double Jeopardy
+    // Find the player with the lowest score to go first in Double Jeopardy
+    const { data: players } = await supabase
+      .from('players')
+      .select('id, score')
+      .eq('game_id', gameId)
+      .order('score', { ascending: true })
+
+    const nextPlayer = players?.[0]?.id || null
+
+    await supabase
+      .from('games')
+      .update({
+        phase: 'round_end',
+        current_round: 2,
+        current_clue_id: null,
+        current_player_id: nextPlayer,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+  } else if (currentRound === 2) {
+    // Move to Final Jeopardy
+    await supabase
+      .from('games')
+      .update({
+        status: 'final_jeopardy',
+        phase: 'final_category',
+        current_round: 3,
+        current_clue_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+  }
+
+  return true
+}
+
+/**
+ * Advance from round_end splash screen to the board for the next round.
+ * Called by the display page after showing the transition screen.
+ */
+export async function advanceFromRoundEnd(gameId: string) {
+  await supabase
+    .from('games')
+    .update({
+      phase: 'board_selection',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+}
+
+/**
+ * Advance Final Jeopardy from category reveal to wager phase.
+ */
+export async function advanceToFinalWager(gameId: string) {
+  // Reset all players' final wager/answer fields
+  const { data: players } = await supabase
+    .from('players')
+    .select('id')
+    .eq('game_id', gameId)
+
+  if (players) {
+    for (const p of players) {
+      await supabase
+        .from('players')
+        .update({ final_wager: null, final_answer: null, final_correct: null })
+        .eq('id', p.id)
+    }
+  }
+
+  await supabase
+    .from('games')
+    .update({
+      phase: 'final_wager',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+}
+
+/**
+ * Advance Final Jeopardy from wager to showing the clue.
+ */
+export async function advanceToFinalClue(gameId: string) {
+  await supabase
+    .from('games')
+    .update({
+      phase: 'final_clue',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+}
+
+/**
+ * Advance Final Jeopardy from clue to answering phase.
+ */
+export async function advanceToFinalAnswering(gameId: string) {
+  await supabase
+    .from('games')
+    .update({
+      phase: 'final_answering',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+}
+
+/**
+ * Submit a Final Jeopardy wager.
+ */
+export async function submitFinalWager(playerId: string, wager: number) {
+  await supabase
+    .from('players')
+    .update({ final_wager: wager })
+    .eq('id', playerId)
+}
+
+/**
+ * Submit a Final Jeopardy answer.
+ */
+export async function submitFinalAnswer(playerId: string, answer: string) {
+  await supabase
+    .from('players')
+    .update({ final_answer: answer })
+    .eq('id', playerId)
+}
+
+/**
+ * Start the Final Jeopardy reveal sequence.
+ * Judges all answers and moves to the reveal phase.
+ */
+export async function startFinalReveal(gameId: string) {
+  // Get the game to get the correct answer
+  const { data: game } = await supabase
+    .from('games')
+    .select('final_answer')
+    .eq('id', gameId)
+    .single()
+
+  if (!game) throw new Error('Game not found')
+
+  const correctAnswer = game.final_answer || ''
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+  // Get all players and judge their answers
+  const { data: players } = await supabase
+    .from('players')
+    .select('id, score, final_wager, final_answer')
+    .eq('game_id', gameId)
+
+  if (players) {
+    for (const p of players) {
+      const playerAnswer = p.final_answer || ''
+      const wager = p.final_wager || 0
+      const correct =
+        normalize(playerAnswer).includes(normalize(correctAnswer)) ||
+        normalize(correctAnswer).includes(normalize(playerAnswer))
+
+      const scoreChange = correct ? wager : -wager
+
+      await supabase
+        .from('players')
+        .update({
+          final_correct: correct,
+          score: p.score + scoreChange,
+        })
+        .eq('id', p.id)
+    }
+  }
+
+  await supabase
+    .from('games')
+    .update({
+      phase: 'final_reveal',
+      status: 'finished',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+}
+
+/**
+ * Move to game_over after final reveal.
+ */
+export async function advanceToGameOver(gameId: string) {
+  await supabase
+    .from('games')
+    .update({
+      phase: 'game_over',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
 }
 
 /**
@@ -305,16 +545,14 @@ export async function submitBuzz(gameId: string, clueId: string, playerId: strin
 
 /**
  * Submit an answer to a clue.
- * For now, does a simple case-insensitive match.
- * TODO: Add fuzzy/AI answer judging.
+ * After answering, checks if the round is complete and auto-advances.
  */
 export async function submitAnswer(gameId: string, clueId: string, playerId: string, answer: string) {
-  // Get the correct answer
-  const { data: clue } = await supabase
-    .from('clues')
-    .select('answer, value')
-    .eq('id', clueId)
-    .single()
+  // Get the correct answer and the game's current round
+  const [{ data: clue }, { data: game }] = await Promise.all([
+    supabase.from('clues').select('answer, value').eq('id', clueId).single(),
+    supabase.from('games').select('current_round').eq('id', gameId).single(),
+  ])
 
   if (!clue) throw new Error('Clue not found')
 
@@ -348,26 +586,18 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     })
     .eq('id', clueId)
 
-  // Move to next phase: if correct, this player picks next. If wrong, go back to buzz window or board.
-  if (correct) {
-    // Correct: this player picks next clue
+  // Check if the round is complete
+  const currentRound = game?.current_round ?? 1
+  const roundComplete = await checkRoundComplete(gameId, currentRound)
+
+  if (!roundComplete) {
+    // Round continues — go back to board
     await supabase
       .from('games')
       .update({
         current_clue_id: null,
         phase: 'board_selection',
         current_player_id: playerId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', gameId)
-  } else {
-    // Wrong: open buzz window for others (or go back to board if no one else can buzz)
-    await supabase
-      .from('games')
-      .update({
-        current_clue_id: null,
-        phase: 'board_selection',
-        // Keep current_player_id as the same player for now
         updated_at: new Date().toISOString(),
       })
       .eq('id', gameId)

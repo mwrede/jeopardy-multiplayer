@@ -3,8 +3,20 @@
 import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { BuzzerButton } from '@/components/BuzzerButton'
-import { setReady, startGame, selectClue, submitAnswer, submitWager, submitBuzz } from '@/lib/game-api'
-import { useState, useRef } from 'react'
+import {
+  setReady,
+  startGame,
+  selectClue,
+  submitAnswer,
+  submitWager,
+  submitBuzz,
+  submitFinalWager,
+  submitFinalAnswer,
+  advanceToFinalClue,
+  advanceToFinalAnswering,
+  startFinalReveal,
+} from '@/lib/game-api'
+import { useState, useRef, useEffect } from 'react'
 
 /**
  * PLAYER VIEW (Phone)
@@ -36,9 +48,25 @@ export default function PlayerPage() {
 
   const [answer, setAnswer] = useState('')
   const [wager, setWager] = useState('')
+  const [finalWagerInput, setFinalWagerInput] = useState('')
+  const [finalAnswerInput, setFinalAnswerInput] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [finalWagerLocked, setFinalWagerLocked] = useState(false)
+  const [finalAnswerLocked, setFinalAnswerLocked] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Reset final locks when phase changes
+  useEffect(() => {
+    if (game?.phase === 'final_wager') {
+      setFinalWagerLocked(myPlayer?.final_wager != null)
+      setFinalWagerInput('')
+    }
+    if (game?.phase === 'final_clue' || game?.phase === 'final_answering') {
+      setFinalAnswerLocked(myPlayer?.final_answer != null && myPlayer?.final_answer !== '')
+      setFinalAnswerInput('')
+    }
+  }, [game?.phase])
 
   // Wrap actions: write to DB, refresh, show errors
   async function doAction(fn: () => Promise<void>) {
@@ -89,6 +117,41 @@ export default function PlayerPage() {
     await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
     setWager('')
   })
+
+  const handleFinalWager = () => doAction(async () => {
+    if (!myPlayer) return
+    const maxWager = Math.max(myPlayer.score, 0)
+    const w = parseInt(finalWagerInput) || 0
+    const clamped = Math.min(Math.max(w, 0), maxWager)
+    await submitFinalWager(myPlayer.id, clamped)
+    setFinalWagerLocked(true)
+    setFinalWagerInput('')
+  })
+
+  const handleFinalAnswer = () => doAction(async () => {
+    if (!myPlayer || !finalAnswerInput.trim()) return
+    await submitFinalAnswer(myPlayer.id, finalAnswerInput.trim())
+    setFinalAnswerLocked(true)
+    setFinalAnswerInput('')
+  })
+
+  // Auto-advance: when all wagers are in, move to showing the clue
+  useEffect(() => {
+    if (!game || game.phase !== 'final_wager') return
+    const allWagered = players.length > 0 && players.every((p) => p.final_wager != null)
+    if (allWagered) {
+      advanceToFinalClue(game.id)
+    }
+  }, [game?.phase, game?.id, players])
+
+  // Auto-advance: when all answers are in, start reveal
+  useEffect(() => {
+    if (!game || game.phase !== 'final_answering') return
+    const allAnswered = players.length > 0 && players.every((p) => p.final_answer != null && p.final_answer !== '')
+    if (allAnswered) {
+      startFinalReveal(game.id)
+    }
+  }, [game?.phase, game?.id, players])
 
   // No game loaded yet
   if (!game || !myPlayer) {
@@ -154,6 +217,165 @@ export default function PlayerPage() {
         )}
 
         {error && <p className="text-red-400 text-center text-sm mt-4 max-w-sm">{error}</p>}
+      </div>
+    )
+  }
+
+  // ===== ROUND END (transition between rounds) =====
+  if (game.phase === 'round_end') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <h2 className="text-4xl font-bold text-jeopardy-gold mb-4 animate-pulse">
+            {game.current_round === 2 ? 'Double Jeopardy!' : 'Final Jeopardy!'}
+          </h2>
+          <p className="text-gray-400 text-lg">Get ready...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ===== FINAL JEOPARDY: Category reveal =====
+  if (game.phase === 'final_category') {
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <h2 className="text-3xl font-bold text-jeopardy-gold mb-6">Final Jeopardy!</h2>
+          <p className="text-gray-400 mb-4">The category is...</p>
+          <div className="bg-jeopardy-blue rounded-xl px-8 py-6 border border-jeopardy-gold/50">
+            <p className="text-2xl font-bold text-white text-center uppercase">
+              {game.final_category_name}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ===== FINAL JEOPARDY: Wager =====
+  if (game.phase === 'final_wager') {
+    const maxWager = Math.max(myPlayer.score, 0)
+
+    if (finalWagerLocked || myPlayer.final_wager != null) {
+      return (
+        <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
+          <PlayerHeader myPlayer={myPlayer} game={game} />
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <h2 className="text-2xl font-bold text-jeopardy-gold mb-4">Wager Locked In!</h2>
+            <p className="text-3xl font-bold text-white">
+              ${(myPlayer.final_wager ?? 0).toLocaleString()}
+            </p>
+            <p className="text-gray-400 mt-4">Waiting for other players...</p>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <h2 className="text-2xl font-bold text-jeopardy-gold mb-2">Final Jeopardy!</h2>
+          <p className="text-gray-400 text-lg mb-1 uppercase">{game.final_category_name}</p>
+          <p className="text-gray-500 mb-6">Wager $0 - ${maxWager.toLocaleString()}</p>
+
+          <input
+            type="number"
+            value={finalWagerInput}
+            onChange={(e) => setFinalWagerInput(e.target.value)}
+            min={0}
+            max={maxWager}
+            placeholder="Enter your wager"
+            className="w-full max-w-xs bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-2xl text-center focus:outline-none focus:border-jeopardy-gold"
+            autoFocus
+          />
+          <button
+            onClick={handleFinalWager}
+            disabled={busy}
+            className="w-full max-w-xs mt-4 bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl disabled:opacity-50"
+          >
+            Lock In Wager
+          </button>
+        </div>
+        {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
+      </div>
+    )
+  }
+
+  // ===== FINAL JEOPARDY: Clue display + answer =====
+  if (game.phase === 'final_clue' || game.phase === 'final_answering') {
+    if (finalAnswerLocked || (myPlayer.final_answer != null && myPlayer.final_answer !== '')) {
+      return (
+        <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
+          <PlayerHeader myPlayer={myPlayer} game={game} />
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <h2 className="text-2xl font-bold text-green-400 mb-4">Answer Submitted!</h2>
+            <p className="text-gray-400">Waiting for other players...</p>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <h2 className="text-xl font-bold text-jeopardy-gold mb-2 uppercase">{game.final_category_name}</h2>
+          <p className="text-gray-400 text-sm mb-6">Look at the TV for the clue!</p>
+
+          <input
+            type="text"
+            value={finalAnswerInput}
+            onChange={(e) => setFinalAnswerInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleFinalAnswer()
+            }}
+            placeholder="What is..."
+            maxLength={200}
+            className="w-full max-w-sm bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-xl placeholder:text-gray-500 focus:outline-none focus:border-jeopardy-gold"
+            autoFocus
+            autoComplete="off"
+          />
+          <button
+            onClick={handleFinalAnswer}
+            disabled={!finalAnswerInput.trim() || busy}
+            className="w-full max-w-sm mt-4 bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl disabled:opacity-50"
+          >
+            Submit Final Answer
+          </button>
+        </div>
+        {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
+      </div>
+    )
+  }
+
+  // ===== FINAL REVEAL =====
+  if (game.phase === 'final_reveal' || game.phase === 'game_over') {
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <h2 className="text-3xl font-bold text-jeopardy-gold mb-4">
+            {game.phase === 'game_over' ? 'Game Over!' : 'Final Results...'}
+          </h2>
+          <p className="text-gray-400 text-lg">Look at the TV!</p>
+
+          {/* Show my result */}
+          <div className={`mt-8 px-8 py-6 rounded-2xl text-center ${
+            myPlayer.final_correct
+              ? 'bg-green-600/20 border border-green-500'
+              : 'bg-red-600/20 border border-red-500'
+          }`}>
+            <p className={`text-xl font-bold ${myPlayer.final_correct ? 'text-green-400' : 'text-red-400'}`}>
+              {myPlayer.final_correct ? 'You got it right!' : 'Incorrect'}
+            </p>
+            <p className={`text-3xl font-bold mt-2 ${myPlayer.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
+              ${myPlayer.score.toLocaleString()}
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
