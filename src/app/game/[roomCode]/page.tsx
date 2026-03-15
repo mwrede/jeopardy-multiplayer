@@ -380,6 +380,63 @@ export default function PlayerPage() {
     )
   }
 
+  // ===== CLUE RESULT (show who got it right/wrong) =====
+  if (game.phase === 'clue_result' && currentClue) {
+    const answerer = players.find((p) => p.id === game.current_player_id)
+    const wasCorrect = currentClue.answered_by != null
+    const iWasAnswerer = game.current_player_id === myPlayerId
+    const clueCategory = categories.find((c) => c.id === currentClue.category_id)
+
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+
+        <div className="flex-1 flex flex-col items-center justify-center p-6">
+          {/* Category + Value */}
+          {clueCategory && (
+            <p className="text-blue-300 text-sm font-bold uppercase tracking-wide mb-1">
+              {clueCategory.name}
+            </p>
+          )}
+          <p className="text-jeopardy-gold text-lg font-bold mb-6">
+            ${currentClue.value.toLocaleString()}
+          </p>
+
+          {/* Result card */}
+          <div className={`w-full max-w-sm px-8 py-8 rounded-2xl text-center ${
+            wasCorrect
+              ? 'bg-green-600/15 border-2 border-green-500'
+              : 'bg-red-600/15 border-2 border-red-500'
+          }`}>
+            <p className={`text-5xl font-bold mb-3 ${
+              wasCorrect ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {wasCorrect ? '✓' : '✗'}
+            </p>
+            <p className="text-xl text-white font-semibold mb-1">
+              {iWasAnswerer
+                ? (wasCorrect ? 'You got it right!' : 'Incorrect!')
+                : (wasCorrect
+                    ? `${answerer?.name || 'Someone'} got it right!`
+                    : `${answerer?.name || 'Someone'} got it wrong`)}
+            </p>
+            <p className={`text-2xl font-bold mt-2 ${
+              wasCorrect ? 'text-green-300' : 'text-red-300'
+            }`}>
+              {wasCorrect ? '+' : '-'}${currentClue.value.toLocaleString()}
+            </p>
+          </div>
+
+          {/* Correct answer */}
+          <div className="mt-6 text-center">
+            <p className="text-gray-500 text-sm mb-1">Correct answer:</p>
+            <p className="text-white text-lg font-bold">{currentClue.answer}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ===== BOARD SELECTION (active player picks) =====
   if (game.phase === 'board_selection' && isMyTurn) {
     const roundCats = categories
@@ -409,14 +466,34 @@ export default function PlayerPage() {
             roundCats.map((cat) => {
               const clue = clues.find((c) => c.category_id === cat.id && c.value === value)
               const answered = clue?.is_answered ?? false
+              const answeredByPlayer =
+                answered && clue?.answered_by
+                  ? players.find((p) => p.id === clue.answered_by)
+                  : null
               return (
                 <button
                   key={`${cat.id}-${value}`}
                   onClick={() => clue && !answered && handleSelectClue(clue.id)}
                   disabled={answered}
-                  className={`board-cell text-sm py-2 ${answered ? 'board-cell-answered' : ''}`}
+                  className={`board-cell py-2 ${
+                    answered
+                      ? answeredByPlayer
+                        ? 'board-cell-correct'
+                        : 'board-cell-wrong'
+                      : ''
+                  }`}
                 >
-                  {answered ? '' : `$${value}`}
+                  {answered ? (
+                    answeredByPlayer ? (
+                      <span className="text-[7px] text-green-300 font-bold truncate block px-0.5">
+                        {answeredByPlayer.name}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-red-400/70">✗</span>
+                    )
+                  ) : (
+                    <span className="text-sm">{`$${value}`}</span>
+                  )}
                 </button>
               )
             })

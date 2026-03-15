@@ -586,24 +586,47 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     })
     .eq('id', clueId)
 
-  // Check if the round is complete
+  // Go to clue_result phase to show the result animation
+  // Keep current_clue_id and current_player_id so displays can show who answered
+  await supabase
+    .from('games')
+    .update({
+      phase: 'clue_result',
+      current_player_id: playerId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+
+  return { correct, scoreChange }
+}
+
+/**
+ * Advance from clue_result to next state.
+ * Checks if the round is complete and routes accordingly.
+ * Called by the display page after showing the result animation.
+ */
+export async function advanceFromClueResult(gameId: string) {
+  const { data: game } = await supabase
+    .from('games')
+    .select('current_round')
+    .eq('id', gameId)
+    .single()
+
   const currentRound = game?.current_round ?? 1
   const roundComplete = await checkRoundComplete(gameId, currentRound)
 
   if (!roundComplete) {
-    // Round continues — go back to board
+    // Round continues — go back to board selection
     await supabase
       .from('games')
       .update({
         current_clue_id: null,
         phase: 'board_selection',
-        current_player_id: playerId,
         updated_at: new Date().toISOString(),
       })
       .eq('id', gameId)
   }
-
-  return { correct, scoreChange }
+  // If roundComplete, checkRoundComplete already set the phase to round_end or final_category
 }
 
 /**

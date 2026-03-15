@@ -105,17 +105,35 @@ export function GameBoard({
           roundCategories.map((cat) => {
             const clue = getClue(cat.id, value)
             const isAnswered = clue?.is_answered ?? false
+            const answeredByPlayer =
+              isAnswered && clue?.answered_by
+                ? players.find((p) => p.id === clue.answered_by)
+                : null
 
             return (
               <button
                 key={`${cat.id}-${value}`}
                 onClick={() => handleCellClick(clue)}
                 disabled={isAnswered || !isMyTurn}
-                className={`board-cell text-lg md:text-2xl py-3 md:py-6 ${
-                  isAnswered ? 'board-cell-answered' : ''
+                className={`board-cell py-3 md:py-6 ${
+                  isAnswered
+                    ? answeredByPlayer
+                      ? 'board-cell-correct'
+                      : 'board-cell-wrong'
+                    : ''
                 } ${!isMyTurn && !isAnswered ? 'opacity-70' : ''}`}
               >
-                {isAnswered ? '' : `$${value}`}
+                {isAnswered ? (
+                  answeredByPlayer ? (
+                    <span className="text-[9px] md:text-xs text-green-300 font-bold truncate block px-0.5">
+                      {answeredByPlayer.name}
+                    </span>
+                  ) : (
+                    <span className="text-sm md:text-lg text-red-400/70">✗</span>
+                  )
+                ) : (
+                  <span className="text-lg md:text-2xl">{`$${value}`}</span>
+                )}
               </button>
             )
           })

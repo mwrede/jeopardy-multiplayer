@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   advanceFromRoundEnd,
+  advanceFromClueResult,
   advanceToFinalWager,
   advanceToFinalClue,
   advanceToFinalAnswering,
@@ -126,6 +127,26 @@ export default function DisplayPage() {
 
     return () => {
       if (revealRef.current) clearTimeout(revealRef.current)
+    }
+  }, [game?.phase, game?.id])
+
+  // Auto-transition: clue_result → board_selection (or round_end) after 4 seconds
+  const clueResultRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'clue_result') {
+      if (clueResultRef.current) {
+        clearTimeout(clueResultRef.current)
+        clueResultRef.current = null
+      }
+      return
+    }
+
+    clueResultRef.current = setTimeout(async () => {
+      await advanceFromClueResult(game.id)
+    }, 4000)
+
+    return () => {
+      if (clueResultRef.current) clearTimeout(clueResultRef.current)
     }
   }, [game?.phase, game?.id])
 
@@ -363,6 +384,92 @@ export default function DisplayPage() {
                 </div>
               </div>
             ))}
+        </div>
+      </div>
+    )
+  }
+
+  // CLUE RESULT: Show answer result animation
+  if (game.phase === 'clue_result') {
+    const resultClue = game.current_clue_id
+      ? clues.find((c) => c.id === game.current_clue_id)
+      : null
+    const answerer = players.find((p) => p.id === game.current_player_id)
+    const wasCorrect = resultClue?.answered_by != null
+    const clueCategory = resultClue
+      ? categories.find((c) => c.id === resultClue.category_id)
+      : null
+
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+        {/* Scoreboard bar */}
+        <div className="flex gap-3 px-4 py-3 bg-black/30 overflow-x-auto">
+          {players
+            .sort((a, b) => b.score - a.score)
+            .map((p) => (
+              <div
+                key={p.id}
+                className={`flex-shrink-0 px-5 py-2 rounded-xl text-center min-w-[120px] transition-all ${
+                  p.id === game.current_player_id
+                    ? wasCorrect
+                      ? 'bg-green-600/20 border-2 border-green-500 scale-105'
+                      : 'bg-red-600/20 border-2 border-red-500 scale-105'
+                    : 'bg-white/5'
+                }`}
+              >
+                <p className="text-sm text-gray-400 truncate">{p.name}</p>
+                <p className={`text-2xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
+                  ${p.score.toLocaleString()}
+                </p>
+              </div>
+            ))}
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center px-12">
+          {/* Category + Value */}
+          {clueCategory && (
+            <p className="text-blue-300 text-xl font-bold uppercase tracking-wide mb-2">
+              {clueCategory.name}
+            </p>
+          )}
+          {resultClue && (
+            <p className="text-jeopardy-gold text-2xl font-bold mb-6">
+              ${resultClue.value.toLocaleString()}
+            </p>
+          )}
+
+          {/* Result indicator */}
+          <div className={`px-16 py-10 rounded-3xl mb-8 ${
+            wasCorrect
+              ? 'bg-green-600/15 border-2 border-green-500'
+              : 'bg-red-600/15 border-2 border-red-500'
+          }`}>
+            <p className={`text-6xl md:text-8xl font-bold text-center mb-4 ${
+              wasCorrect ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {wasCorrect ? '✓ Correct!' : '✗ Incorrect'}
+            </p>
+            <p className="text-3xl text-white text-center font-semibold">
+              {answerer?.name || 'Unknown'}
+            </p>
+            {resultClue && (
+              <p className={`text-4xl font-bold text-center mt-4 ${
+                wasCorrect ? 'text-green-300' : 'text-red-300'
+              }`}>
+                {wasCorrect ? '+' : '-'}${resultClue.value.toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          {/* Correct answer */}
+          {resultClue && (
+            <div className="text-center">
+              <p className="text-gray-400 text-lg mb-2">The correct answer:</p>
+              <p className="text-3xl md:text-4xl text-white font-bold">
+                {resultClue.answer}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     )
