@@ -430,6 +430,16 @@ export default function DisplayPage() {
       {/* Board or Clue display */}
       {showClue && currentClue ? (
         <div className="flex-1 flex flex-col items-center justify-center px-12">
+          {/* Category name */}
+          {(() => {
+            const clueCategory = categories.find((c) => c.id === currentClue.category_id)
+            return clueCategory ? (
+              <p className="text-blue-300 text-2xl font-bold uppercase tracking-wide mb-4">
+                {clueCategory.name}
+              </p>
+            ) : null
+          })()}
+
           {/* Clue value */}
           <p className="text-jeopardy-gold text-4xl font-bold mb-8">
             ${currentClue.value.toLocaleString()}

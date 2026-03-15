@@ -383,7 +383,7 @@ export default function PlayerPage() {
   // ===== BOARD SELECTION (active player picks) =====
   if (game.phase === 'board_selection' && isMyTurn) {
     const roundCats = categories
-      .filter((c) => c.round_number === game.current_round)
+      .filter((c) => Number(c.round_number) === Number(game.current_round))
       .sort((a, b) => a.position - b.position)
     const values = ROUND_VALUES[game.current_round] || ROUND_VALUES[1]
 
