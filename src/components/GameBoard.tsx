@@ -76,25 +76,29 @@ export function GameBoard({
       </div>
 
       {/* Turn indicator */}
-      <div className="text-center py-2 text-sm">
+      <div className={`text-center py-3 mx-2 rounded-xl text-lg ${
+        isMyTurn
+          ? 'bg-jeopardy-gold/15 border border-jeopardy-gold/40'
+          : ''
+      }`}>
         {isMyTurn ? (
-          <span className="text-jeopardy-gold font-semibold">Your turn - pick a clue!</span>
+          <span className="text-jeopardy-gold font-bold">Your turn — pick a clue!</span>
         ) : (
-          <span className="text-gray-400">
+          <span className="text-gray-400 font-medium">
             {currentPlayer?.name || 'Someone'} is picking...
           </span>
         )}
       </div>
 
       {/* Board Grid */}
-      <div className="flex-1 grid grid-cols-6 gap-1 md:gap-2 px-1 md:px-4 pb-4">
+      <div className="flex-1 grid grid-cols-6 gap-1.5 md:gap-2 px-1.5 md:px-4 pb-4 pt-2">
         {/* Category headers */}
         {roundCategories.map((cat) => (
           <div
             key={cat.id}
-            className="bg-jeopardy-blue rounded p-1 md:p-2 flex items-center justify-center text-center"
+            className="bg-jeopardy-blue rounded p-1.5 md:p-2 flex items-center justify-center text-center min-h-[40px] md:min-h-0"
           >
-            <span className="text-[10px] md:text-sm font-bold text-white uppercase leading-tight">
+            <span className="text-[9px] md:text-sm font-bold text-white uppercase leading-tight line-clamp-2">
               {cat.name}
             </span>
           </div>
@@ -115,13 +119,13 @@ export function GameBoard({
                 key={`${cat.id}-${value}`}
                 onClick={() => handleCellClick(clue)}
                 disabled={isAnswered || !isMyTurn}
-                className={`board-cell py-3 md:py-6 ${
+                className={`board-cell py-4 md:py-6 min-h-[44px] ${
                   isAnswered
                     ? answeredByPlayer
                       ? 'board-cell-correct'
                       : 'board-cell-wrong'
                     : ''
-                } ${!isMyTurn && !isAnswered ? 'opacity-70' : ''}`}
+                } ${!isMyTurn && !isAnswered ? 'opacity-60' : ''}`}
               >
                 {isAnswered ? (
                   answeredByPlayer ? (
@@ -132,7 +136,7 @@ export function GameBoard({
                     <span className="text-sm md:text-lg text-red-400/70">✗</span>
                   )
                 ) : (
-                  <span className="text-lg md:text-2xl">{`$${value}`}</span>
+                  <span className="text-base md:text-2xl">{`$${value}`}</span>
                 )}
               </button>
             )

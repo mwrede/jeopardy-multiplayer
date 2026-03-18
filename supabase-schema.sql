@@ -88,9 +88,12 @@ CREATE TABLE buzzes (
     latency_offset    SMALLINT,
     adjusted_time     TIMESTAMPTZ,
     is_winner         BOOLEAN NOT NULL DEFAULT FALSE,
+    is_pass           BOOLEAN NOT NULL DEFAULT FALSE,
     answer            TEXT,
     is_correct        BOOLEAN,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT unique_buzz_per_player_clue UNIQUE (game_id, clue_id, player_id)
 );
 
 CREATE INDEX idx_buzzes_game_clue ON buzzes(game_id, clue_id);

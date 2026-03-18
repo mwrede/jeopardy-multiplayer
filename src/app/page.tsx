@@ -55,7 +55,7 @@ export default function Home() {
           value={playerName}
           onChange={(e) => setPlayerName(e.target.value)}
           maxLength={30}
-          className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-lg placeholder:text-gray-500 focus:outline-none focus:border-jeopardy-gold"
+          className="input-base text-lg"
           autoFocus
         />
 
@@ -65,13 +65,13 @@ export default function Home() {
           value={roomCode}
           onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
           maxLength={6}
-          className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-xl placeholder:text-gray-500 focus:outline-none focus:border-jeopardy-gold tracking-[0.3em] text-center font-mono"
+          className="input-base text-xl tracking-[0.3em] text-center font-mono"
         />
 
         <button
           onClick={handleJoin}
           disabled={loading}
-          className="w-full bg-jeopardy-gold text-jeopardy-dark font-bold py-4 rounded-xl text-xl hover:brightness-110 transition-all disabled:opacity-50"
+          className="btn-primary w-full py-4 text-xl"
         >
           {loading ? 'Joining...' : 'Join Game'}
         </button>

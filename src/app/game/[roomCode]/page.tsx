@@ -6,6 +6,7 @@ import { BuzzerButton } from '@/components/BuzzerButton'
 import {
   setReady,
   startGame,
+  startGameFromSource,
   selectClue,
   submitAnswer,
   submitWager,
@@ -15,6 +16,8 @@ import {
   advanceToFinalClue,
   advanceToFinalAnswering,
   startFinalReveal,
+  passOnClue,
+  passAfterBuzz,
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 
@@ -54,9 +57,16 @@ export default function PlayerPage() {
   const [busy, setBusy] = useState(false)
   const [finalWagerLocked, setFinalWagerLocked] = useState(false)
   const [finalAnswerLocked, setFinalAnswerLocked] = useState(false)
+  const [hasPassed, setHasPassed] = useState(false)
+  const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
+  const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
+  const [codeCopied, setCodeCopied] = useState(false)
+  const buzzIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const answerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const answerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Reset final locks when phase changes
+  // Reset state when phase changes
   useEffect(() => {
     if (game?.phase === 'final_wager') {
       setFinalWagerLocked(myPlayer?.final_wager != null)
@@ -66,7 +76,67 @@ export default function PlayerPage() {
       setFinalAnswerLocked(myPlayer?.final_answer != null && myPlayer?.final_answer !== '')
       setFinalAnswerInput('')
     }
+    // Reset pass state when entering a new clue phase
+    if (game?.phase === 'clue_reading' || game?.phase === 'board_selection') {
+      setHasPassed(false)
+    }
   }, [game?.phase])
+
+  // Buzz window countdown timer on player view
+  useEffect(() => {
+    if (!game || game.phase !== 'buzz_window') {
+      setBuzzCountdown(null)
+      if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
+      buzzIntervalRef.current = null
+      return
+    }
+
+    const totalMs = game.settings?.buzz_window_ms ?? 15000
+    const totalSec = Math.ceil(totalMs / 1000)
+    setBuzzCountdown(totalSec)
+
+    buzzIntervalRef.current = setInterval(() => {
+      setBuzzCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    return () => {
+      if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
+    }
+  }, [game?.phase, game?.id])
+
+  // Answer countdown timer when it's your turn to answer
+  useEffect(() => {
+    const isAnswering = game?.phase === 'player_answering' && game?.current_player_id === myPlayerId
+
+    if (!isAnswering || !game) {
+      setAnswerCountdown(null)
+      if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
+      if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
+      answerIntervalRef.current = null
+      answerTimeoutRef.current = null
+      return
+    }
+
+    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const totalSec = Math.ceil(totalMs / 1000)
+    setAnswerCountdown(totalSec)
+
+    answerIntervalRef.current = setInterval(() => {
+      setAnswerCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    // Auto-pass when time runs out
+    answerTimeoutRef.current = setTimeout(async () => {
+      if (game.current_clue_id && myPlayerId) {
+        await passAfterBuzz(game.id, game.current_clue_id, myPlayerId)
+      }
+    }, totalMs)
+
+    return () => {
+      if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
+      if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
+    }
+  }, [game?.phase, game?.id, game?.current_player_id, myPlayerId])
 
   // Wrap actions: write to DB, refresh, show errors
   async function doAction(fn: () => Promise<void>) {
@@ -91,7 +161,14 @@ export default function PlayerPage() {
 
   const handleStartGame = () => doAction(async () => {
     if (!game) return
-    await startGame(game.id)
+    // Check if a specific J-Archive game was selected by the host
+    const sourceGameId = localStorage.getItem(`game_source_${game.id}`)
+    if (sourceGameId) {
+      await startGameFromSource(game.id, parseInt(sourceGameId))
+      localStorage.removeItem(`game_source_${game.id}`)
+    } else {
+      await startGame(game.id)
+    }
   })
 
   const handleSelectClue = (clueId: string) => doAction(async () => {
@@ -104,10 +181,21 @@ export default function PlayerPage() {
     await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
   })
 
+  const handlePass = () => doAction(async () => {
+    if (!game || !myPlayer || !game.current_clue_id) return
+    await passOnClue(game.id, game.current_clue_id, myPlayer.id)
+    setHasPassed(true)
+  })
+
   const handleSubmitAnswer = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id || !answer.trim()) return
     await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
     setAnswer('')
+  })
+
+  const handlePassAfterBuzz = () => doAction(async () => {
+    if (!game || !myPlayer || !game.current_clue_id) return
+    await passAfterBuzz(game.id, game.current_clue_id, myPlayer.id)
   })
 
   const handleSubmitWager = () => doAction(async () => {
@@ -174,7 +262,18 @@ export default function PlayerPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-jeopardy-dark">
         <h2 className="text-3xl font-bold text-jeopardy-gold mb-2">JEOPARDY!</h2>
-        <p className="text-gray-400 mb-8">Room {game.room_code}</p>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(game.room_code)
+            setCodeCopied(true)
+            setTimeout(() => setCodeCopied(false), 2000)
+          }}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors mb-8"
+        >
+          <span className="text-gray-400 text-sm">Room</span>
+          <span className="text-white font-mono text-lg font-bold tracking-widest">{game.room_code}</span>
+          <span className="text-xs text-gray-500">{codeCopied ? 'Copied!' : 'Copy'}</span>
+        </button>
 
         <div className="w-full max-w-sm space-y-3 mb-8">
           {players.map((p) => (
@@ -197,9 +296,9 @@ export default function PlayerPage() {
         <button
           onClick={handleReady}
           disabled={busy}
-          className={`w-full max-w-sm py-5 rounded-2xl font-bold text-xl transition-all disabled:opacity-50 ${
+          className={`w-full max-w-sm py-5 rounded-2xl font-bold text-xl transition-all active:scale-[0.98] disabled:opacity-50 ${
             myPlayer.is_ready
-              ? 'bg-gray-700 text-gray-300'
+              ? 'btn-secondary'
               : 'bg-green-600 text-white'
           }`}
         >
@@ -210,7 +309,7 @@ export default function PlayerPage() {
           <button
             onClick={handleStartGame}
             disabled={busy}
-            className="w-full max-w-sm mt-3 py-5 rounded-2xl font-bold text-xl bg-jeopardy-gold text-jeopardy-dark disabled:opacity-50"
+            className="btn-primary w-full max-w-sm mt-3 py-5 text-xl"
           >
             {busy ? 'Starting...' : 'Start Game'}
           </button>
@@ -288,13 +387,13 @@ export default function PlayerPage() {
             min={0}
             max={maxWager}
             placeholder="Enter your wager"
-            className="w-full max-w-xs bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-2xl text-center focus:outline-none focus:border-jeopardy-gold"
+            className="input-base max-w-xs text-2xl text-center"
             autoFocus
           />
           <button
             onClick={handleFinalWager}
             disabled={busy}
-            className="w-full max-w-xs mt-4 bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl disabled:opacity-50"
+            className="btn-primary w-full max-w-xs mt-4 py-4 text-xl"
           >
             Lock In Wager
           </button>
@@ -319,34 +418,38 @@ export default function PlayerPage() {
     }
 
     return (
-      <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
         <PlayerHeader myPlayer={myPlayer} game={game} />
-        <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="flex-1 flex flex-col items-center justify-center p-6">
           <h2 className="text-xl font-bold text-jeopardy-gold mb-2 uppercase">{game.final_category_name}</h2>
-          <p className="text-gray-400 text-sm mb-6">Look at the TV for the clue!</p>
-
-          <input
-            type="text"
-            value={finalAnswerInput}
-            onChange={(e) => setFinalAnswerInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleFinalAnswer()
-            }}
-            placeholder="What is..."
-            maxLength={200}
-            className="w-full max-w-sm bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-xl placeholder:text-gray-500 focus:outline-none focus:border-jeopardy-gold"
-            autoFocus
-            autoComplete="off"
-          />
-          <button
-            onClick={handleFinalAnswer}
-            disabled={!finalAnswerInput.trim() || busy}
-            className="w-full max-w-sm mt-4 bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl disabled:opacity-50"
-          >
-            Submit Final Answer
-          </button>
+          <p className="text-gray-400 text-sm">Look at the TV for the clue!</p>
         </div>
-        {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
+
+        <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
+          <div className="w-full max-w-sm mx-auto space-y-3">
+            <input
+              type="text"
+              value={finalAnswerInput}
+              onChange={(e) => setFinalAnswerInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleFinalAnswer()
+              }}
+              placeholder="What is..."
+              maxLength={200}
+              className="input-base text-xl"
+              autoFocus
+              autoComplete="off"
+            />
+            <button
+              onClick={handleFinalAnswer}
+              disabled={!finalAnswerInput.trim() || busy}
+              className="btn-primary w-full py-4 text-xl"
+            >
+              Submit Final Answer
+            </button>
+            {error && <p className="text-red-400 text-center text-sm">{error}</p>}
+          </div>
+        </div>
       </div>
     )
   }
@@ -382,8 +485,11 @@ export default function PlayerPage() {
 
   // ===== CLUE RESULT (show who got it right/wrong) =====
   if (game.phase === 'clue_result' && currentClue) {
-    const answerer = players.find((p) => p.id === game.current_player_id)
+    const answerer = game.current_player_id
+      ? players.find((p) => p.id === game.current_player_id)
+      : null
     const wasCorrect = currentClue.answered_by != null
+    const noOneAnswered = !game.current_player_id
     const iWasAnswerer = game.current_player_id === myPlayerId
     const clueCategory = categories.find((c) => c.id === currentClue.category_id)
 
@@ -404,27 +510,33 @@ export default function PlayerPage() {
 
           {/* Result card */}
           <div className={`w-full max-w-sm px-8 py-8 rounded-2xl text-center ${
-            wasCorrect
-              ? 'bg-green-600/15 border-2 border-green-500'
-              : 'bg-red-600/15 border-2 border-red-500'
+            noOneAnswered
+              ? 'bg-gray-600/15 border-2 border-gray-500'
+              : wasCorrect
+                ? 'bg-green-600/15 border-2 border-green-500'
+                : 'bg-red-600/15 border-2 border-red-500'
           }`}>
             <p className={`text-5xl font-bold mb-3 ${
-              wasCorrect ? 'text-green-400' : 'text-red-400'
+              noOneAnswered ? 'text-gray-400' : wasCorrect ? 'text-green-400' : 'text-red-400'
             }`}>
-              {wasCorrect ? '✓' : '✗'}
+              {noOneAnswered ? '—' : wasCorrect ? '✓' : '✗'}
             </p>
             <p className="text-xl text-white font-semibold mb-1">
-              {iWasAnswerer
-                ? (wasCorrect ? 'You got it right!' : 'Incorrect!')
-                : (wasCorrect
-                    ? `${answerer?.name || 'Someone'} got it right!`
-                    : `${answerer?.name || 'Someone'} got it wrong`)}
+              {noOneAnswered
+                ? 'No one answered'
+                : iWasAnswerer
+                  ? (wasCorrect ? 'You got it right!' : 'Incorrect!')
+                  : (wasCorrect
+                      ? `${answerer?.name || 'Someone'} got it right!`
+                      : `${answerer?.name || 'Someone'} got it wrong`)}
             </p>
-            <p className={`text-2xl font-bold mt-2 ${
-              wasCorrect ? 'text-green-300' : 'text-red-300'
-            }`}>
-              {wasCorrect ? '+' : '-'}${currentClue.value.toLocaleString()}
-            </p>
+            {!noOneAnswered && (
+              <p className={`text-2xl font-bold mt-2 ${
+                wasCorrect ? 'text-green-300' : 'text-red-300'
+              }`}>
+                {wasCorrect ? '+' : '-'}${currentClue.value.toLocaleString()}
+              </p>
+            )}
           </div>
 
           {/* Correct answer */}
@@ -449,14 +561,14 @@ export default function PlayerPage() {
       <div className="min-h-screen flex flex-col bg-jeopardy-dark p-2">
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
-        <p className="text-center text-jeopardy-gold font-bold text-lg py-2">
-          Pick a clue!
-        </p>
+        <div className="text-center py-3 mx-2 rounded-xl bg-jeopardy-gold/15 border border-jeopardy-gold/40">
+          <span className="text-jeopardy-gold font-bold text-lg">Your turn — pick a clue!</span>
+        </div>
 
-        <div className="flex-1 grid grid-cols-6 gap-1">
+        <div className="flex-1 grid grid-cols-6 gap-1.5 px-1 pt-2">
           {roundCats.map((cat) => (
-            <div key={cat.id} className="bg-jeopardy-blue rounded p-1 flex items-center justify-center">
-              <span className="text-[8px] font-bold text-white uppercase text-center leading-tight">
+            <div key={cat.id} className="bg-jeopardy-blue rounded p-1.5 flex items-center justify-center min-h-[36px]">
+              <span className="text-[9px] font-bold text-white uppercase text-center leading-tight line-clamp-2">
                 {cat.name}
               </span>
             </div>
@@ -475,7 +587,7 @@ export default function PlayerPage() {
                   key={`${cat.id}-${value}`}
                   onClick={() => clue && !answered && handleSelectClue(clue.id)}
                   disabled={answered}
-                  className={`board-cell py-2 ${
+                  className={`board-cell py-3 min-h-[44px] ${
                     answered
                       ? answeredByPlayer
                         ? 'board-cell-correct'
@@ -485,14 +597,14 @@ export default function PlayerPage() {
                 >
                   {answered ? (
                     answeredByPlayer ? (
-                      <span className="text-[7px] text-green-300 font-bold truncate block px-0.5">
+                      <span className="text-[8px] text-green-300 font-bold truncate block px-0.5">
                         {answeredByPlayer.name}
                       </span>
                     ) : (
                       <span className="text-xs text-red-400/70">✗</span>
                     )
                   ) : (
-                    <span className="text-sm">{`$${value}`}</span>
+                    <span className="text-sm font-bold">{`$${value}`}</span>
                   )}
                 </button>
               )
@@ -525,22 +637,48 @@ export default function PlayerPage() {
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
-        <div className="flex-1 flex items-center justify-center px-6">
-          <p className="text-gray-400 text-center text-lg">
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <p className="text-gray-400 text-center text-lg mb-4">
             Look at the TV for the clue!
           </p>
+          {/* Countdown timer */}
+          {game.phase === 'buzz_window' && buzzCountdown !== null && (
+            <p className={`text-4xl font-bold font-mono ${
+              buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'
+            }`}>
+              {buzzCountdown}
+            </p>
+          )}
         </div>
 
-        <div className="p-4">
-          <BuzzerButton
-            gameId={game.id}
-            clueId={currentClue.id}
-            playerId={myPlayer.id}
-            buzzWindowOpen={game.phase === 'buzz_window'}
-            isBuzzWinner={false}
-            isLockedOut={false}
-            onBuzz={handleBuzz}
-          />
+        <div className="p-4 space-y-3">
+          {hasPassed ? (
+            <div className="w-full py-8 rounded-2xl bg-gray-800 text-center">
+              <p className="text-gray-400 text-xl font-semibold">Passed</p>
+              <p className="text-gray-500 text-sm mt-1">Waiting for others...</p>
+            </div>
+          ) : (
+            <>
+              <BuzzerButton
+                gameId={game.id}
+                clueId={currentClue.id}
+                playerId={myPlayer.id}
+                buzzWindowOpen={game.phase === 'buzz_window'}
+                isBuzzWinner={false}
+                isLockedOut={false}
+                onBuzz={handleBuzz}
+              />
+              {game.phase === 'buzz_window' && (
+                <button
+                  onClick={handlePass}
+                  disabled={busy}
+                  className="btn-secondary w-full py-4 text-lg active:scale-95"
+                >
+                  I Don&apos;t Know
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     )
@@ -552,13 +690,21 @@ export default function PlayerPage() {
 
     if (isAnswering) {
       return (
-        <div className="min-h-screen flex flex-col bg-jeopardy-dark p-4">
+        <div className="min-h-screen flex flex-col bg-jeopardy-dark">
           <PlayerHeader myPlayer={myPlayer} game={game} />
 
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <p className="text-jeopardy-gold text-2xl font-bold mb-6">Your turn to answer!</p>
+          <div className="flex-1 flex flex-col items-center justify-center p-4">
+            <p className="text-jeopardy-gold text-2xl font-bold mb-2">Your turn to answer!</p>
+            {answerCountdown !== null && (
+              <p className={`text-4xl font-bold mb-4 ${answerCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                {answerCountdown}s
+              </p>
+            )}
+          </div>
 
-            <div className="w-full max-w-sm space-y-4">
+          {/* Sticky bottom input — stays above mobile keyboard */}
+          <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
+            <div className="w-full max-w-sm mx-auto space-y-3">
               <input
                 ref={inputRef}
                 type="text"
@@ -569,16 +715,23 @@ export default function PlayerPage() {
                 }}
                 placeholder="Type your answer..."
                 maxLength={200}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-xl placeholder:text-gray-500 focus:outline-none focus:border-jeopardy-gold"
+                className="input-base text-xl"
                 autoFocus
                 autoComplete="off"
               />
               <button
                 onClick={handleSubmitAnswer}
                 disabled={!answer.trim()}
-                className="w-full bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl disabled:opacity-50"
+                className="btn-primary w-full py-4 text-xl"
               >
                 Submit Answer
+              </button>
+              <button
+                onClick={handlePassAfterBuzz}
+                disabled={busy}
+                className="btn-secondary w-full py-3 text-lg active:scale-95"
+              >
+                I Don&apos;t Know
               </button>
             </div>
           </div>
@@ -611,12 +764,12 @@ export default function PlayerPage() {
           onChange={(e) => setWager(e.target.value)}
           min={5}
           max={maxWager}
-          className="w-full max-w-xs bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white text-2xl text-center focus:outline-none focus:border-jeopardy-gold"
+          className="input-base max-w-xs text-2xl text-center"
           autoFocus
         />
         <button
           onClick={handleSubmitWager}
-          className="w-full max-w-xs mt-4 bg-jeopardy-gold text-jeopardy-dark py-4 rounded-xl font-bold text-xl"
+          className="btn-primary w-full max-w-xs mt-4 py-4 text-xl"
         >
           Lock In Wager
         </button>

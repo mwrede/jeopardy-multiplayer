@@ -50,9 +50,21 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   judgment: 'ai',
   reading_period_ms: 0,
   buzz_window_ms: 15000,
-  answer_time_ms: 20000,
+  answer_time_ms: 15000,
   daily_double_answer_ms: 25000,
   final_answer_ms: 45000,
+}
+
+// Game search result for browsing J-Archive games
+export interface GameSearchResult {
+  game_id_source: number
+  game_title: string
+  air_date: string | null
+  player1: string
+  player2: string
+  player3: string
+  season: string
+  clue_count: number
 }
 
 export const DEFAULT_STRICT_SETTINGS: GameSettings = {

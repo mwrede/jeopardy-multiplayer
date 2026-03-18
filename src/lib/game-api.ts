@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Game, Player, Category, Clue, GameSettings } from '@/types/game'
+import type { Game, Player, Category, Clue, GameSettings, GameSearchResult } from '@/types/game'
 
 // Generate a 6-character room code
 function generateRoomCode(): string {
@@ -544,6 +544,70 @@ export async function submitBuzz(gameId: string, clueId: string, playerId: strin
 }
 
 /**
+ * Player passes on a clue ("I don't know").
+ * Records the pass in the buzzes table with a special flag.
+ * If all players have passed, skips the clue and returns to board.
+ */
+export async function passOnClue(gameId: string, clueId: string, playerId: string) {
+  // Record the pass as a buzz with is_pass = true
+  await supabase
+    .from('buzzes')
+    .upsert({
+      game_id: gameId,
+      clue_id: clueId,
+      player_id: playerId,
+      client_timestamp: performance.now(),
+      is_pass: true,
+    }, { onConflict: 'game_id,clue_id,player_id' })
+
+  // Check if all players have passed
+  const { data: allPlayers } = await supabase
+    .from('players')
+    .select('id')
+    .eq('game_id', gameId)
+
+  const { data: passes } = await supabase
+    .from('buzzes')
+    .select('player_id')
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('is_pass', true)
+
+  const playerIds = new Set(allPlayers?.map((p) => p.id) || [])
+  const passedIds = new Set(passes?.map((b) => b.player_id) || [])
+  const allPassed = playerIds.size > 0 && [...playerIds].every((id) => passedIds.has(id))
+
+  if (allPassed) {
+    await skipClue(gameId, clueId)
+  }
+}
+
+/**
+ * Skip a clue (no one answered — either timeout or all passed).
+ * Marks clue as answered with no answerer, shows result, then moves on.
+ */
+export async function skipClue(gameId: string, clueId: string) {
+  // Mark clue as answered with no one getting it
+  await supabase
+    .from('clues')
+    .update({
+      is_answered: true,
+      answered_by: null,
+    })
+    .eq('id', clueId)
+
+  // Go to clue_result phase to show the correct answer
+  await supabase
+    .from('games')
+    .update({
+      phase: 'clue_result',
+      current_player_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+}
+
+/**
  * Submit an answer to a clue.
  * After answering, checks if the round is complete and auto-advances.
  */
@@ -645,6 +709,253 @@ export async function submitWager(gameId: string, playerId: string, wager: numbe
     .from('games')
     .update({
       phase: 'daily_double_answering',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+
+  if (error) throw error
+}
+
+/**
+ * Player passes after buzzing in ("I Don't Know" during answering phase).
+ * No points are deducted. Clue is marked as answered with no answerer.
+ */
+export async function passAfterBuzz(gameId: string, clueId: string, playerId: string) {
+  // Mark clue as answered with no one getting it (no score change)
+  await supabase
+    .from('clues')
+    .update({
+      is_answered: true,
+      answered_by: null,
+    })
+    .eq('id', clueId)
+
+  // Go to clue_result phase
+  await supabase
+    .from('games')
+    .update({
+      phase: 'clue_result',
+      current_player_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+}
+
+/**
+ * Search J-Archive games by title/notes.
+ * Returns distinct games with metadata for the game browser.
+ */
+export async function searchGames(query: string, page: number = 0, limit: number = 50): Promise<GameSearchResult[]> {
+  // Use RPC or manual query to get distinct games matching the search
+  // We query clue_pool and group by game_id_source
+  let queryBuilder = supabase
+    .from('clue_pool')
+    .select('game_id_source, game_title, air_date, player1, player2, player3, season')
+
+  if (query.trim()) {
+    // Search in game_title and notes with ilike
+    queryBuilder = queryBuilder.or(`game_title.ilike.%${query}%,notes.ilike.%${query}%`)
+  }
+
+  const { data, error } = await queryBuilder
+    .order('air_date', { ascending: false })
+    .limit(5000)
+
+  if (error) throw error
+  if (!data) return []
+
+  // Group by game_id_source to get distinct games with clue counts
+  const gameMap = new Map<number, GameSearchResult>()
+  for (const row of data) {
+    if (!row.game_id_source) continue
+    const existing = gameMap.get(row.game_id_source)
+    if (existing) {
+      existing.clue_count++
+    } else {
+      gameMap.set(row.game_id_source, {
+        game_id_source: row.game_id_source,
+        game_title: row.game_title || '',
+        air_date: row.air_date,
+        player1: row.player1 || '',
+        player2: row.player2 || '',
+        player3: row.player3 || '',
+        season: row.season || '',
+        clue_count: 1,
+      })
+    }
+  }
+
+  // Sort by air_date descending and paginate
+  const games = Array.from(gameMap.values())
+    .sort((a, b) => {
+      if (!a.air_date && !b.air_date) return 0
+      if (!a.air_date) return 1
+      if (!b.air_date) return -1
+      return b.air_date.localeCompare(a.air_date)
+    })
+    .slice(page * limit, (page + 1) * limit)
+
+  return games
+}
+
+/**
+ * Start a game using clues from a specific J-Archive game (by game_id_source).
+ * Preserves the original categories, clue order, and daily doubles.
+ */
+export async function startGameFromSource(gameId: string, sourceGameId: number) {
+  const ROUND_1_VALUES = [200, 400, 600, 800, 1000]
+  const ROUND_2_VALUES = [400, 800, 1200, 1600, 2000]
+
+  // Fetch all clues from this source game
+  const { data: sourceClues, error: fetchErr } = await supabase
+    .from('clue_pool')
+    .select('*')
+    .eq('game_id_source', sourceGameId)
+
+  if (fetchErr) throw fetchErr
+  if (!sourceClues || sourceClues.length === 0) throw new Error('No clues found for this game')
+
+  // Group clues by round and category
+  const rounds: Record<string, Record<string, typeof sourceClues>> = {}
+  for (const clue of sourceClues) {
+    if (!rounds[clue.round]) rounds[clue.round] = {}
+    if (!rounds[clue.round][clue.category]) rounds[clue.round][clue.category] = []
+    rounds[clue.round][clue.category].push(clue)
+  }
+
+  // --- Round 1 ---
+  const r1Cats = Object.keys(rounds['Jeopardy Round'] || {})
+  const round1ClueIds: string[] = []
+  const round1DailyDoubles: Set<string> = new Set()
+
+  for (let pos = 0; pos < r1Cats.length && pos < 6; pos++) {
+    const catName = r1Cats[pos]
+    const catClues = rounds['Jeopardy Round'][catName]
+
+    const { data: cat, error: catErr } = await supabase
+      .from('categories')
+      .insert({ game_id: gameId, name: catName, round_number: 1, position: pos })
+      .select('id')
+      .single()
+    if (catErr || !cat) throw catErr || new Error('Failed to create category')
+
+    // Sort clues by value and take up to 5
+    catClues.sort((a: any, b: any) => (a.value || 0) - (b.value || 0))
+    const cluesForCat = catClues.slice(0, 5)
+
+    for (let i = 0; i < cluesForCat.length; i++) {
+      const srcClue = cluesForCat[i]
+      const isDd = srcClue.is_daily_double === true
+      const { data: clue, error: clueErr } = await supabase
+        .from('clues')
+        .insert({
+          category_id: cat.id,
+          value: ROUND_1_VALUES[i] || (i + 1) * 200,
+          question: srcClue.question,
+          answer: srcClue.answer,
+          is_daily_double: isDd,
+        })
+        .select('id')
+        .single()
+      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
+      round1ClueIds.push(clue.id)
+      if (isDd) round1DailyDoubles.add(clue.id)
+    }
+  }
+
+  // If no daily doubles were preserved from source, add 1 random one
+  if (round1DailyDoubles.size === 0 && round1ClueIds.length > 0) {
+    const dd1 = round1ClueIds[Math.floor(Math.random() * round1ClueIds.length)]
+    await supabase.from('clues').update({ is_daily_double: true }).eq('id', dd1)
+  }
+
+  // --- Round 2 ---
+  const r2Cats = Object.keys(rounds['Double Jeopardy'] || {})
+  const round2ClueIds: string[] = []
+  const round2DailyDoubles: Set<string> = new Set()
+
+  for (let pos = 0; pos < r2Cats.length && pos < 6; pos++) {
+    const catName = r2Cats[pos]
+    const catClues = rounds['Double Jeopardy'][catName]
+
+    const { data: cat, error: catErr } = await supabase
+      .from('categories')
+      .insert({ game_id: gameId, name: catName, round_number: 2, position: pos })
+      .select('id')
+      .single()
+    if (catErr || !cat) throw catErr || new Error('Failed to create category')
+
+    catClues.sort((a: any, b: any) => (a.value || 0) - (b.value || 0))
+    const cluesForCat = catClues.slice(0, 5)
+
+    for (let i = 0; i < cluesForCat.length; i++) {
+      const srcClue = cluesForCat[i]
+      const isDd = srcClue.is_daily_double === true
+      const { data: clue, error: clueErr } = await supabase
+        .from('clues')
+        .insert({
+          category_id: cat.id,
+          value: ROUND_2_VALUES[i] || (i + 1) * 400,
+          question: srcClue.question,
+          answer: srcClue.answer,
+          is_daily_double: isDd,
+        })
+        .select('id')
+        .single()
+      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
+      round2ClueIds.push(clue.id)
+      if (isDd) round2DailyDoubles.add(clue.id)
+    }
+  }
+
+  // If no daily doubles were preserved, add 2 random ones
+  if (round2DailyDoubles.size === 0 && round2ClueIds.length > 0) {
+    const dd2idx = Math.floor(Math.random() * round2ClueIds.length)
+    await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd2idx])
+    let dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+    while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+    await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
+  }
+
+  // --- Final Jeopardy ---
+  let finalCategoryName = 'Final Jeopardy'
+  let finalClueText = 'No Final Jeopardy clue available.'
+  let finalAnswerText = ''
+
+  const fjClues = rounds['Final Jeopardy']
+  if (fjClues) {
+    const fjCats = Object.keys(fjClues)
+    if (fjCats.length > 0) {
+      const fjCat = fjCats[0]
+      const fjClue = fjClues[fjCat][0]
+      if (fjClue) {
+        finalCategoryName = fjCat
+        finalClueText = fjClue.question
+        finalAnswerText = fjClue.answer
+      }
+    }
+  }
+
+  // --- Pick random first player ---
+  const { data: gamePlayers } = await supabase
+    .from('players')
+    .select('id')
+    .eq('game_id', gameId)
+
+  if (!gamePlayers || gamePlayers.length === 0) throw new Error('No players in game')
+  const firstPlayer = gamePlayers[Math.floor(Math.random() * gamePlayers.length)]
+
+  // --- Activate game ---
+  const { error } = await supabase
+    .from('games')
+    .update({
+      status: 'active',
+      phase: 'board_selection',
+      current_round: 1,
+      current_player_id: firstPlayer.id,
+      final_category_name: finalCategoryName,
+      final_clue_text: finalClueText,
+      final_answer: finalAnswerText,
       updated_at: new Date().toISOString(),
     })
     .eq('id', gameId)

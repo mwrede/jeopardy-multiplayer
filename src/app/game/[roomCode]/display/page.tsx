@@ -13,6 +13,8 @@ import {
   advanceToFinalAnswering,
   startFinalReveal,
   advanceToGameOver,
+  skipClue,
+  passAfterBuzz,
 } from '@/lib/game-api'
 import type { Player } from '@/types/game'
 
@@ -69,6 +71,77 @@ export default function DisplayPage() {
       if (transitionRef.current) clearTimeout(transitionRef.current)
     }
   }, [game?.phase, game?.id, game?.settings?.reading_period_ms])
+
+  // Buzz window countdown timer + auto-skip on timeout
+  const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
+  const buzzTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const buzzIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'buzz_window') {
+      setBuzzCountdown(null)
+      if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)
+      if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
+      buzzTimeoutRef.current = null
+      buzzIntervalRef.current = null
+      return
+    }
+
+    const totalMs = game.settings?.buzz_window_ms ?? 15000
+    const totalSec = Math.ceil(totalMs / 1000)
+    setBuzzCountdown(totalSec)
+
+    // Tick down every second
+    buzzIntervalRef.current = setInterval(() => {
+      setBuzzCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    // Auto-skip when time runs out
+    buzzTimeoutRef.current = setTimeout(async () => {
+      if (game.current_clue_id) {
+        await skipClue(game.id, game.current_clue_id)
+      }
+    }, totalMs)
+
+    return () => {
+      if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)
+      if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
+    }
+  }, [game?.phase, game?.id])
+
+  // Answer countdown timer + auto-skip on timeout
+  const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
+  const answerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const answerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'player_answering') {
+      setAnswerCountdown(null)
+      if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
+      if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
+      answerTimeoutRef.current = null
+      answerIntervalRef.current = null
+      return
+    }
+
+    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const totalSec = Math.ceil(totalMs / 1000)
+    setAnswerCountdown(totalSec)
+
+    answerIntervalRef.current = setInterval(() => {
+      setAnswerCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    // Auto-pass when time runs out
+    answerTimeoutRef.current = setTimeout(async () => {
+      if (game.current_clue_id && game.current_player_id) {
+        await passAfterBuzz(game.id, game.current_clue_id, game.current_player_id)
+      }
+    }, totalMs)
+
+    return () => {
+      if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
+      if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
+    }
+  }, [game?.phase, game?.id])
 
   // Auto-transition: round_end → board_selection after 4 seconds
   const roundEndRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -394,8 +467,11 @@ export default function DisplayPage() {
     const resultClue = game.current_clue_id
       ? clues.find((c) => c.id === game.current_clue_id)
       : null
-    const answerer = players.find((p) => p.id === game.current_player_id)
+    const answerer = game.current_player_id
+      ? players.find((p) => p.id === game.current_player_id)
+      : null
     const wasCorrect = resultClue?.answered_by != null
+    const noOneAnswered = !game.current_player_id
     const clueCategory = resultClue
       ? categories.find((c) => c.id === resultClue.category_id)
       : null
@@ -440,19 +516,23 @@ export default function DisplayPage() {
 
           {/* Result indicator */}
           <div className={`px-16 py-10 rounded-3xl mb-8 ${
-            wasCorrect
-              ? 'bg-green-600/15 border-2 border-green-500'
-              : 'bg-red-600/15 border-2 border-red-500'
+            noOneAnswered
+              ? 'bg-gray-600/15 border-2 border-gray-500'
+              : wasCorrect
+                ? 'bg-green-600/15 border-2 border-green-500'
+                : 'bg-red-600/15 border-2 border-red-500'
           }`}>
             <p className={`text-6xl md:text-8xl font-bold text-center mb-4 ${
-              wasCorrect ? 'text-green-400' : 'text-red-400'
+              noOneAnswered ? 'text-gray-400' : wasCorrect ? 'text-green-400' : 'text-red-400'
             }`}>
-              {wasCorrect ? '✓ Correct!' : '✗ Incorrect'}
+              {noOneAnswered ? 'Time\'s Up!' : wasCorrect ? '✓ Correct!' : '✗ Incorrect'}
             </p>
-            <p className="text-3xl text-white text-center font-semibold">
-              {answerer?.name || 'Unknown'}
-            </p>
-            {resultClue && (
+            {!noOneAnswered && (
+              <p className="text-3xl text-white text-center font-semibold">
+                {answerer?.name || 'Unknown'}
+              </p>
+            )}
+            {resultClue && !noOneAnswered && (
               <p className={`text-4xl font-bold text-center mt-4 ${
                 wasCorrect ? 'text-green-300' : 'text-red-300'
               }`}>
@@ -563,14 +643,30 @@ export default function DisplayPage() {
               <p className="text-gray-500 text-xl animate-pulse">Reading...</p>
             )}
             {game.phase === 'buzz_window' && (
-              <p className="text-blue-400 text-2xl font-bold animate-buzz-pulse">
-                BUZZ IN NOW!
-              </p>
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-blue-400 text-2xl font-bold animate-buzz-pulse">
+                  BUZZ IN NOW!
+                </p>
+                {buzzCountdown !== null && (
+                  <p className={`text-5xl font-bold font-mono ${
+                    buzzCountdown <= 5 ? 'text-red-400' : 'text-white'
+                  }`}>
+                    {buzzCountdown}
+                  </p>
+                )}
+              </div>
             )}
             {game.phase === 'player_answering' && (
-              <p className="text-green-400 text-2xl font-bold">
-                {players.find((p) => p.id === game.current_player_id)?.name} is answering...
-              </p>
+              <div className="flex flex-col items-center gap-4">
+                <p className="text-green-400 text-2xl font-bold">
+                  {players.find((p) => p.id === game.current_player_id)?.name} is answering...
+                </p>
+                {answerCountdown !== null && (
+                  <p className={`text-6xl font-bold ${answerCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                    {answerCountdown}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>

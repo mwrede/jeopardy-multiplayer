@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "tsx src/scripts/seed-game-data.ts"
+    "seed": "tsx src/scripts/seed-game-data.ts",
+    "scrape": "tsx src/scripts/scrape-jarchive.ts",
+    "seed:jarchive": "tsx src/scripts/seed-jarchive-data.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",
+    "cheerio": "^1.2.0",
     "next": "^14.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
