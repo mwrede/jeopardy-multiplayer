@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Game, Player, Category, Clue, GameSettings, GameSearchResult } from '@/types/game'
+import type { Game, Player, Category, Clue, GameSettings, GameSearchResult, GameSearchFilters } from '@/types/game'
 
 // Generate a 6-character room code
 function generateRoomCode(): string {
@@ -742,19 +742,54 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
 }
 
 /**
- * Search J-Archive games by title/notes.
+ * Get all distinct seasons from the clue pool, sorted.
+ */
+export async function getSeasons(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('clue_pool')
+    .select('season')
+    .not('season', 'is', null)
+    .limit(50000)
+
+  if (error) throw error
+  if (!data) return []
+
+  const seasons = [...new Set(data.map((r) => r.season).filter(Boolean))] as string[]
+
+  // Separate numeric and non-numeric seasons
+  const numeric = seasons.filter((s) => /^\d+$/.test(s)).sort((a, b) => Number(a) - Number(b))
+  const special = seasons.filter((s) => !/^\d+$/.test(s)).sort()
+
+  return [...numeric, ...special]
+}
+
+/**
+ * Search J-Archive games with structured filters.
  * Returns distinct games with metadata for the game browser.
  */
-export async function searchGames(query: string, page: number = 0, limit: number = 50): Promise<GameSearchResult[]> {
-  // Use RPC or manual query to get distinct games matching the search
-  // We query clue_pool and group by game_id_source
+export async function searchGames(filters: GameSearchFilters = {}): Promise<GameSearchResult[]> {
+  const { query, season, dateFrom, dateTo, page = 0, limit = 50 } = filters
+
   let queryBuilder = supabase
     .from('clue_pool')
     .select('game_id_source, game_title, air_date, player1, player2, player3, season')
 
-  if (query.trim()) {
-    // Search in game_title and notes with ilike
-    queryBuilder = queryBuilder.or(`game_title.ilike.%${query}%,notes.ilike.%${query}%`)
+  if (query?.trim()) {
+    queryBuilder = queryBuilder.or(
+      `game_title.ilike.%${query}%,notes.ilike.%${query}%,player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`
+    )
+  }
+
+  if (season) {
+    queryBuilder = queryBuilder.eq('season', season)
+  }
+
+  if (dateFrom) {
+    queryBuilder = queryBuilder.gte('air_date', dateFrom)
+  }
+
+  if (dateTo) {
+    queryBuilder = queryBuilder.lte('air_date', dateTo)
   }
 
   const { data, error } = await queryBuilder

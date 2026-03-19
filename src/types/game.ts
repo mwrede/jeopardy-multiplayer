@@ -67,6 +67,16 @@ export interface GameSearchResult {
   clue_count: number
 }
 
+// Structured filters for game search
+export interface GameSearchFilters {
+  query?: string       // free text search (title, notes, player names)
+  season?: string      // exact season match
+  dateFrom?: string    // YYYY-MM-DD
+  dateTo?: string      // YYYY-MM-DD
+  page?: number
+  limit?: number
+}
+
 export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   mode: 'strict',
   judgment: 'ai',
