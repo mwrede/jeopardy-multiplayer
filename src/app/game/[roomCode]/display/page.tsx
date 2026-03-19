@@ -238,7 +238,7 @@ export default function DisplayPage() {
         <img
           src="/jeopardy-logo.png"
           alt="JEOPARDY!"
-          className="h-28 md:h-44 w-auto mb-4"
+          className="h-44 md:h-64 w-auto mb-6"
         />
 
         <p className="text-2xl text-blue-300 mb-12">Join on your phone</p>

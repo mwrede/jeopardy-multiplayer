@@ -282,7 +282,7 @@ export default function HostPage() {
       <img
         src="/jeopardy-logo.png"
         alt="JEOPARDY!"
-        className="h-24 md:h-36 w-auto mb-4 mt-8"
+        className="h-40 md:h-56 w-auto mb-6 mt-8"
       />
 
       {/* Mode selector */}
