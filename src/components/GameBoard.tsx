@@ -50,33 +50,7 @@ export function GameBoard({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Scoreboard - Jeopardy podium style */}
-      <div className="flex gap-2 px-3 py-3 overflow-x-auto bg-black/40">
-        {players
-          .sort((a, b) => b.score - a.score)
-          .map((p) => (
-            <div
-              key={p.id}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-center min-w-[100px] border-b-4 ${
-                p.id === game.current_player_id
-                  ? 'bg-jeopardy-blue-cell/60 border-jeopardy-gold'
-                  : 'bg-jeopardy-blue-dark/40 border-transparent'
-              } ${p.id === myPlayerId ? 'ring-1 ring-blue-400/50' : ''}`}
-            >
-              <p className="text-xs text-white/70 truncate font-semibold uppercase tracking-wide">{p.name}</p>
-              <p
-                className={`text-lg font-bold ${
-                  p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'
-                }`}
-                style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.5)' }}
-              >
-                ${p.score.toLocaleString()}
-              </p>
-            </div>
-          ))}
-      </div>
-
-      {/* Turn indicator */}
+      {/* Turn indicator (scoreboard is shown by the parent page) */}
       <div className={`text-center py-2 mx-2 rounded-lg text-base ${
         isMyTurn
           ? 'bg-jeopardy-gold/15 border border-jeopardy-gold/40'

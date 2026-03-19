@@ -762,49 +762,53 @@ export async function getSeasons(): Promise<string[]> {
 
 /**
  * Search J-Archive games with structured filters.
- * Uses a two-step approach: first get matching game_id_source values,
- * then fetch one representative row per game for metadata.
+ * For text queries, searches notes and game_title separately then merges
+ * (faster than a single OR across 5 ilike columns on 558K rows).
  */
 export async function searchGames(filters: GameSearchFilters = {}): Promise<GameSearchResult[]> {
   const { query, season, dateFrom, dateTo, page = 0, limit = 50 } = filters
 
-  // Step 1: Build filtered query to find matching game IDs
-  let qb = supabase
-    .from('clue_pool')
-    .select('game_id_source, game_title, air_date, player1, player2, player3, season')
+  function addDateFilters(qb: any) {
+    if (season) qb = qb.eq('season', season)
+    if (dateFrom) qb = qb.gte('air_date', dateFrom)
+    if (dateTo) qb = qb.lte('air_date', dateTo)
+    return qb
+  }
+
+  const cols = 'game_id_source, game_title, air_date, player1, player2, player3, season'
+  const fetchLimit = 5000
+
+  let allData: any[] = []
 
   if (query?.trim()) {
-    qb = qb.or(
-      `game_title.ilike.%${query}%,notes.ilike.%${query}%,player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`
-    )
+    // Run two parallel searches: one on notes, one on game_title
+    // This is MUCH faster than a single OR with 5 ilike columns
+    const [notesResult, titleResult] = await Promise.all([
+      addDateFilters(
+        supabase.from('clue_pool').select(cols).ilike('notes', `%${query}%`)
+      ).order('air_date', { ascending: false }).limit(fetchLimit),
+      addDateFilters(
+        supabase.from('clue_pool').select(cols).ilike('game_title', `%${query}%`)
+      ).order('air_date', { ascending: false }).limit(fetchLimit),
+    ])
+
+    if (notesResult.error) throw notesResult.error
+    if (titleResult.error) throw titleResult.error
+
+    allData = [...(notesResult.data || []), ...(titleResult.data || [])]
+  } else {
+    // No text query — just apply date/season filters
+    const result = await addDateFilters(
+      supabase.from('clue_pool').select(cols)
+    ).order('air_date', { ascending: false }).limit(fetchLimit)
+
+    if (result.error) throw result.error
+    allData = result.data || []
   }
-
-  if (season) {
-    qb = qb.eq('season', season)
-  }
-
-  if (dateFrom) {
-    qb = qb.gte('air_date', dateFrom)
-  }
-
-  if (dateTo) {
-    qb = qb.lte('air_date', dateTo)
-  }
-
-  // Fetch enough rows to find distinct games for the page.
-  // Each game has ~60 clues, so to get 50 games we need ~3000 rows.
-  // Fetch extra to account for pagination.
-  const rowsNeeded = (page + 2) * limit * 61
-  const { data, error } = await qb
-    .order('air_date', { ascending: false })
-    .limit(Math.min(rowsNeeded, 50000))
-
-  if (error) throw error
-  if (!data) return []
 
   // Group by game_id_source to get distinct games
   const gameMap = new Map<number, GameSearchResult>()
-  for (const row of data) {
+  for (const row of allData) {
     if (!row.game_id_source) continue
     const existing = gameMap.get(row.game_id_source)
     if (existing) {
