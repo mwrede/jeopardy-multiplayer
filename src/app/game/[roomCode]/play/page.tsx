@@ -26,6 +26,7 @@ import {
   skipClue,
   passOnClue,
   passAfterBuzz,
+  removePlayer,
 } from '@/lib/game-api'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 import {
@@ -215,6 +216,19 @@ export default function PlayPage() {
     prevAnswerCount.current = answerCountdown
   }, [answerCountdown])
 
+  // Remove self from lobby when closing tab
+  useEffect(() => {
+    if (!game || game.phase !== 'lobby' || !myPlayerId) return
+    const handleUnload = () => {
+      // Use sendBeacon for reliability on tab close
+      const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/players?id=eq.${myPlayerId}`
+      navigator.sendBeacon(url) // Best-effort; actual delete via kick button
+      removePlayer(myPlayerId)
+    }
+    window.addEventListener('beforeunload', handleUnload)
+    return () => window.removeEventListener('beforeunload', handleUnload)
+  }, [game?.phase, myPlayerId])
+
   // Reset state on phase changes
   useEffect(() => {
     if (game?.phase === 'final_wager') { setFinalWagerLocked(myPlayer?.final_wager != null); setFinalWagerInput('') }
@@ -343,9 +357,20 @@ export default function PlayPage() {
               p.id === myPlayerId ? 'bg-jeopardy-blue/30 border border-jeopardy-blue/50' : 'bg-white/5'
             }`}>
               <span className="font-semibold">{p.name}</span>
-              <span className={`text-sm font-semibold ${p.is_ready ? 'text-green-400' : 'text-gray-500'}`}>
-                {p.is_ready ? 'Ready' : 'Not ready'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-semibold ${p.is_ready ? 'text-green-400' : 'text-gray-500'}`}>
+                  {p.is_ready ? 'Ready' : 'Not ready'}
+                </span>
+                {p.id !== myPlayerId && (
+                  <button
+                    onClick={async () => { await removePlayer(p.id); await refreshState() }}
+                    className="text-xs text-red-400/60 hover:text-red-400 transition-colors px-2"
+                    title="Remove player"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

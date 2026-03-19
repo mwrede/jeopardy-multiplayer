@@ -5,6 +5,7 @@ import { useGameChannel } from '@/hooks/useGameChannel'
 import { BuzzerButton } from '@/components/BuzzerButton'
 import {
   setReady,
+  removePlayer,
   startGame,
   startGameFromSource,
   selectClue,
@@ -78,6 +79,14 @@ export default function PlayerPage() {
       setHasPassed(false)
     }
   }, [game?.phase])
+
+  // Remove self from lobby when closing tab
+  useEffect(() => {
+    if (!game || game.phase !== 'lobby' || !myPlayerId) return
+    const handleUnload = () => { removePlayer(myPlayerId) }
+    window.addEventListener('beforeunload', handleUnload)
+    return () => window.removeEventListener('beforeunload', handleUnload)
+  }, [game?.phase, myPlayerId])
 
   // Buzz window countdown timer on player view
   useEffect(() => {
@@ -303,9 +312,20 @@ export default function PlayerPage() {
               }`}
             >
               <span className="font-semibold">{p.name}</span>
-              <span className={`text-sm font-semibold ${p.is_ready ? 'text-green-400' : 'text-gray-500'}`}>
-                {p.is_ready ? 'Ready' : 'Not ready'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-semibold ${p.is_ready ? 'text-green-400' : 'text-gray-500'}`}>
+                  {p.is_ready ? 'Ready' : 'Not ready'}
+                </span>
+                {p.id !== myPlayerId && (
+                  <button
+                    onClick={async () => { await removePlayer(p.id); await refreshState() }}
+                    className="text-xs text-red-400/60 hover:text-red-400 transition-colors px-2"
+                    title="Remove player"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

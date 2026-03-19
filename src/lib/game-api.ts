@@ -92,6 +92,13 @@ export async function joinGame(roomCode: string, playerName: string) {
   return { game: game as Game, player: player as Player }
 }
 
+/**
+ * Remove a player from the game (kick from lobby).
+ */
+export async function removePlayer(playerId: string) {
+  await supabase.from('players').delete().eq('id', playerId)
+}
+
 export async function setReady(playerId: string, isReady: boolean) {
   const { error } = await supabase
     .from('players')
