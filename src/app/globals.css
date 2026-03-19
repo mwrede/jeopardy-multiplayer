@@ -45,15 +45,15 @@ body {
   }
 
   .board-cell-correct {
-    @apply bg-jeopardy-blue-dark cursor-default
-           hover:brightness-100 active:scale-100
-           border-green-800/60;
+    @apply cursor-default hover:brightness-100 active:scale-100;
+    background: #0a3d1a;
+    border: 2px solid #22C55E40;
   }
 
   .board-cell-wrong {
-    @apply bg-jeopardy-blue-dark cursor-default
-           hover:brightness-100 active:scale-100
-           border-red-800/50;
+    @apply cursor-default hover:brightness-100 active:scale-100;
+    background: #3d0a0a;
+    border: 2px solid #EF444440;
   }
 
   /* Category headers - white text, uppercase, authentic style */
