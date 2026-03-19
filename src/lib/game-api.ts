@@ -711,9 +711,10 @@ export async function skipClue(gameId: string, clueId: string) {
  */
 export async function submitAnswer(gameId: string, clueId: string, playerId: string, answer: string) {
   // Get the correct answer and the game's current round
-  const [{ data: clue }, { data: game }] = await Promise.all([
-    supabase.from('clues').select('answer, value').eq('id', clueId).single(),
-    supabase.from('games').select('current_round').eq('id', gameId).single(),
+  const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
+    supabase.from('clues').select('answer, value, is_daily_double').eq('id', clueId).single(),
+    supabase.from('games').select('current_round, phase').eq('id', gameId).single(),
+    supabase.from('players').select('final_wager').eq('id', playerId).single(),
   ])
 
   if (!clue) throw new Error('Clue not found')
@@ -723,7 +724,10 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
   const correct = normalize(answer).includes(normalize(clue.answer)) ||
                   normalize(clue.answer).includes(normalize(answer))
 
-  const scoreChange = correct ? clue.value : -clue.value
+  // For Daily Doubles, use the player's wager instead of clue value
+  const isDailyDouble = clue.is_daily_double && (game?.phase === 'daily_double_answering')
+  const pointValue = isDailyDouble ? (playerData?.final_wager || clue.value) : clue.value
+  const scoreChange = correct ? pointValue : -pointValue
 
   // Update player score
   const { data: player } = await supabase

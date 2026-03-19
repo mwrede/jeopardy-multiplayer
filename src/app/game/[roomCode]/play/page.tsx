@@ -574,6 +574,18 @@ export default function PlayPage() {
                   placeholder="Enter wager" className="input-base text-xl text-center" autoFocus />
                 <button onClick={handleSubmitWager} className="btn-primary w-full py-3 text-lg">Lock In Wager</button>
               </div>
+            ) : (game.phase === 'daily_double_wager' || game.phase === 'daily_double_answering') && !isMyTurn ? (
+              <div className="text-center py-4">
+                <p className="text-jeopardy-gold font-bold text-lg animate-pulse">Daily Double!</p>
+                <p className="text-gray-400 text-sm">{currentPlayer?.name} {game.phase === 'daily_double_wager' ? 'is wagering...' : 'is answering...'}</p>
+              </div>
+            ) : game.phase === 'daily_double_answering' && isMyTurn ? (
+              <div className="w-full max-w-sm mx-auto space-y-2">
+                <input ref={inputRef} type="text" value={answer} onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitAnswer() }}
+                  placeholder="Type your answer..." maxLength={200} className="input-base text-lg" autoFocus autoComplete="off" />
+                <button onClick={handleSubmitAnswer} disabled={!answer.trim()} className="btn-primary w-full py-3 text-lg">Submit Answer</button>
+              </div>
             ) : game.phase === 'player_answering' && game.current_player_id === myPlayerId ? (
               <div className="w-full max-w-sm mx-auto space-y-2">
                 <input ref={inputRef} type="text" value={answer} onChange={(e) => setAnswer(e.target.value)}

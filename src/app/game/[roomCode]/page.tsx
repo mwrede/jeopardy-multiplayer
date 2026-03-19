@@ -772,6 +772,36 @@ export default function PlayerPage() {
     )
   }
 
+  // ===== DAILY DOUBLE ANSWERING =====
+  if (game.phase === 'daily_double_answering' && isMyTurn && currentClue) {
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
+          <p className="text-jeopardy-gold text-2xl font-bold mb-2">Daily Double!</p>
+          <p className="text-gray-400">Answer the clue on the TV</p>
+        </div>
+        <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
+          <div className="w-full max-w-sm mx-auto space-y-3">
+            <input
+              type="text"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitAnswer() }}
+              placeholder="Type your answer..."
+              maxLength={200}
+              className="input-base text-xl"
+              autoFocus
+              autoComplete="off"
+            />
+            <button onClick={handleSubmitAnswer} disabled={!answer.trim()}
+              className="btn-primary w-full py-4 text-xl">Submit Answer</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ===== DAILY DOUBLE WAGER =====
   if (game.phase === 'daily_double_wager' && isMyTurn) {
     const wagerVals = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']
@@ -797,6 +827,21 @@ export default function PlayerPage() {
         >
           Lock In Wager
         </button>
+      </div>
+    )
+  }
+
+  // ===== DAILY DOUBLE (other players watching) =====
+  if ((game.phase === 'daily_double_wager' || game.phase === 'daily_double_answering') && !isMyTurn) {
+    const ddPlayer = players.find((p) => p.id === game.current_player_id)
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <h2 className="text-3xl font-bold text-jeopardy-gold mb-4 mt-8 animate-pulse">Daily Double!</h2>
+        <p className="text-white text-xl mb-2">{ddPlayer?.name || 'Someone'}</p>
+        <p className="text-gray-400">
+          {game.phase === 'daily_double_wager' ? 'is making their wager...' : 'is answering...'}
+        </p>
       </div>
     )
   }
