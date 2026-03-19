@@ -4,8 +4,11 @@
 
 :root {
   --jeopardy-blue: #060CE9;
-  --jeopardy-dark: #000033;
-  --jeopardy-gold: #D4AF37;
+  --jeopardy-blue-dark: #0A0A6B;
+  --jeopardy-blue-cell: #0A14C8;
+  --jeopardy-dark: #000428;
+  --jeopardy-gold: #CC8A25;
+  --jeopardy-gold-light: #E8A832;
 }
 
 body {
@@ -24,53 +27,53 @@ body {
 }
 
 @layer components {
-  /* Board cells */
+  /* Board cells - authentic Jeopardy look */
   .board-cell {
-    @apply flex items-center justify-center font-bold text-jeopardy-gold
-           bg-jeopardy-blue rounded cursor-pointer transition-all
-           hover:brightness-125 active:scale-95
-           border border-black/20 shadow-lg;
+    @apply flex items-center justify-center font-bold
+           bg-jeopardy-blue-cell cursor-pointer transition-all
+           hover:brightness-125 active:scale-[0.97]
+           border-2 border-black shadow-[inset_0_2px_4px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.3)];
+    color: var(--jeopardy-gold-light);
+    text-shadow: 1px 2px 3px rgba(0,0,0,0.6);
   }
 
   .board-cell-answered {
-    @apply bg-jeopardy-dark/60 cursor-default text-gray-600
+    @apply bg-jeopardy-blue-dark cursor-default
            hover:brightness-100 active:scale-100;
+    color: transparent;
+    text-shadow: none;
   }
 
   .board-cell-correct {
-    @apply bg-green-900/50 cursor-default
+    @apply bg-jeopardy-blue-dark cursor-default
            hover:brightness-100 active:scale-100
-           border-green-700/50;
+           border-green-800/60;
   }
 
   .board-cell-wrong {
-    @apply bg-red-900/40 cursor-default
+    @apply bg-jeopardy-blue-dark cursor-default
            hover:brightness-100 active:scale-100
-           border-red-700/50;
+           border-red-800/50;
   }
 
-  /* Buzzer */
-  .buzzer-btn {
-    @apply w-full py-8 rounded-2xl font-bold text-2xl uppercase tracking-wider
-           transition-all active:scale-95 select-none touch-manipulation;
+  /* Category headers - white text, uppercase, authentic style */
+  .board-category {
+    @apply flex items-center justify-center text-center
+           bg-jeopardy-blue-cell border-2 border-black
+           shadow-[inset_0_2px_4px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.3)];
+    text-shadow: 1px 2px 3px rgba(0,0,0,0.5);
   }
 
-  .buzzer-ready {
-    @apply bg-red-600 text-white animate-buzz-pulse
-           shadow-[0_0_30px_rgba(220,38,38,0.5)];
+  /* Board wrapper */
+  .board-wrapper {
+    @apply bg-black p-1 rounded-lg;
+    box-shadow:
+      0 0 0 3px #1a1a3a,
+      0 0 0 6px #0a0a2a,
+      0 8px 32px rgba(0,0,0,0.8);
   }
 
-  .buzzer-disabled {
-    @apply bg-gray-800 text-gray-500 cursor-not-allowed active:scale-100;
-  }
-
-  .buzzer-buzzed {
-    @apply bg-green-600 text-white;
-  }
-
-  .buzzer-lockout {
-    @apply bg-gray-800 text-red-500 border-2 border-red-500/50;
-  }
+  /* Buzzer - not used anymore, see BuzzerButton component */
 
   /* Shared button styles */
   .btn-primary {

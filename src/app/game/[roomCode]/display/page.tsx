@@ -479,22 +479,25 @@ export default function DisplayPage() {
     return (
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
         {/* Scoreboard bar */}
-        <div className="flex gap-3 px-4 py-3 bg-black/30 overflow-x-auto">
+        <div className="flex gap-3 px-4 py-3 bg-black/50 overflow-x-auto">
           {players
             .sort((a, b) => b.score - a.score)
             .map((p) => (
               <div
                 key={p.id}
-                className={`flex-shrink-0 px-5 py-2 rounded-xl text-center min-w-[120px] transition-all ${
+                className={`flex-shrink-0 px-5 py-2 rounded-xl text-center min-w-[120px] transition-all border-b-4 ${
                   p.id === game.current_player_id
                     ? wasCorrect
-                      ? 'bg-green-600/20 border-2 border-green-500 scale-105'
-                      : 'bg-red-600/20 border-2 border-red-500 scale-105'
-                    : 'bg-white/5'
+                      ? 'bg-green-900/30 border-green-500 scale-105'
+                      : 'bg-red-900/30 border-red-500 scale-105'
+                    : 'bg-jeopardy-blue-dark/30 border-transparent'
                 }`}
               >
-                <p className="text-sm text-gray-400 truncate">{p.name}</p>
-                <p className={`text-2xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
+                <p className="text-sm text-white/60 truncate font-semibold uppercase tracking-wide">{p.name}</p>
+                <p
+                  className={`text-2xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}
+                  style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.5)' }}
+                >
                   ${p.score.toLocaleString()}
                 </p>
               </div>
@@ -577,21 +580,24 @@ export default function DisplayPage() {
         <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
       </div>
 
-      {/* Scoreboard bar */}
-      <div className="flex gap-3 px-4 py-3 bg-black/30 overflow-x-auto">
+      {/* Scoreboard bar - podium style */}
+      <div className="flex gap-3 px-4 py-3 bg-black/50 overflow-x-auto">
         {players
           .sort((a, b) => b.score - a.score)
           .map((p) => (
             <div
               key={p.id}
-              className={`flex-shrink-0 px-5 py-2 rounded-xl text-center min-w-[120px] transition-all ${
+              className={`flex-shrink-0 px-5 py-2 rounded-xl text-center min-w-[120px] transition-all border-b-4 ${
                 p.id === game.current_player_id
-                  ? 'bg-jeopardy-blue border-2 border-jeopardy-gold scale-105'
-                  : 'bg-white/5'
+                  ? 'bg-jeopardy-blue-cell/50 border-jeopardy-gold scale-105'
+                  : 'bg-jeopardy-blue-dark/30 border-transparent'
               }`}
             >
-              <p className="text-sm text-gray-400 truncate">{p.name}</p>
-              <p className={`text-2xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
+              <p className="text-sm text-white/60 truncate font-semibold uppercase tracking-wide">{p.name}</p>
+              <p
+                className={`text-2xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}
+                style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.5)' }}
+              >
                 ${p.score.toLocaleString()}
               </p>
             </div>
@@ -599,8 +605,11 @@ export default function DisplayPage() {
       </div>
 
       {/* Round header */}
-      <div className="text-center py-2">
-        <span className="text-lg text-gray-300 font-semibold">
+      <div className="text-center py-2 bg-black/20">
+        <span
+          className="text-lg text-jeopardy-gold font-bold uppercase tracking-wide"
+          style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.5)' }}
+        >
           {game.current_round === 1
             ? 'Jeopardy!'
             : game.current_round === 2
@@ -608,7 +617,7 @@ export default function DisplayPage() {
             : 'Final Jeopardy!'}
         </span>
         {currentPlayer && !showClue && (
-          <span className="text-gray-500 ml-4">
+          <span className="text-white/40 ml-4">
             {currentPlayer.name}&apos;s pick
           </span>
         )}

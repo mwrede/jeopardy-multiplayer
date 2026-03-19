@@ -50,24 +50,25 @@ export function GameBoard({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Scoreboard */}
-      <div className="flex gap-2 px-2 py-3 overflow-x-auto">
+      {/* Scoreboard - Jeopardy podium style */}
+      <div className="flex gap-2 px-3 py-3 overflow-x-auto bg-black/40">
         {players
           .sort((a, b) => b.score - a.score)
           .map((p) => (
             <div
               key={p.id}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg text-center min-w-[100px] ${
+              className={`flex-shrink-0 px-4 py-2 rounded-lg text-center min-w-[100px] border-b-4 ${
                 p.id === game.current_player_id
-                  ? 'bg-jeopardy-blue border-2 border-jeopardy-gold'
-                  : 'bg-white/5'
+                  ? 'bg-jeopardy-blue-cell/60 border-jeopardy-gold'
+                  : 'bg-jeopardy-blue-dark/40 border-transparent'
               } ${p.id === myPlayerId ? 'ring-1 ring-blue-400/50' : ''}`}
             >
-              <p className="text-xs text-gray-400 truncate">{p.name}</p>
+              <p className="text-xs text-white/70 truncate font-semibold uppercase tracking-wide">{p.name}</p>
               <p
                 className={`text-lg font-bold ${
-                  p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'
+                  p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'
                 }`}
+                style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.5)' }}
               >
                 ${p.score.toLocaleString()}
               </p>
@@ -76,7 +77,7 @@ export function GameBoard({
       </div>
 
       {/* Turn indicator */}
-      <div className={`text-center py-3 mx-2 rounded-xl text-lg ${
+      <div className={`text-center py-2 mx-2 rounded-lg text-base ${
         isMyTurn
           ? 'bg-jeopardy-gold/15 border border-jeopardy-gold/40'
           : ''
@@ -84,64 +85,70 @@ export function GameBoard({
         {isMyTurn ? (
           <span className="text-jeopardy-gold font-bold">Your turn — pick a clue!</span>
         ) : (
-          <span className="text-gray-400 font-medium">
+          <span className="text-white/50 font-medium">
             {currentPlayer?.name || 'Someone'} is picking...
           </span>
         )}
       </div>
 
-      {/* Board Grid */}
-      <div className="flex-1 grid grid-cols-6 gap-1.5 md:gap-2 px-1.5 md:px-4 pb-4 pt-2">
-        {/* Category headers */}
-        {roundCategories.map((cat) => (
-          <div
-            key={cat.id}
-            className="bg-jeopardy-blue rounded p-1.5 md:p-2 flex items-center justify-center text-center min-h-[40px] md:min-h-0"
-          >
-            <span className="text-[9px] md:text-sm font-bold text-white uppercase leading-tight line-clamp-2">
-              {cat.name}
-            </span>
-          </div>
-        ))}
-
-        {/* Value cells */}
-        {values.map((value) =>
-          roundCategories.map((cat) => {
-            const clue = getClue(cat.id, value)
-            const isAnswered = clue?.is_answered ?? false
-            const answeredByPlayer =
-              isAnswered && clue?.answered_by
-                ? players.find((p) => p.id === clue.answered_by)
-                : null
-
-            return (
-              <button
-                key={`${cat.id}-${value}`}
-                onClick={() => handleCellClick(clue)}
-                disabled={isAnswered || !isMyTurn}
-                className={`board-cell py-4 md:py-6 min-h-[44px] ${
-                  isAnswered
-                    ? answeredByPlayer
-                      ? 'board-cell-correct'
-                      : 'board-cell-wrong'
-                    : ''
-                } ${!isMyTurn && !isAnswered ? 'opacity-60' : ''}`}
+      {/* Board Grid - authentic Jeopardy look */}
+      <div className="flex-1 px-1.5 md:px-3 pb-3 pt-1">
+        <div className="board-wrapper h-full">
+          <div className="grid grid-cols-6 gap-[3px] md:gap-1 h-full">
+            {/* Category headers */}
+            {roundCategories.map((cat) => (
+              <div
+                key={cat.id}
+                className="board-category p-1.5 md:p-3 min-h-[44px] md:min-h-[60px]"
               >
-                {isAnswered ? (
-                  answeredByPlayer ? (
-                    <span className="text-[9px] md:text-xs text-green-300 font-bold truncate block px-0.5">
-                      {answeredByPlayer.name}
-                    </span>
-                  ) : (
-                    <span className="text-sm md:text-lg text-red-400/70">✗</span>
-                  )
-                ) : (
-                  <span className="text-base md:text-2xl">{`$${value}`}</span>
-                )}
-              </button>
-            )
-          })
-        )}
+                <span className="text-[9px] md:text-sm font-bold text-white uppercase leading-tight line-clamp-3 text-center tracking-wide">
+                  {cat.name}
+                </span>
+              </div>
+            ))}
+
+            {/* Value cells */}
+            {values.map((value) =>
+              roundCategories.map((cat) => {
+                const clue = getClue(cat.id, value)
+                const isAnswered = clue?.is_answered ?? false
+                const answeredByPlayer =
+                  isAnswered && clue?.answered_by
+                    ? players.find((p) => p.id === clue.answered_by)
+                    : null
+
+                return (
+                  <button
+                    key={`${cat.id}-${value}`}
+                    onClick={() => handleCellClick(clue)}
+                    disabled={isAnswered || !isMyTurn}
+                    className={`board-cell py-3 md:py-5 min-h-[44px] ${
+                      isAnswered
+                        ? answeredByPlayer
+                          ? 'board-cell-correct'
+                          : 'board-cell-wrong'
+                        : ''
+                    } ${!isMyTurn && !isAnswered ? 'opacity-70' : ''}`}
+                  >
+                    {isAnswered ? (
+                      answeredByPlayer ? (
+                        <span className="text-[8px] md:text-xs text-green-400 font-bold truncate block px-0.5">
+                          {answeredByPlayer.name}
+                        </span>
+                      ) : (
+                        <span className="text-sm md:text-lg text-red-400/60">✗</span>
+                      )
+                    ) : (
+                      <span className="text-sm md:text-2xl font-bold" style={{ fontFamily: 'Swiss911, Impact, Arial Black, sans-serif' }}>
+                        ${value}
+                      </span>
+                    )}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

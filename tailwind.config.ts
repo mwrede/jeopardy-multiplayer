@@ -10,8 +10,11 @@ const config: Config = {
     extend: {
       colors: {
         'jeopardy-blue': '#060CE9',
-        'jeopardy-dark': '#000033',
-        'jeopardy-gold': '#D4AF37',
+        'jeopardy-blue-dark': '#0A0A6B',
+        'jeopardy-blue-cell': '#0A14C8',
+        'jeopardy-dark': '#000428',
+        'jeopardy-gold': '#CC8A25',
+        'jeopardy-gold-light': '#E8A832',
         'jeopardy-correct': '#22C55E',
         'jeopardy-incorrect': '#EF4444',
       },
