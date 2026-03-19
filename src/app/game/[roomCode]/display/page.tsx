@@ -45,6 +45,25 @@ export default function DisplayPage() {
     connected,
   } = useGameChannel(roomCode)
 
+  // Load source game info (date, title) from clue_pool if this is a J-Archive game
+  const [sourceGameInfo, setSourceGameInfo] = useState<{ title: string; airDate: string | null } | null>(null)
+  useEffect(() => {
+    if (!game?.id) return
+    const sourceId = localStorage.getItem(`game_source_${game.id}`)
+    if (!sourceId) return
+
+    supabase
+      .from('clue_pool')
+      .select('game_title, air_date')
+      .eq('game_id_source', parseInt(sourceId))
+      .limit(1)
+      .then(({ data }) => {
+        if (data?.[0]) {
+          setSourceGameInfo({ title: data[0].game_title, airDate: data[0].air_date })
+        }
+      })
+  }, [game?.id])
+
   // === SOUND EFFECTS ===
   const prevPhaseRef = useRef<string | null>(null)
   useEffect(() => {
@@ -693,23 +712,37 @@ export default function DisplayPage() {
           ))}
       </div>
 
-      {/* Round header */}
-      <div className="text-center py-2 bg-black/20">
-        <span
-          className="text-lg text-jeopardy-gold font-bold uppercase tracking-wide"
-          style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.5)' }}
-        >
-          {game.current_round === 1
-            ? 'Jeopardy!'
-            : game.current_round === 2
-            ? 'Double Jeopardy!'
-            : 'Final Jeopardy!'}
-        </span>
-        {currentPlayer && !showClue && (
-          <span className="text-white/40 ml-4">
-            {currentPlayer.name}&apos;s pick
+      {/* Round header with game info */}
+      <div className="flex items-center justify-between px-4 py-2 bg-black/20">
+        <div className="flex items-center gap-3">
+          <span
+            className="text-lg text-jeopardy-gold font-bold uppercase tracking-wide"
+            style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.5)' }}
+          >
+            {game.current_round === 1
+              ? 'Jeopardy!'
+              : game.current_round === 2
+              ? 'Double Jeopardy!'
+              : 'Final Jeopardy!'}
           </span>
-        )}
+          {currentPlayer && !showClue && (
+            <span className="text-white/40">
+              {currentPlayer.name}&apos;s pick
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+          {sourceGameInfo?.airDate && (
+            <span className="text-white/30">
+              {new Date(sourceGameInfo.airDate + 'T00:00:00').toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </span>
+          )}
+          <span className="text-white/20 font-mono tracking-wider">{roomCode}</span>
+        </div>
       </div>
 
       {/* Board or Clue display */}

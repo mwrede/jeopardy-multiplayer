@@ -32,17 +32,37 @@ export async function createGame(settings: GameSettings) {
 }
 
 export async function joinGame(roomCode: string, playerName: string) {
+  // Find game by room code — allow joining in any non-finished status
   const { data: game, error: gameError } = await supabase
     .from('games')
     .select('*')
     .eq('room_code', roomCode.toUpperCase())
-    .eq('status', 'lobby')
+    .neq('phase', 'game_over')
     .single()
 
   if (gameError || !game) {
-    throw new Error('Game not found or already started')
+    throw new Error('Game not found or already finished')
   }
 
+  // Check if player with this name already exists (reconnect)
+  const { data: existing } = await supabase
+    .from('players')
+    .select('*')
+    .eq('game_id', game.id)
+    .eq('name', playerName)
+    .single()
+
+  if (existing) {
+    // Reconnect: update connection status and return existing player
+    await supabase
+      .from('players')
+      .update({ is_connected: true })
+      .eq('id', existing.id)
+
+    return { game: game as Game, player: existing as Player }
+  }
+
+  // New player joining
   const { count } = await supabase
     .from('players')
     .select('*', { count: 'exact', head: true })
@@ -52,16 +72,8 @@ export async function joinGame(roomCode: string, playerName: string) {
     throw new Error('Game is full (max 8 players)')
   }
 
-  const { data: existing } = await supabase
-    .from('players')
-    .select('id')
-    .eq('game_id', game.id)
-    .eq('name', playerName)
-    .single()
-
-  if (existing) {
-    throw new Error('Name already taken in this game')
-  }
+  // For mid-game joins, auto-set ready and start with 0 score
+  const isActive = game.status !== 'lobby'
 
   const { data: player, error: playerError } = await supabase
     .from('players')
@@ -69,7 +81,7 @@ export async function joinGame(roomCode: string, playerName: string) {
       game_id: game.id,
       name: playerName,
       join_order: (count ?? 0) + 1,
-      is_ready: false,
+      is_ready: isActive, // auto-ready if game already started
     })
     .select()
     .single()
