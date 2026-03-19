@@ -15,6 +15,7 @@ import {
   advanceToGameOver,
   skipClue,
   passAfterBuzz,
+  skipToRound,
 } from '@/lib/game-api'
 import type { Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
@@ -627,8 +628,24 @@ export default function DisplayPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-jeopardy-dark">
-      {/* Connection indicator */}
-      <div className="fixed top-3 right-3 z-50">
+      {/* Connection indicator + debug skip buttons */}
+      <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
+        {game.phase === 'board_selection' && game.current_round === 1 && (
+          <button
+            onClick={() => skipToRound(game.id, 2)}
+            className="px-3 py-1 text-xs bg-white/10 hover:bg-white/20 rounded text-gray-400 transition-colors"
+          >
+            Skip → DJ
+          </button>
+        )}
+        {game.phase === 'board_selection' && game.current_round <= 2 && (
+          <button
+            onClick={() => skipToRound(game.id, 3)}
+            className="px-3 py-1 text-xs bg-white/10 hover:bg-white/20 rounded text-gray-400 transition-colors"
+          >
+            Skip → FJ
+          </button>
+        )}
         <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
       </div>
 

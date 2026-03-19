@@ -330,6 +330,75 @@ async function checkRoundComplete(gameId: string, currentRound: number) {
 }
 
 /**
+ * Skip directly to a specific round (for testing).
+ * Marks all clues in prior rounds as answered.
+ */
+export async function skipToRound(gameId: string, targetRound: number) {
+  if (targetRound === 2) {
+    // Mark all round 1 clues as answered
+    const { data: r1Cats } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('game_id', gameId)
+      .eq('round_number', 1)
+
+    if (r1Cats) {
+      for (const cat of r1Cats) {
+        await supabase
+          .from('clues')
+          .update({ is_answered: true })
+          .eq('category_id', cat.id)
+      }
+    }
+
+    // Get lowest-scoring player for Double Jeopardy
+    const { data: pls } = await supabase
+      .from('players')
+      .select('id')
+      .eq('game_id', gameId)
+      .order('score', { ascending: true })
+
+    await supabase
+      .from('games')
+      .update({
+        current_round: 2,
+        phase: 'board_selection',
+        current_clue_id: null,
+        current_player_id: pls?.[0]?.id || null,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+  } else if (targetRound === 3) {
+    // Mark all round 1 and 2 clues as answered
+    const { data: allCats } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('game_id', gameId)
+
+    if (allCats) {
+      for (const cat of allCats) {
+        await supabase
+          .from('clues')
+          .update({ is_answered: true })
+          .eq('category_id', cat.id)
+      }
+    }
+
+    await supabase
+      .from('games')
+      .update({
+        current_round: 3,
+        phase: 'final_category',
+        current_clue_id: null,
+        status: 'final_jeopardy',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+  }
+}
+
+/**
  * Advance from round_end splash screen to the board for the next round.
  * Called by the display page after showing the transition screen.
  */
