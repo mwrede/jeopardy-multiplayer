@@ -90,6 +90,18 @@ export default function HostPage() {
     }
   }, [])
 
+  // Special season display names
+  const specialSeasonLabels: Record<string, string> = {
+    bbab: 'Battle of the Bay Area Brains',
+    cwcpi: 'Celebrity Wheel of Fortune Crossover',
+    goattournament: 'Greatest of All Time',
+    jm: 'Jeopardy! Masters',
+    ncc: 'National College Championship',
+    pcj: 'Pop Culture Jeopardy!',
+    superjeopardy: 'Super Jeopardy!',
+    trebekpilots: 'Trebek Pilots',
+  }
+
   // Season → year mapping (approx: Season 1 = 1984, Season N = 1983 + N)
   const seasonToYear = (s: string) => {
     const n = parseInt(s)
@@ -380,7 +392,7 @@ export default function HostPage() {
                     <optgroup label="Special" className="bg-gray-900">
                       {specialSeasons.map((s) => (
                         <option key={s} value={s} className="bg-gray-900">
-                          {s.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/(^|\s)\w/g, (c) => c.toUpperCase())}
+                          {specialSeasonLabels[s] || s}
                         </option>
                       ))}
                     </optgroup>

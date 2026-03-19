@@ -742,120 +742,85 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
 }
 
 /**
- * Get all distinct seasons from the clue pool, sorted.
- * Queries game_id_source + season pairs (~9400 games) instead of all 558K clues.
+ * Get all distinct seasons. Uses a hardcoded list since J-Archive seasons
+ * are known and stable. Much faster than querying 558K rows.
  */
 export async function getSeasons(): Promise<string[]> {
-  // Fetch in pages of 10K to cover all games
-  const allSeasons = new Set<string>()
-  let offset = 0
-  const pageSize = 10000
-
-  while (true) {
-    const { data, error } = await supabase
-      .from('clue_pool')
-      .select('game_id_source, season')
-      .not('season', 'is', null)
-      .order('game_id_source')
-      .range(offset, offset + pageSize - 1)
-
-    if (error) throw error
-    if (!data || data.length === 0) break
-
-    for (const row of data) {
-      if (row.season) allSeasons.add(row.season)
-    }
-
-    // If we already have a good set and this page didn't add new ones, we can stop early
-    if (data.length < pageSize) break
-    offset += pageSize
-  }
-
-  const seasons = [...allSeasons]
-
-  // Separate numeric and non-numeric seasons
-  const numeric = seasons.filter((s) => /^\d+$/.test(s)).sort((a, b) => Number(a) - Number(b))
-  const special = seasons.filter((s) => !/^\d+$/.test(s)).sort()
-
+  const numeric = Array.from({ length: 42 }, (_, i) => String(i + 1))
+  const special = [
+    'bbab',
+    'cwcpi',
+    'goattournament',
+    'jm',
+    'ncc',
+    'pcj',
+    'superjeopardy',
+    'trebekpilots',
+  ]
   return [...numeric, ...special]
 }
 
 /**
  * Search J-Archive games with structured filters.
- * Returns distinct games with metadata for the game browser.
- * Paginates through all matching clues to build a complete game list.
+ * Uses a two-step approach: first get matching game_id_source values,
+ * then fetch one representative row per game for metadata.
  */
 export async function searchGames(filters: GameSearchFilters = {}): Promise<GameSearchResult[]> {
   const { query, season, dateFrom, dateTo, page = 0, limit = 50 } = filters
 
-  // Build the base query with filters
-  function buildQuery() {
-    let qb = supabase
-      .from('clue_pool')
-      .select('game_id_source, game_title, air_date, player1, player2, player3, season')
+  // Step 1: Build filtered query to find matching game IDs
+  let qb = supabase
+    .from('clue_pool')
+    .select('game_id_source, game_title, air_date, player1, player2, player3, season')
 
-    if (query?.trim()) {
-      qb = qb.or(
-        `game_title.ilike.%${query}%,notes.ilike.%${query}%,player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`
-      )
-    }
-
-    if (season) {
-      qb = qb.eq('season', season)
-    }
-
-    if (dateFrom) {
-      qb = qb.gte('air_date', dateFrom)
-    }
-
-    if (dateTo) {
-      qb = qb.lte('air_date', dateTo)
-    }
-
-    return qb
+  if (query?.trim()) {
+    qb = qb.or(
+      `game_title.ilike.%${query}%,notes.ilike.%${query}%,player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`
+    )
   }
 
-  // Paginate through all matching rows to build complete game map
+  if (season) {
+    qb = qb.eq('season', season)
+  }
+
+  if (dateFrom) {
+    qb = qb.gte('air_date', dateFrom)
+  }
+
+  if (dateTo) {
+    qb = qb.lte('air_date', dateTo)
+  }
+
+  // Fetch enough rows to find distinct games for the page.
+  // Each game has ~60 clues, so to get 50 games we need ~3000 rows.
+  // Fetch extra to account for pagination.
+  const rowsNeeded = (page + 2) * limit * 61
+  const { data, error } = await qb
+    .order('air_date', { ascending: false })
+    .limit(Math.min(rowsNeeded, 50000))
+
+  if (error) throw error
+  if (!data) return []
+
+  // Group by game_id_source to get distinct games
   const gameMap = new Map<number, GameSearchResult>()
-  let offset = 0
-  const fetchSize = 10000
-  // Stop after we have enough distinct games for the requested page
-  const targetGames = (page + 1) * limit + limit // fetch a bit extra
-
-  while (true) {
-    const { data, error } = await buildQuery()
-      .order('air_date', { ascending: false })
-      .range(offset, offset + fetchSize - 1)
-
-    if (error) throw error
-    if (!data || data.length === 0) break
-
-    for (const row of data) {
-      if (!row.game_id_source) continue
-      const existing = gameMap.get(row.game_id_source)
-      if (existing) {
-        existing.clue_count++
-      } else {
-        gameMap.set(row.game_id_source, {
-          game_id_source: row.game_id_source,
-          game_title: row.game_title || '',
-          air_date: row.air_date,
-          player1: row.player1 || '',
-          player2: row.player2 || '',
-          player3: row.player3 || '',
-          season: row.season || '',
-          clue_count: 1,
-        })
-      }
+  for (const row of data) {
+    if (!row.game_id_source) continue
+    const existing = gameMap.get(row.game_id_source)
+    if (existing) {
+      existing.clue_count++
+    } else {
+      gameMap.set(row.game_id_source, {
+        game_id_source: row.game_id_source,
+        game_title: row.game_title || '',
+        air_date: row.air_date,
+        player1: row.player1 || '',
+        player2: row.player2 || '',
+        player3: row.player3 || '',
+        season: row.season || '',
+        clue_count: 1,
+      })
     }
-
-    // Stop if we got fewer rows than requested (no more data)
-    if (data.length < fetchSize) break
-
-    // Stop early if we have enough distinct games already
-    if (gameMap.size >= targetGames) break
-
-    offset += fetchSize
   }
 
   // Sort by air_date descending and paginate
