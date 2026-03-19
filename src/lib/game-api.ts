@@ -743,18 +743,35 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
 
 /**
  * Get all distinct seasons from the clue pool, sorted.
+ * Queries game_id_source + season pairs (~9400 games) instead of all 558K clues.
  */
 export async function getSeasons(): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('clue_pool')
-    .select('season')
-    .not('season', 'is', null)
-    .limit(50000)
+  // Fetch in pages of 10K to cover all games
+  const allSeasons = new Set<string>()
+  let offset = 0
+  const pageSize = 10000
 
-  if (error) throw error
-  if (!data) return []
+  while (true) {
+    const { data, error } = await supabase
+      .from('clue_pool')
+      .select('game_id_source, season')
+      .not('season', 'is', null)
+      .order('game_id_source')
+      .range(offset, offset + pageSize - 1)
 
-  const seasons = [...new Set(data.map((r) => r.season).filter(Boolean))] as string[]
+    if (error) throw error
+    if (!data || data.length === 0) break
+
+    for (const row of data) {
+      if (row.season) allSeasons.add(row.season)
+    }
+
+    // If we already have a good set and this page didn't add new ones, we can stop early
+    if (data.length < pageSize) break
+    offset += pageSize
+  }
+
+  const seasons = [...allSeasons]
 
   // Separate numeric and non-numeric seasons
   const numeric = seasons.filter((s) => /^\d+$/.test(s)).sort((a, b) => Number(a) - Number(b))
@@ -766,58 +783,79 @@ export async function getSeasons(): Promise<string[]> {
 /**
  * Search J-Archive games with structured filters.
  * Returns distinct games with metadata for the game browser.
+ * Paginates through all matching clues to build a complete game list.
  */
 export async function searchGames(filters: GameSearchFilters = {}): Promise<GameSearchResult[]> {
   const { query, season, dateFrom, dateTo, page = 0, limit = 50 } = filters
 
-  let queryBuilder = supabase
-    .from('clue_pool')
-    .select('game_id_source, game_title, air_date, player1, player2, player3, season')
+  // Build the base query with filters
+  function buildQuery() {
+    let qb = supabase
+      .from('clue_pool')
+      .select('game_id_source, game_title, air_date, player1, player2, player3, season')
 
-  if (query?.trim()) {
-    queryBuilder = queryBuilder.or(
-      `game_title.ilike.%${query}%,notes.ilike.%${query}%,player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`
-    )
-  }
-
-  if (season) {
-    queryBuilder = queryBuilder.eq('season', season)
-  }
-
-  if (dateFrom) {
-    queryBuilder = queryBuilder.gte('air_date', dateFrom)
-  }
-
-  if (dateTo) {
-    queryBuilder = queryBuilder.lte('air_date', dateTo)
-  }
-
-  const { data, error } = await queryBuilder
-    .order('air_date', { ascending: false })
-    .limit(5000)
-
-  if (error) throw error
-  if (!data) return []
-
-  // Group by game_id_source to get distinct games with clue counts
-  const gameMap = new Map<number, GameSearchResult>()
-  for (const row of data) {
-    if (!row.game_id_source) continue
-    const existing = gameMap.get(row.game_id_source)
-    if (existing) {
-      existing.clue_count++
-    } else {
-      gameMap.set(row.game_id_source, {
-        game_id_source: row.game_id_source,
-        game_title: row.game_title || '',
-        air_date: row.air_date,
-        player1: row.player1 || '',
-        player2: row.player2 || '',
-        player3: row.player3 || '',
-        season: row.season || '',
-        clue_count: 1,
-      })
+    if (query?.trim()) {
+      qb = qb.or(
+        `game_title.ilike.%${query}%,notes.ilike.%${query}%,player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`
+      )
     }
+
+    if (season) {
+      qb = qb.eq('season', season)
+    }
+
+    if (dateFrom) {
+      qb = qb.gte('air_date', dateFrom)
+    }
+
+    if (dateTo) {
+      qb = qb.lte('air_date', dateTo)
+    }
+
+    return qb
+  }
+
+  // Paginate through all matching rows to build complete game map
+  const gameMap = new Map<number, GameSearchResult>()
+  let offset = 0
+  const fetchSize = 10000
+  // Stop after we have enough distinct games for the requested page
+  const targetGames = (page + 1) * limit + limit // fetch a bit extra
+
+  while (true) {
+    const { data, error } = await buildQuery()
+      .order('air_date', { ascending: false })
+      .range(offset, offset + fetchSize - 1)
+
+    if (error) throw error
+    if (!data || data.length === 0) break
+
+    for (const row of data) {
+      if (!row.game_id_source) continue
+      const existing = gameMap.get(row.game_id_source)
+      if (existing) {
+        existing.clue_count++
+      } else {
+        gameMap.set(row.game_id_source, {
+          game_id_source: row.game_id_source,
+          game_title: row.game_title || '',
+          air_date: row.air_date,
+          player1: row.player1 || '',
+          player2: row.player2 || '',
+          player3: row.player3 || '',
+          season: row.season || '',
+          clue_count: 1,
+        })
+      }
+    }
+
+    // Stop if we got fewer rows than requested (no more data)
+    if (data.length < fetchSize) break
+
+    // Stop early if we have enough distinct games already
+    if (gameMap.size >= targetGames) break
+
+    offset += fetchSize
   }
 
   // Sort by air_date descending and paginate
