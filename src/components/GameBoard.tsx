@@ -86,6 +86,7 @@ export function GameBoard({
               roundCategories.map((cat) => {
                 const clue = getClue(cat.id, value)
                 const isAnswered = clue?.is_answered ?? false
+                const wasCorrect = clue?.answered_correct === true
                 const answeredByPlayer =
                   isAnswered && clue?.answered_by
                     ? players.find((p) => p.id === clue.answered_by)
@@ -98,7 +99,7 @@ export function GameBoard({
                     disabled={isAnswered || !isMyTurn}
                     className={`board-cell py-3 md:py-5 min-h-[44px] ${
                       isAnswered
-                        ? answeredByPlayer
+                        ? wasCorrect
                           ? 'board-cell-correct'
                           : 'board-cell-wrong'
                         : ''
@@ -106,11 +107,13 @@ export function GameBoard({
                   >
                     {isAnswered ? (
                       answeredByPlayer ? (
-                        <span className="text-[8px] md:text-xs text-green-400 font-bold truncate block px-0.5">
+                        <span className={`text-[8px] md:text-xs font-bold truncate block px-0.5 ${
+                          wasCorrect ? 'text-green-400' : 'text-red-400'
+                        }`}>
                           {answeredByPlayer.name}
                         </span>
                       ) : (
-                        <span className="text-sm md:text-lg text-red-400/60">✗</span>
+                        <span className="text-sm md:text-lg text-gray-500/60">—</span>
                       )
                     ) : (
                       <span className="text-sm md:text-2xl font-bold" style={{ fontFamily: 'Swiss911, Impact, Arial Black, sans-serif' }}>

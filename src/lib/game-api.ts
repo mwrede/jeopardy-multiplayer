@@ -641,12 +641,13 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
       .eq('id', playerId)
   }
 
-  // Mark clue as answered
+  // Mark clue as answered — always store who answered and whether correct
   await supabase
     .from('clues')
     .update({
       is_answered: true,
-      answered_by: correct ? playerId : null,
+      answered_by: playerId,
+      answered_correct: correct,
     })
     .eq('id', clueId)
 

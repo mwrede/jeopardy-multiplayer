@@ -118,6 +118,7 @@ export interface Clue {
   is_daily_double: boolean
   is_answered: boolean
   answered_by: string | null
+  answered_correct: boolean | null
 }
 
 export interface Buzz {

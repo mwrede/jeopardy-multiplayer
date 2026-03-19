@@ -578,6 +578,7 @@ export default function PlayerPage() {
             roundCats.map((cat) => {
               const clue = clues.find((c) => c.category_id === cat.id && c.value === value)
               const answered = clue?.is_answered ?? false
+              const wasCorrect = clue?.answered_correct === true
               const answeredByPlayer =
                 answered && clue?.answered_by
                   ? players.find((p) => p.id === clue.answered_by)
@@ -589,7 +590,7 @@ export default function PlayerPage() {
                   disabled={answered}
                   className={`board-cell py-3 min-h-[44px] ${
                     answered
-                      ? answeredByPlayer
+                      ? wasCorrect
                         ? 'board-cell-correct'
                         : 'board-cell-wrong'
                       : ''
@@ -597,11 +598,13 @@ export default function PlayerPage() {
                 >
                   {answered ? (
                     answeredByPlayer ? (
-                      <span className="text-[8px] text-green-300 font-bold truncate block px-0.5">
+                      <span className={`text-[8px] font-bold truncate block px-0.5 ${
+                        wasCorrect ? 'text-green-300' : 'text-red-400'
+                      }`}>
                         {answeredByPlayer.name}
                       </span>
                     ) : (
-                      <span className="text-xs text-red-400/70">✗</span>
+                      <span className="text-xs text-gray-500/70">—</span>
                     )
                   ) : (
                     <span className="text-sm font-bold">{`$${value}`}</span>
