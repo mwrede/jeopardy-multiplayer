@@ -20,6 +20,7 @@ import {
   passAfterBuzz,
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
+import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 
 /**
  * PLAYER VIEW (Phone)
@@ -138,6 +139,23 @@ export default function PlayerPage() {
     }
   }, [game?.phase, game?.id, game?.current_player_id, myPlayerId])
 
+  // Play tick sounds on countdown changes
+  const prevBuzzRef2 = useRef<number | null>(null)
+  useEffect(() => {
+    if (buzzCountdown !== null && prevBuzzRef2.current !== null && buzzCountdown !== prevBuzzRef2.current && buzzCountdown > 0) {
+      playTickSound(buzzCountdown <= 5)
+    }
+    prevBuzzRef2.current = buzzCountdown
+  }, [buzzCountdown])
+
+  const prevAnswerRef2 = useRef<number | null>(null)
+  useEffect(() => {
+    if (answerCountdown !== null && prevAnswerRef2.current !== null && answerCountdown !== prevAnswerRef2.current && answerCountdown > 0) {
+      playTickSound(answerCountdown <= 5)
+    }
+    prevAnswerRef2.current = answerCountdown
+  }, [answerCountdown])
+
   // Wrap actions: write to DB, refresh, show errors
   async function doAction(fn: () => Promise<void>) {
     if (busy) return
@@ -178,6 +196,7 @@ export default function PlayerPage() {
 
   const handleBuzz = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id) return
+    playBuzzSound()
     await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
   })
 

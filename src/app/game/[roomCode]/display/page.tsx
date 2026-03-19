@@ -17,6 +17,7 @@ import {
   passAfterBuzz,
 } from '@/lib/game-api'
 import type { Player } from '@/types/game'
+import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
 
 /**
  * TV/DISPLAY VIEW
@@ -42,6 +43,37 @@ export default function DisplayPage() {
     clues,
     connected,
   } = useGameChannel(roomCode)
+
+  // === SOUND EFFECTS ===
+  const prevPhaseRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!game) return
+    const prev = prevPhaseRef.current
+    const curr = game.phase
+
+    // Play sounds on phase transitions
+    if (prev !== curr) {
+      if (curr === 'clue_reading') playSelectSound()
+      if (curr === 'player_answering') playBuzzSound()
+      if (curr === 'daily_double_wager') playDailyDoubleSound()
+      if (curr === 'clue_result') {
+        // Check if the clue was answered correctly
+        const resultClue = game.current_clue_id
+          ? clues.find((c) => c.id === game.current_clue_id)
+          : null
+        if (resultClue?.answered_correct === true) {
+          playCorrectSound()
+        } else if (resultClue?.answered_by && resultClue?.answered_correct === false) {
+          playWrongSound()
+        } else {
+          // No one answered (timeout)
+          playTimeUpSound()
+        }
+      }
+    }
+
+    prevPhaseRef.current = curr
+  }, [game?.phase, game?.current_clue_id, clues])
 
   // Auto-transition: clue_reading → buzz_window after reading period
   const transitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -142,6 +174,24 @@ export default function DisplayPage() {
       if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
     }
   }, [game?.phase, game?.id])
+
+  // Play tick sounds during buzz countdown
+  const prevBuzzCountRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (buzzCountdown !== null && prevBuzzCountRef.current !== null && buzzCountdown !== prevBuzzCountRef.current && buzzCountdown > 0) {
+      playTickSound(buzzCountdown <= 5)
+    }
+    prevBuzzCountRef.current = buzzCountdown
+  }, [buzzCountdown])
+
+  // Play tick sounds during answer countdown
+  const prevAnswerCountRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (answerCountdown !== null && prevAnswerCountRef.current !== null && answerCountdown !== prevAnswerCountRef.current && answerCountdown > 0) {
+      playTickSound(answerCountdown <= 5)
+    }
+    prevAnswerCountRef.current = answerCountdown
+  }, [answerCountdown])
 
   // Auto-transition: round_end → board_selection after 4 seconds
   const roundEndRef = useRef<ReturnType<typeof setTimeout> | null>(null)
