@@ -139,20 +139,26 @@ export default function DisplayPage() {
     }
 
     const totalMs = game.settings?.buzz_window_ms ?? 15000
-    const totalSec = Math.ceil(totalMs / 1000)
-    setBuzzCountdown(totalSec)
+    // Sync timer to when the buzz window actually opened
+    const startTime = game.buzz_window_start ? new Date(game.buzz_window_start).getTime() : Date.now()
+    const elapsed = Date.now() - startTime
+    const remainingMs = Math.max(0, totalMs - elapsed)
+    setBuzzCountdown(Math.ceil(remainingMs / 1000))
 
-    // Tick down every second
+    // Tick down every second (synced)
     buzzIntervalRef.current = setInterval(() => {
-      setBuzzCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
+      const remaining = Math.max(0, totalMs - (Date.now() - startTime))
+      setBuzzCountdown(Math.ceil(remaining / 1000))
     }, 1000)
 
-    // Auto-skip when time runs out
-    buzzTimeoutRef.current = setTimeout(async () => {
-      if (game.current_clue_id) {
-        await skipClue(game.id, game.current_clue_id)
-      }
-    }, totalMs)
+    // Auto-skip when time runs out (synced)
+    if (remainingMs > 0) {
+      buzzTimeoutRef.current = setTimeout(async () => {
+        if (game.current_clue_id) {
+          await skipClue(game.id, game.current_clue_id)
+        }
+      }, remainingMs)
+    }
 
     return () => {
       if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)

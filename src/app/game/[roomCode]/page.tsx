@@ -98,11 +98,15 @@ export default function PlayerPage() {
     }
 
     const totalMs = game.settings?.buzz_window_ms ?? 15000
-    const totalSec = Math.ceil(totalMs / 1000)
-    setBuzzCountdown(totalSec)
+    // Sync timer to when the buzz window actually opened
+    const startTime = game.buzz_window_start ? new Date(game.buzz_window_start).getTime() : Date.now()
+    const elapsed = Date.now() - startTime
+    const remainingMs = Math.max(0, totalMs - elapsed)
+    setBuzzCountdown(Math.ceil(remainingMs / 1000))
 
     buzzIntervalRef.current = setInterval(() => {
-      setBuzzCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
+      const remaining = Math.max(0, totalMs - (Date.now() - startTime))
+      setBuzzCountdown(Math.ceil(remaining / 1000))
     }, 1000)
 
     return () => {
