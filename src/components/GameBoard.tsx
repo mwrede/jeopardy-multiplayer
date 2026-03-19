@@ -87,6 +87,7 @@ export function GameBoard({
                 const clue = getClue(cat.id, value)
                 const isAnswered = clue?.is_answered ?? false
                 const wasCorrect = clue?.answered_correct === true
+                const wasWrong = clue?.answered_correct === false
                 const answeredByPlayer =
                   isAnswered && clue?.answered_by
                     ? players.find((p) => p.id === clue.answered_by)
@@ -101,7 +102,9 @@ export function GameBoard({
                       isAnswered
                         ? wasCorrect
                           ? 'board-cell-correct'
-                          : 'board-cell-wrong'
+                          : wasWrong
+                            ? 'board-cell-wrong'
+                            : 'board-cell-answered'
                         : ''
                     } ${!isMyTurn && !isAnswered ? 'opacity-70' : ''}`}
                   >
