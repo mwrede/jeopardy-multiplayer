@@ -234,6 +234,26 @@ export default function DisplayPage() {
     }
   }, [game?.phase, game?.id])
 
+  // Auto-transition: final_clue → final_answering after 5 seconds
+  const finalClueRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'final_clue') {
+      if (finalClueRef.current) {
+        clearTimeout(finalClueRef.current)
+        finalClueRef.current = null
+      }
+      return
+    }
+
+    finalClueRef.current = setTimeout(async () => {
+      await advanceToFinalAnswering(game.id)
+    }, 5000)
+
+    return () => {
+      if (finalClueRef.current) clearTimeout(finalClueRef.current)
+    }
+  }, [game?.phase, game?.id])
+
   // Auto-transition: final_reveal → game_over after showing reveals (8 seconds)
   const revealRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -763,9 +783,14 @@ export default function DisplayPage() {
 
       {/* Game over overlay */}
       {game.phase === 'game_over' && (
-        <div className="fixed inset-0 bg-jeopardy-dark z-50 flex flex-col items-center justify-center">
-          <h1 className="text-6xl font-bold text-jeopardy-gold mb-12">Final Scores</h1>
-          <div className="w-full max-w-2xl space-y-4">
+        <div className="fixed inset-0 bg-jeopardy-dark z-50 flex flex-col items-center justify-center p-8">
+          <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-20 md:h-32 w-auto mb-6" />
+          <h1 className="text-5xl md:text-7xl font-bold text-jeopardy-gold mb-2">
+            {players.sort((a, b) => b.score - a.score)[0]?.name || 'Winner'}
+          </h1>
+          <p className="text-2xl text-white/60 mb-10">is our champion!</p>
+
+          <div className="w-full max-w-2xl space-y-4 mb-12">
             {players
               .sort((a, b) => b.score - a.score)
               .map((p, i) => (
@@ -774,7 +799,9 @@ export default function DisplayPage() {
                   className={`flex items-center justify-between px-8 py-6 rounded-2xl transition-all ${
                     i === 0
                       ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold scale-105'
-                      : 'bg-white/5'
+                      : i === 1
+                        ? 'bg-white/5 border border-gray-600'
+                        : 'bg-white/5'
                   }`}
                 >
                   <div className="flex items-center gap-4">
@@ -789,6 +816,13 @@ export default function DisplayPage() {
                 </div>
               ))}
           </div>
+
+          <a
+            href="/host"
+            className="btn-primary px-12 py-5 text-xl"
+          >
+            New Game
+          </a>
         </div>
       )}
     </div>
