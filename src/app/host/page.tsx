@@ -144,20 +144,17 @@ export default function HostPage() {
     setSelectedYear(y ? String(y) : '')
   }
 
-  // Tournament filters
+  // Tournament filters — use season-based lookups (fast, indexed)
+  // ilike text search times out on 558K rows on free Supabase tier
   const tournamentFilters = [
-    { label: 'Teen Tournament', query: 'teen tournament' },
-    { label: 'Tournament of Champions', query: 'tournament of champions' },
-    { label: 'College Championship', query: 'college championship' },
-    { label: 'Teachers Tournament', query: 'teachers tournament' },
-    { label: 'All-Star Games', query: 'all-star' },
-    { label: 'Celebrity', query: 'celebrity' },
-    { label: 'Battle of the Decades', query: 'battle of the decades' },
-    { label: 'Jeopardy Masters', query: 'masters' },
-    { label: 'GOAT Tournament', query: 'greatest of all time' },
-    { label: 'Pop Culture', query: 'pop culture' },
-    { label: 'Kids Week', query: 'kids week' },
-    { label: 'Power Players', query: 'power players' },
+    { label: 'Jeopardy Masters', season: 'jm' },
+    { label: 'GOAT Tournament', season: 'goattournament' },
+    { label: 'Pop Culture Jeopardy', season: 'pcj' },
+    { label: 'College Championship', season: 'ncc' },
+    { label: 'Super Jeopardy', season: 'superjeopardy' },
+    { label: 'Trebek Pilots', season: 'trebekpilots' },
+    { label: 'Celebrity Crossover', season: 'cwcpi' },
+    { label: 'Bay Area Brains', season: 'bbab' },
   ]
 
   async function handleCreateGame(sourceGameId?: number) {
@@ -182,11 +179,11 @@ export default function HostPage() {
     doSearch({ query: searchQuery, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, page: 0 })
   }
 
-  // Do tournament search
-  function handleTournamentClick(query: string) {
-    setActiveTournament(query)
+  // Do tournament search (by season, not text search)
+  function handleTournamentClick(season: string) {
+    setActiveTournament(season)
     setSelectedGame(null)
-    doSearch({ query, page: 0 })
+    doSearch({ season, page: 0 })
   }
 
   // Shared game card renderer
@@ -509,10 +506,10 @@ export default function HostPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
               {tournamentFilters.map((filter) => (
                 <button
-                  key={filter.query}
-                  onClick={() => handleTournamentClick(filter.query)}
+                  key={filter.season}
+                  onClick={() => handleTournamentClick(filter.season)}
                   className={`px-5 py-4 rounded-xl text-base font-medium transition-all text-center ${
-                    activeTournament === filter.query
+                    activeTournament === filter.season
                       ? 'bg-jeopardy-gold text-black shadow-lg'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
                   }`}
@@ -523,7 +520,7 @@ export default function HostPage() {
             </div>
 
             {activeTournament ? (
-              <ResultsList currentFilters={{ query: activeTournament }} />
+              <ResultsList currentFilters={{ season: activeTournament }} />
             ) : (
               <p className="text-gray-500 text-center py-12 text-lg">
                 Select a tournament type to browse games

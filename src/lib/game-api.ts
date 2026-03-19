@@ -851,21 +851,16 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
   let allData: any[] = []
 
   if (query?.trim()) {
-    // Run two parallel searches: one on notes, one on game_title
-    // This is MUCH faster than a single OR with 5 ilike columns
-    const [notesResult, titleResult] = await Promise.all([
-      addDateFilters(
-        supabase.from('clue_pool').select(cols).ilike('notes', `%${query}%`)
-      ).order('air_date', { ascending: false }).limit(fetchLimit),
-      addDateFilters(
-        supabase.from('clue_pool').select(cols).ilike('game_title', `%${query}%`)
-      ).order('air_date', { ascending: false }).limit(fetchLimit),
-    ])
+    // Text search — only search player names (shorter fields, faster)
+    // Note: ilike on notes/game_title times out on 558K rows on free Supabase
+    // Tournament search uses season filters instead (indexed, fast)
+    const result = await addDateFilters(
+      supabase.from('clue_pool').select(cols)
+        .or(`player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`)
+    ).order('air_date', { ascending: false }).limit(fetchLimit)
 
-    if (notesResult.error) throw notesResult.error
-    if (titleResult.error) throw titleResult.error
-
-    allData = [...(notesResult.data || []), ...(titleResult.data || [])]
+    if (result.error) throw result.error
+    allData = result.data || []
   } else {
     // No text query — just apply date/season filters
     const result = await addDateFilters(
