@@ -779,7 +779,7 @@ export default function PlayerPage() {
         <PlayerHeader myPlayer={myPlayer} game={game} />
         <div className="flex-1 flex flex-col items-center justify-center p-4">
           <p className="text-jeopardy-gold text-2xl font-bold mb-2">Daily Double!</p>
-          <p className="text-gray-400">Answer the clue on the TV</p>
+          <p className="text-gray-400">Type your answer below</p>
         </div>
         <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
           <div className="w-full max-w-sm mx-auto space-y-3">

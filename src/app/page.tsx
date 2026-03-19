@@ -33,7 +33,9 @@ export default function Home() {
       const { game, player } = await joinGame(roomCode.trim(), playerName.trim())
       localStorage.setItem('playerId', player.id)
       localStorage.setItem('playerName', player.name)
-      router.push(`/game/${game.room_code}`)
+      // Route to play page for multiplayer, party page for party mode
+      const isMultiplayer = (game.settings as any)?.gameMode === 'multiplayer'
+      router.push(`/game/${game.room_code}${isMultiplayer ? '/play' : ''}`)
     } catch (e: any) {
       setError(e.message || 'Failed to join game')
     } finally {
