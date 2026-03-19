@@ -2,6 +2,118 @@ import { supabase } from './supabase'
 import type { Game, Player, Category, Clue, GameSettings, GameSearchResult, GameSearchFilters } from '@/types/game'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
+/**
+ * Jeopardy answer checker.
+ * Handles: case insensitivity, articles (a/an/the), "What is/Who is" prefixes,
+ * punctuation, common abbreviations, partial matches, and fuzzy matching.
+ */
+function checkAnswer(playerAnswer: string, correctAnswer: string): boolean {
+  // Strip "What is", "Who is", "Where is", etc. prefixes
+  function stripPrefix(s: string): string {
+    return s.replace(/^(what|who|where|when|how)\s+(is|are|was|were)\s+/i, '').trim()
+  }
+
+  // Normalize: lowercase, strip articles, punctuation, extra spaces
+  function normalize(s: string): string {
+    return s
+      .toLowerCase()
+      .replace(/['']/g, "'")         // normalize quotes
+      .replace(/[""]/g, '"')         // normalize double quotes
+      .replace(/\(.*?\)/g, '')       // remove parenthetical notes
+      .replace(/^(a|an|the)\s+/i, '') // strip leading articles
+      .replace(/[^a-z0-9\s]/g, '')   // remove punctuation
+      .replace(/\s+/g, ' ')          // collapse whitespace
+      .trim()
+  }
+
+  // Common abbreviations and expansions
+  function expandAbbreviations(s: string): string {
+    return s
+      .replace(/\bst\b/g, 'saint')
+      .replace(/\bmt\b/g, 'mount')
+      .replace(/\bdr\b/g, 'doctor')
+      .replace(/\bmr\b/g, 'mister')
+      .replace(/\bmrs\b/g, 'missus')
+      .replace(/\bft\b/g, 'fort')
+      .replace(/\bnyc\b/g, 'new york city')
+      .replace(/\bla\b/g, 'los angeles')
+      .replace(/\bdc\b/g, 'district of columbia')
+      .replace(/\buk\b/g, 'united kingdom')
+      .replace(/\bus\b/g, 'united states')
+      .replace(/\busa\b/g, 'united states of america')
+  }
+
+  const player = normalize(stripPrefix(playerAnswer))
+  const correct = normalize(correctAnswer)
+
+  // Exact match after normalization
+  if (player === correct) return true
+
+  // Try with abbreviation expansion
+  const playerExp = expandAbbreviations(player)
+  const correctExp = expandAbbreviations(correct)
+  if (playerExp === correctExp) return true
+
+  // Substring containment (either direction)
+  // Handles: player says "Lincoln" for "Abraham Lincoln"
+  if (player.length >= 3 && (correct.includes(player) || player.includes(correct))) return true
+  if (playerExp.length >= 3 && (correctExp.includes(playerExp) || playerExp.includes(correctExp))) return true
+
+  // Try matching without articles anywhere in the string
+  function stripAllArticles(s: string): string {
+    return s.replace(/\b(a|an|the)\b/g, '').replace(/\s+/g, ' ').trim()
+  }
+  if (stripAllArticles(player) === stripAllArticles(correct)) return true
+
+  // Handle answers with "/" alternatives (e.g., "dogs/canines")
+  const alternatives = correctAnswer.split(/[\/&]/).map((a) => normalize(a.trim()))
+  if (alternatives.some((alt) => alt.length >= 2 && (alt === player || alt.includes(player) || player.includes(alt)))) return true
+
+  // Levenshtein distance for typo tolerance (allow ~15% error rate)
+  function levenshtein(a: string, b: string): number {
+    const matrix: number[][] = []
+    for (let i = 0; i <= a.length; i++) {
+      matrix[i] = [i]
+      for (let j = 1; j <= b.length; j++) {
+        matrix[i][j] = i === 0 ? j : 0
+      }
+    }
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        )
+      }
+    }
+    return matrix[a.length][b.length]
+  }
+
+  const maxLen = Math.max(player.length, correct.length)
+  if (maxLen >= 4) {
+    const dist = levenshtein(player, correct)
+    const threshold = Math.max(1, Math.floor(maxLen * 0.2)) // 20% tolerance
+    if (dist <= threshold) return true
+  }
+
+  // Number matching: "5" matches "five", etc.
+  const numberWords: Record<string, string> = {
+    '0': 'zero', '1': 'one', '2': 'two', '3': 'three', '4': 'four',
+    '5': 'five', '6': 'six', '7': 'seven', '8': 'eight', '9': 'nine',
+    '10': 'ten', '11': 'eleven', '12': 'twelve', '13': 'thirteen',
+    '14': 'fourteen', '15': 'fifteen', '16': 'sixteen', '17': 'seventeen',
+    '18': 'eighteen', '19': 'nineteen', '20': 'twenty',
+  }
+  function replaceNumbers(s: string): string {
+    return s.replace(/\d+/g, (match) => numberWords[match] || match)
+  }
+  if (replaceNumbers(player) === replaceNumbers(correct)) return true
+
+  return false
+}
+
 // Generate a 6-character room code
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no I/O/0/1 for readability
@@ -538,7 +650,6 @@ export async function startFinalReveal(gameId: string) {
   if (!game) throw new Error('Game not found')
 
   const correctAnswer = game.final_answer || ''
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
   // Get all players and judge their answers
   const { data: players } = await supabase
@@ -550,9 +661,7 @@ export async function startFinalReveal(gameId: string) {
     for (const p of players) {
       const playerAnswer = p.final_answer || ''
       const wager = p.final_wager || 0
-      const correct =
-        normalize(playerAnswer).includes(normalize(correctAnswer)) ||
-        normalize(correctAnswer).includes(normalize(playerAnswer))
+      const correct = checkAnswer(playerAnswer, correctAnswer)
 
       const scoreChange = correct ? wager : -wager
 
@@ -726,10 +835,7 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
 
   if (!clue) throw new Error('Clue not found')
 
-  // Simple answer check: normalize and compare
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const correct = normalize(answer).includes(normalize(clue.answer)) ||
-                  normalize(clue.answer).includes(normalize(answer))
+  const correct = checkAnswer(answer, clue.answer)
 
   // For Daily Doubles, use the player's wager instead of clue value
   const isDailyDouble = clue.is_daily_double && (game?.phase === 'daily_double_answering')
