@@ -279,9 +279,11 @@ export default function HostPage() {
 
   return (
     <main className="min-h-screen flex flex-col items-center p-8 bg-jeopardy-dark">
-      <h1 className="text-7xl md:text-9xl font-bold text-jeopardy-gold mb-4 tracking-tight mt-8">
-        JEOPARDY!
-      </h1>
+      <img
+        src="/jeopardy-logo.png"
+        alt="JEOPARDY!"
+        className="h-24 md:h-36 w-auto mb-4 mt-8"
+      />
 
       {/* Mode selector */}
       <div className="flex gap-4 mb-8">

@@ -261,7 +261,7 @@ export default function PlayerPage() {
   if (game.phase === 'lobby') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-jeopardy-dark">
-        <h2 className="text-3xl font-bold text-jeopardy-gold mb-2">JEOPARDY!</h2>
+        <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-12 w-auto mb-2" />
         <button
           onClick={() => {
             navigator.clipboard.writeText(game.room_code)

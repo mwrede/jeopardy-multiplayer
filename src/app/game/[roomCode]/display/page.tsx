@@ -235,9 +235,11 @@ export default function DisplayPage() {
   if (game.status === 'lobby' || game.phase === 'lobby') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-8">
-        <h1 className="text-7xl md:text-9xl font-bold text-jeopardy-gold mb-4 tracking-tight">
-          JEOPARDY!
-        </h1>
+        <img
+          src="/jeopardy-logo.png"
+          alt="JEOPARDY!"
+          className="h-28 md:h-44 w-auto mb-4"
+        />
 
         <p className="text-2xl text-blue-300 mb-12">Join on your phone</p>
 

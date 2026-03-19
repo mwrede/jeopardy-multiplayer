@@ -43,9 +43,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6">
-      <h1 className="text-5xl md:text-7xl font-bold text-jeopardy-gold mb-2 tracking-tight">
-        JEOPARDY!
-      </h1>
+      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-16 md:h-24 w-auto mb-2" />
       <p className="text-blue-300 mb-10">Join a game on your phone</p>
 
       <div className="w-full max-w-sm space-y-4">
