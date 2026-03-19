@@ -7,9 +7,9 @@ import { joinGame } from '@/lib/game-api'
 /**
  * LANDING PAGE
  *
- * Two paths:
- * 1. TV/Display: Go to /host to select a game and create a room
- * 2. Phone/Player: Enter name + room code to join
+ * Two game modes:
+ * 1. Party: TV + phones (Jackbox-style) — go to /host for TV, join by code on phone
+ * 2. Multiplayer: everything on your device — public or private rooms
  */
 export default function Home() {
   const router = useRouter()
@@ -18,7 +18,7 @@ export default function Home() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleJoin() {
+  async function handleJoinParty() {
     if (!playerName.trim()) {
       setError('Enter your name')
       return
@@ -43,48 +43,60 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6">
-      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 w-auto mb-4" />
-      <p className="text-blue-300 mb-10">Join a game on your phone</p>
+      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 w-auto mb-8" />
 
-      <div className="w-full max-w-sm space-y-4">
-        <input
-          type="text"
-          placeholder="Your name"
-          value={playerName}
-          onChange={(e) => setPlayerName(e.target.value)}
-          maxLength={30}
-          className="input-base text-lg"
-          autoFocus
-        />
-
-        <input
-          type="text"
-          placeholder="Room code"
-          value={roomCode}
-          onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-          maxLength={6}
-          className="input-base text-xl tracking-[0.3em] text-center font-mono"
-        />
-
-        <button
-          onClick={handleJoin}
-          disabled={loading}
-          className="btn-primary w-full py-4 text-xl"
+      {/* Two mode cards */}
+      <div className="w-full max-w-lg grid gap-4 md:grid-cols-2 mb-10">
+        {/* Multiplayer */}
+        <a
+          href="/multiplayer"
+          className="group bg-jeopardy-blue-cell/30 hover:bg-jeopardy-blue-cell/50 border-2 border-jeopardy-blue rounded-2xl p-6 text-center transition-all hover:scale-[1.02]"
         >
-          {loading ? 'Joining...' : 'Join Game'}
-        </button>
+          <p className="text-3xl mb-2">🌐</p>
+          <h2 className="text-xl font-bold text-white mb-1">Multiplayer</h2>
+          <p className="text-gray-400 text-sm">Play on your phone or computer. No TV needed.</p>
+        </a>
 
-        {error && <p className="text-red-400 text-center text-sm">{error}</p>}
-      </div>
-
-      <div className="mt-12 text-center">
-        <p className="text-gray-500 text-sm mb-2">Hosting on a TV?</p>
+        {/* Party */}
         <a
           href="/host"
-          className="text-jeopardy-gold hover:underline font-semibold"
+          className="group bg-jeopardy-gold/10 hover:bg-jeopardy-gold/20 border-2 border-jeopardy-gold/50 rounded-2xl p-6 text-center transition-all hover:scale-[1.02]"
         >
-          Go to Host Screen →
+          <p className="text-3xl mb-2">📺</p>
+          <h2 className="text-xl font-bold text-jeopardy-gold mb-1">Party</h2>
+          <p className="text-gray-400 text-sm">Host on a TV, players buzz in on phones.</p>
         </a>
+      </div>
+
+      {/* Join existing party game */}
+      <div className="w-full max-w-sm">
+        <p className="text-gray-500 text-sm text-center mb-3">Join a party game by code</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            maxLength={30}
+            className="input-base text-base flex-1"
+          />
+          <input
+            type="text"
+            placeholder="Code"
+            value={roomCode}
+            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+            maxLength={6}
+            className="input-base text-lg tracking-[0.2em] text-center font-mono w-28"
+          />
+          <button
+            onClick={handleJoinParty}
+            disabled={loading}
+            className="btn-primary px-5 py-3 text-base whitespace-nowrap"
+          >
+            {loading ? '...' : 'Join'}
+          </button>
+        </div>
+        {error && <p className="text-red-400 text-center text-sm mt-2">{error}</p>}
       </div>
     </main>
   )

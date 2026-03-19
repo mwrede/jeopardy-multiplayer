@@ -37,9 +37,12 @@ export interface Game {
 
 export type GameLength = 'full' | 'half' | 'rapid'
 
+export type GameMode = 'party' | 'multiplayer'
+
 export interface GameSettings {
   mode: 'casual' | 'strict'
   judgment: 'ai' | 'voting'
+  gameMode: GameMode
   gameLength: GameLength
   reading_period_ms: number
   buzz_window_ms: number
@@ -64,6 +67,7 @@ export const GAME_LENGTH_CONFIG: Record<GameLength, {
 export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   mode: 'casual',
   judgment: 'ai',
+  gameMode: 'party',
   gameLength: 'full',
   reading_period_ms: 0,
   buzz_window_ms: 15000,
@@ -97,6 +101,7 @@ export interface GameSearchFilters {
 export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   mode: 'strict',
   judgment: 'ai',
+  gameMode: 'party',
   gameLength: 'full',
   reading_period_ms: 3000,
   buzz_window_ms: 10000,
