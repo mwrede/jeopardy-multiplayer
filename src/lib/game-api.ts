@@ -695,12 +695,11 @@ export async function skipClue(gameId: string, clueId: string) {
     })
     .eq('id', clueId)
 
-  // Go to clue_result phase to show the correct answer
+  // Go to clue_result phase — keep current_player_id so same player picks next
   await supabase
     .from('games')
     .update({
       phase: 'clue_result',
-      current_player_id: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', gameId)
@@ -751,14 +750,18 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     .eq('id', clueId)
 
   // Go to clue_result phase to show the result animation
-  // Keep current_clue_id and current_player_id so displays can show who answered
+  // Only change current_player_id to the answerer if they got it right
+  // (correct player gets to pick next; wrong answer keeps the previous picker)
+  const updateFields: any = {
+    phase: 'clue_result',
+    updated_at: new Date().toISOString(),
+  }
+  if (correct) {
+    updateFields.current_player_id = playerId
+  }
   await supabase
     .from('games')
-    .update({
-      phase: 'clue_result',
-      current_player_id: playerId,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateFields)
     .eq('id', gameId)
 
   return { correct, scoreChange }
@@ -772,7 +775,7 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
 export async function advanceFromClueResult(gameId: string) {
   const { data: game } = await supabase
     .from('games')
-    .select('current_round')
+    .select('current_round, current_player_id')
     .eq('id', gameId)
     .single()
 
@@ -780,11 +783,25 @@ export async function advanceFromClueResult(gameId: string) {
   const roundComplete = await checkRoundComplete(gameId, currentRound)
 
   if (!roundComplete) {
+    // Ensure there's always a player assigned to pick
+    let pickerId = game?.current_player_id
+    if (!pickerId) {
+      // Fallback: pick the first player
+      const { data: pls } = await supabase
+        .from('players')
+        .select('id')
+        .eq('game_id', gameId)
+        .order('join_order', { ascending: true })
+        .limit(1)
+      pickerId = pls?.[0]?.id || null
+    }
+
     // Round continues — go back to board selection
     await supabase
       .from('games')
       .update({
         current_clue_id: null,
+        current_player_id: pickerId,
         phase: 'board_selection',
         updated_at: new Date().toISOString(),
       })
@@ -830,12 +847,11 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
     })
     .eq('id', clueId)
 
-  // Go to clue_result phase
+  // Go to clue_result phase — keep current_player_id so same player picks next
   await supabase
     .from('games')
     .update({
       phase: 'clue_result',
-      current_player_id: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', gameId)
