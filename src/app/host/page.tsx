@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createGame, searchGames, getSeasons } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
-import { DEFAULT_CASUAL_SETTINGS, DEFAULT_STRICT_SETTINGS } from '@/types/game'
+import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
 
 type Tab = 'random' | 'season' | 'search' | 'tournaments'
@@ -20,7 +20,6 @@ type Tab = 'random' | 'season' | 'search' | 'tournaments'
  */
 export default function HostPage() {
   const router = useRouter()
-  const [mode, setMode] = useState<'casual' | 'strict'>('casual')
   const [gameLength, setGameLength] = useState<GameLength>('full')
   const [creating, setCreating] = useState(false)
   const [stats, setStats] = useState({ categories: 0, clues: 0 })
@@ -161,7 +160,7 @@ export default function HostPage() {
   async function handleCreateGame(sourceGameId?: number) {
     setCreating(true)
     try {
-      const baseSettings = mode === 'casual' ? DEFAULT_CASUAL_SETTINGS : DEFAULT_STRICT_SETTINGS
+      const baseSettings = DEFAULT_CASUAL_SETTINGS
       const settings = { ...baseSettings, gameLength }
       const { game } = await createGame(settings)
       if (sourceGameId) {
@@ -296,30 +295,6 @@ export default function HostPage() {
         className="h-40 md:h-56 w-auto mb-6 mt-8"
       />
 
-      {/* Mode selector */}
-      <div className="flex gap-4 mb-8">
-        <button
-          onClick={() => setMode('casual')}
-          className={`px-8 py-3 rounded-2xl text-lg font-semibold transition-all ${
-            mode === 'casual'
-              ? 'bg-jeopardy-blue text-white'
-              : 'bg-white/5 text-gray-400 hover:bg-white/10'
-          }`}
-        >
-          Casual
-        </button>
-        <button
-          onClick={() => setMode('strict')}
-          className={`px-8 py-3 rounded-2xl text-lg font-semibold transition-all ${
-            mode === 'strict'
-              ? 'bg-jeopardy-blue text-white'
-              : 'bg-white/5 text-gray-400 hover:bg-white/10'
-          }`}
-        >
-          Strict
-        </button>
-      </div>
-
       {/* Game length selector */}
       <div className="flex gap-3 mb-8">
         {([
@@ -382,9 +357,7 @@ export default function HostPage() {
               {creating ? 'Creating Game...' : '🎲 Start Random Game'}
             </button>
             <p className="text-gray-600 text-sm mt-6">
-              {mode === 'casual'
-                ? 'Casual mode: No reading delay, 15s answer timer'
-                : 'Strict mode: Reading delay, shorter timers, early-buzz lockout'}
+              No reading delay, 15s answer timer
             </p>
           </div>
         )}
