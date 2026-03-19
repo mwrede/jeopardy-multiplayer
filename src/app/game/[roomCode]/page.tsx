@@ -21,6 +21,7 @@ import {
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
+import { GAME_LENGTH_CONFIG } from '@/types/game'
 
 /**
  * PLAYER VIEW (Phone)
@@ -29,11 +30,6 @@ import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '
  * All actions just write to the DB — the useGameChannel hook
  * picks up changes via postgres_changes + polling and syncs all clients.
  */
-
-const ROUND_VALUES: Record<number, number[]> = {
-  1: [200, 400, 600, 800, 1000],
-  2: [400, 800, 1200, 1600, 2000],
-}
 
 export default function PlayerPage() {
   const params = useParams()
@@ -219,7 +215,9 @@ export default function PlayerPage() {
 
   const handleSubmitWager = () => doAction(async () => {
     if (!game || !myPlayer) return
-    const maxWager = Math.max(myPlayer.score, ROUND_VALUES[game.current_round]?.slice(-1)[0] || 1000)
+    const wagerVals = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']
+    const maxRoundVal = (game.current_round === 2 ? wagerVals.values2 : wagerVals.values1).slice(-1)[0] || 1000
+    const maxWager = Math.max(myPlayer.score, maxRoundVal)
     const w = parseInt(wager) || 5
     await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
     setWager('')
@@ -570,11 +568,13 @@ export default function PlayerPage() {
 
   // ===== BOARD SELECTION (active player picks) =====
   if (game.phase === 'board_selection' && isMyTurn) {
+    const lc = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']
     const roundCats = categories
       .filter((c) => Number(c.round_number) === Number(game.current_round))
       .sort((a, b) => a.position - b.position)
-      .slice(0, 6)
-    const values = ROUND_VALUES[game.current_round] || ROUND_VALUES[1]
+      .slice(0, lc.categories)
+    const values = game.current_round === 2 ? lc.values2 : lc.values1
+    const colCount = roundCats.length || lc.categories
 
     return (
       <div className="min-h-screen flex flex-col bg-jeopardy-dark p-2">
@@ -584,7 +584,7 @@ export default function PlayerPage() {
           <span className="text-jeopardy-gold font-bold text-lg">Your turn — pick a clue!</span>
         </div>
 
-        <div className="flex-1 grid grid-cols-6 gap-1.5 px-1 pt-2">
+        <div className={`flex-1 grid gap-1.5 px-1 pt-2 ${colCount <= 3 ? 'grid-cols-3' : 'grid-cols-6'}`}>
           {roundCats.map((cat) => (
             <div key={cat.id} className="bg-jeopardy-blue rounded p-1.5 flex items-center justify-center min-h-[36px]">
               <span className="text-[9px] font-bold text-white uppercase text-center leading-tight line-clamp-2">
@@ -774,7 +774,9 @@ export default function PlayerPage() {
 
   // ===== DAILY DOUBLE WAGER =====
   if (game.phase === 'daily_double_wager' && isMyTurn) {
-    const maxWager = Math.max(myPlayer.score, ROUND_VALUES[game.current_round]?.slice(-1)[0] || 1000)
+    const wagerVals = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']
+    const maxRoundVal = (game.current_round === 2 ? wagerVals.values2 : wagerVals.values1).slice(-1)[0] || 1000
+    const maxWager = Math.max(myPlayer.score, maxRoundVal)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
         <PlayerHeader myPlayer={myPlayer} game={game} />

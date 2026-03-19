@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createGame, searchGames, getSeasons } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS, DEFAULT_STRICT_SETTINGS } from '@/types/game'
-import type { GameSearchResult, GameSearchFilters } from '@/types/game'
+import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
 
 type Tab = 'random' | 'season' | 'search' | 'tournaments'
 
@@ -21,6 +21,7 @@ type Tab = 'random' | 'season' | 'search' | 'tournaments'
 export default function HostPage() {
   const router = useRouter()
   const [mode, setMode] = useState<'casual' | 'strict'>('casual')
+  const [gameLength, setGameLength] = useState<GameLength>('full')
   const [creating, setCreating] = useState(false)
   const [stats, setStats] = useState({ categories: 0, clues: 0 })
   const [tab, setTab] = useState<Tab>('random')
@@ -160,7 +161,8 @@ export default function HostPage() {
   async function handleCreateGame(sourceGameId?: number) {
     setCreating(true)
     try {
-      const settings = mode === 'casual' ? DEFAULT_CASUAL_SETTINGS : DEFAULT_STRICT_SETTINGS
+      const baseSettings = mode === 'casual' ? DEFAULT_CASUAL_SETTINGS : DEFAULT_STRICT_SETTINGS
+      const settings = { ...baseSettings, gameLength }
       const { game } = await createGame(settings)
       if (sourceGameId) {
         localStorage.setItem(`game_source_${game.id}`, String(sourceGameId))
@@ -316,6 +318,28 @@ export default function HostPage() {
         >
           Strict
         </button>
+      </div>
+
+      {/* Game length selector */}
+      <div className="flex gap-3 mb-8">
+        {([
+          { id: 'full' as GameLength, label: 'Full', desc: '6×5 board' },
+          { id: 'half' as GameLength, label: 'Half', desc: '6×3 board' },
+          { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3 board' },
+        ]).map((gl) => (
+          <button
+            key={gl.id}
+            onClick={() => setGameLength(gl.id)}
+            className={`px-6 py-3 rounded-2xl text-center transition-all ${
+              gameLength === gl.id
+                ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
+            }`}
+          >
+            <span className="font-bold text-lg block">{gl.label}</span>
+            <span className="text-xs opacity-60">{gl.desc}</span>
+          </button>
+        ))}
       </div>
 
       {/* Tab bar */}

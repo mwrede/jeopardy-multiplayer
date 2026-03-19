@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { Game, Player, Category, Clue, GameSettings, GameSearchResult, GameSearchFilters } from '@/types/game'
+import { GAME_LENGTH_CONFIG } from '@/types/game'
 
 // Generate a 6-character room code
 function generateRoomCode(): string {
@@ -103,12 +104,24 @@ export async function setReady(playerId: string, isReady: boolean) {
 /**
  * Start the game: pick random categories from clue_pool, create board, set daily doubles.
  * Also picks a Final Jeopardy clue and stores it on the game row.
+ * Respects gameLength setting (full/half/rapid).
  */
 export async function startGame(gameId: string) {
-  const ROUND_1_VALUES = [200, 400, 600, 800, 1000]
-  const ROUND_2_VALUES = [400, 800, 1200, 1600, 2000]
+  // Get game settings to determine game length
+  const { data: gameRow } = await supabase
+    .from('games')
+    .select('settings')
+    .eq('id', gameId)
+    .single()
 
-  // Helper: pick N random categories that have at least 5 clues
+  const settings = gameRow?.settings as GameSettings | null
+  const lengthConfig = GAME_LENGTH_CONFIG[settings?.gameLength || 'full']
+  const ROUND_1_VALUES = lengthConfig.values1
+  const ROUND_2_VALUES = lengthConfig.values2
+  const NUM_CATEGORIES = lengthConfig.categories
+  const CLUES_PER_CAT = lengthConfig.cluesPerCat
+
+  // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
     const { data: allCats } = await supabase
       .from('clue_pool')
@@ -123,8 +136,8 @@ export async function startGame(gameId: string) {
       counts[row.category] = (counts[row.category] || 0) + 1
     }
 
-    // Filter to categories with >= 5 clues, then shuffle and pick
-    const eligible = Object.keys(counts).filter(c => counts[c] >= 5)
+    // Filter to categories with enough clues, then shuffle and pick
+    const eligible = Object.keys(counts).filter(c => counts[c] >= CLUES_PER_CAT)
     if (eligible.length < count) throw new Error(`Not enough categories for ${roundName} (need ${count}, found ${eligible.length})`)
 
     // Fisher-Yates shuffle
@@ -136,7 +149,7 @@ export async function startGame(gameId: string) {
     return eligible.slice(0, count)
   }
 
-  // Helper: pick 5 random clues from a category
+  // Helper: pick random clues from a category
   async function pickClues(categoryName: string, roundName: string) {
     const { data: pool } = await supabase
       .from('clue_pool')
@@ -145,23 +158,22 @@ export async function startGame(gameId: string) {
       .eq('round', roundName)
       .limit(50)
 
-    if (!pool || pool.length < 5) throw new Error(`Not enough clues for category: ${categoryName}`)
+    if (!pool || pool.length < CLUES_PER_CAT) throw new Error(`Not enough clues for category: ${categoryName}`)
 
-    // Shuffle and take 5
+    // Shuffle and take CLUES_PER_CAT
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]]
     }
 
-    return pool.slice(0, 5)
+    return pool.slice(0, CLUES_PER_CAT)
   }
 
   // --- Round 1 ---
-  const round1Cats = await pickCategories('Jeopardy Round', 6)
+  const round1Cats = await pickCategories('Jeopardy Round', NUM_CATEGORIES)
   const round1ClueIds: string[] = []
 
   for (let pos = 0; pos < round1Cats.length; pos++) {
-    // Create category
     const { data: cat, error: catErr } = await supabase
       .from('categories')
       .insert({ game_id: gameId, name: round1Cats[pos], round_number: 1, position: pos })
@@ -169,9 +181,8 @@ export async function startGame(gameId: string) {
       .single()
     if (catErr || !cat) throw catErr || new Error('Failed to create category')
 
-    // Create 5 clues
     const clueData = await pickClues(round1Cats[pos], 'Jeopardy Round')
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < CLUES_PER_CAT; i++) {
       const { data: clue, error: clueErr } = await supabase
         .from('clues')
         .insert({
@@ -189,7 +200,7 @@ export async function startGame(gameId: string) {
   }
 
   // --- Round 2 ---
-  const round2Cats = await pickCategories('Double Jeopardy', 6)
+  const round2Cats = await pickCategories('Double Jeopardy', NUM_CATEGORIES)
   const round2ClueIds: string[] = []
 
   for (let pos = 0; pos < round2Cats.length; pos++) {
@@ -201,7 +212,7 @@ export async function startGame(gameId: string) {
     if (catErr || !cat) throw catErr || new Error('Failed to create category')
 
     const clueData = await pickClues(round2Cats[pos], 'Double Jeopardy')
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < CLUES_PER_CAT; i++) {
       const { data: clue, error: clueErr } = await supabase
         .from('clues')
         .insert({
@@ -218,18 +229,25 @@ export async function startGame(gameId: string) {
     }
   }
 
-  // --- Daily Doubles ---
-  // 1 in round 1
-  const dd1 = round1ClueIds[Math.floor(Math.random() * round1ClueIds.length)]
-  await supabase.from('clues').update({ is_daily_double: true }).eq('id', dd1)
+  // --- Daily Doubles (count based on game length) ---
+  // Round 1 DDs
+  if (round1ClueIds.length > 0) {
+    const dd1 = round1ClueIds[Math.floor(Math.random() * round1ClueIds.length)]
+    await supabase.from('clues').update({ is_daily_double: true }).eq('id', dd1)
+  }
 
-  // 2 in round 2 (different clues)
-  const dd2idx = Math.floor(Math.random() * round2ClueIds.length)
-  await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd2idx])
+  // Round 2 DDs
+  if (round2ClueIds.length > 0) {
+    const dd2idx = Math.floor(Math.random() * round2ClueIds.length)
+    await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd2idx])
 
-  let dd3idx = Math.floor(Math.random() * round2ClueIds.length)
-  while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
-  await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
+    // Second DD in round 2 only for full games
+    if (lengthConfig.dd2 >= 2 && round2ClueIds.length > 1) {
+      let dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+      while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+      await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
+    }
+  }
 
   // --- Final Jeopardy ---
   // Pick a random Final Jeopardy clue from the pool
@@ -922,8 +940,17 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
  * Preserves the original categories, clue order, and daily doubles.
  */
 export async function startGameFromSource(gameId: string, sourceGameId: number) {
-  const ROUND_1_VALUES = [200, 400, 600, 800, 1000]
-  const ROUND_2_VALUES = [400, 800, 1200, 1600, 2000]
+  // Get game settings for game length
+  const { data: gameRow } = await supabase
+    .from('games')
+    .select('settings')
+    .eq('id', gameId)
+    .single()
+
+  const settings = gameRow?.settings as GameSettings | null
+  const lengthConfig = GAME_LENGTH_CONFIG[settings?.gameLength || 'full']
+  const ROUND_1_VALUES = lengthConfig.values1
+  const ROUND_2_VALUES = lengthConfig.values2
 
   // Fetch all clues from this source game
   const { data: sourceClues, error: fetchErr } = await supabase
@@ -947,7 +974,7 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
   const round1ClueIds: string[] = []
   const round1DailyDoubles: Set<string> = new Set()
 
-  for (let pos = 0; pos < r1Cats.length && pos < 6; pos++) {
+  for (let pos = 0; pos < r1Cats.length && pos < lengthConfig.categories; pos++) {
     const catName = r1Cats[pos]
     const catClues = rounds['Jeopardy Round'][catName]
 
@@ -958,9 +985,8 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
       .single()
     if (catErr || !cat) throw catErr || new Error('Failed to create category')
 
-    // Sort clues by value and take up to 5
     catClues.sort((a: any, b: any) => (a.value || 0) - (b.value || 0))
-    const cluesForCat = catClues.slice(0, 5)
+    const cluesForCat = catClues.slice(0, lengthConfig.cluesPerCat)
 
     for (let i = 0; i < cluesForCat.length; i++) {
       const srcClue = cluesForCat[i]
@@ -993,7 +1019,7 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
   const round2ClueIds: string[] = []
   const round2DailyDoubles: Set<string> = new Set()
 
-  for (let pos = 0; pos < r2Cats.length && pos < 6; pos++) {
+  for (let pos = 0; pos < r2Cats.length && pos < lengthConfig.categories; pos++) {
     const catName = r2Cats[pos]
     const catClues = rounds['Double Jeopardy'][catName]
 
@@ -1005,7 +1031,7 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
     if (catErr || !cat) throw catErr || new Error('Failed to create category')
 
     catClues.sort((a: any, b: any) => (a.value || 0) - (b.value || 0))
-    const cluesForCat = catClues.slice(0, 5)
+    const cluesForCat = catClues.slice(0, lengthConfig.cluesPerCat)
 
     for (let i = 0; i < cluesForCat.length; i++) {
       const srcClue = cluesForCat[i]
@@ -1027,13 +1053,16 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
     }
   }
 
-  // If no daily doubles were preserved, add 2 random ones
+  // If no daily doubles were preserved, add random ones based on game length
   if (round2DailyDoubles.size === 0 && round2ClueIds.length > 0) {
     const dd2idx = Math.floor(Math.random() * round2ClueIds.length)
     await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd2idx])
-    let dd3idx = Math.floor(Math.random() * round2ClueIds.length)
-    while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
-    await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
+
+    if (lengthConfig.dd2 >= 2 && round2ClueIds.length > 1) {
+      let dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+      while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+      await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
+    }
   }
 
   // --- Final Jeopardy ---

@@ -35,9 +35,12 @@ export interface Game {
   final_answer: string | null
 }
 
+export type GameLength = 'full' | 'half' | 'rapid'
+
 export interface GameSettings {
   mode: 'casual' | 'strict'
   judgment: 'ai' | 'voting'
+  gameLength: GameLength
   reading_period_ms: number
   buzz_window_ms: number
   answer_time_ms: number
@@ -45,9 +48,23 @@ export interface GameSettings {
   final_answer_ms: number
 }
 
+export const GAME_LENGTH_CONFIG: Record<GameLength, {
+  categories: number
+  cluesPerCat: number
+  values1: number[]
+  values2: number[]
+  dd1: number
+  dd2: number
+}> = {
+  full:  { categories: 6, cluesPerCat: 5, values1: [200, 400, 600, 800, 1000], values2: [400, 800, 1200, 1600, 2000], dd1: 1, dd2: 2 },
+  half:  { categories: 6, cluesPerCat: 3, values1: [200, 400, 600],            values2: [400, 800, 1200],              dd1: 1, dd2: 1 },
+  rapid: { categories: 3, cluesPerCat: 3, values1: [200, 400, 600],            values2: [400, 800, 1200],              dd1: 1, dd2: 1 },
+}
+
 export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   mode: 'casual',
   judgment: 'ai',
+  gameLength: 'full',
   reading_period_ms: 0,
   buzz_window_ms: 15000,
   answer_time_ms: 15000,
@@ -80,6 +97,7 @@ export interface GameSearchFilters {
 export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   mode: 'strict',
   judgment: 'ai',
+  gameLength: 'full',
   reading_period_ms: 3000,
   buzz_window_ms: 10000,
   answer_time_ms: 15000,
