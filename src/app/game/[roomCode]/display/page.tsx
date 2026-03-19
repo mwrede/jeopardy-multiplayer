@@ -666,10 +666,26 @@ export default function DisplayPage() {
     (game.phase === 'clue_reading' ||
       game.phase === 'buzz_window' ||
       game.phase === 'player_answering' ||
-      game.phase === 'daily_double_wager' ||
       game.phase === 'daily_double_answering')
 
   const currentPlayer = players.find((p) => p.id === game.current_player_id)
+
+  // DAILY DOUBLE WAGER: Show category but NOT the clue
+  if (game.phase === 'daily_double_wager' && currentClue) {
+    const ddCategory = categories.find((c) => c.id === currentClue.category_id)
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark">
+        <h1 className="text-6xl md:text-8xl font-bold text-jeopardy-gold mb-8 animate-pulse">Daily Double!</h1>
+        {ddCategory && (
+          <div className="bg-jeopardy-blue rounded-2xl px-12 py-6 border-2 border-jeopardy-gold mb-8">
+            <p className="text-3xl md:text-5xl font-bold text-white text-center uppercase">{ddCategory.name}</p>
+          </div>
+        )}
+        <p className="text-2xl text-white mb-2">{currentPlayer?.name}</p>
+        <p className="text-xl text-gray-400">is making their wager...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-jeopardy-dark">

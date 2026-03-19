@@ -558,9 +558,43 @@ export default function PlayPage() {
   // === ACTIVE GAME: Board + Clue + Buzzer ===
   const showClue = currentClue && (
     game.phase === 'clue_reading' || game.phase === 'buzz_window' ||
-    game.phase === 'player_answering' || game.phase === 'daily_double_wager' ||
-    game.phase === 'daily_double_answering'
+    game.phase === 'player_answering' || game.phase === 'daily_double_answering'
   )
+
+  // === DAILY DOUBLE WAGER (clue hidden until wager is placed) ===
+  if (game.phase === 'daily_double_wager' && currentClue) {
+    const clueCategory = categories.find((c) => c.id === currentClue.category_id)
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+        <Scoreboard />
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-4">
+          <h2 className="text-4xl font-bold text-jeopardy-gold mb-4 animate-pulse">Daily Double!</h2>
+          {clueCategory && (
+            <p className="text-blue-300 text-lg font-bold uppercase tracking-wide mb-2">{clueCategory.name}</p>
+          )}
+          <p className="text-jeopardy-gold text-xl font-bold mb-6">${currentClue.value.toLocaleString()}</p>
+          {isMyTurn ? (
+            <p className="text-white text-lg">Make your wager below</p>
+          ) : (
+            <p className="text-gray-400 text-lg">{currentPlayer?.name} is making their wager...</p>
+          )}
+        </div>
+        <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-3 pb-[env(safe-area-inset-bottom,12px)]">
+          {isMyTurn ? (
+            <div className="w-full max-w-sm mx-auto space-y-2">
+              <input type="number" value={wager} onChange={(e) => setWager(e.target.value)}
+                placeholder="Enter wager" className="input-base text-xl text-center" autoFocus />
+              <button onClick={handleSubmitWager} className="btn-primary w-full py-3 text-lg">Lock In Wager</button>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-gray-500">Waiting for wager...</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-jeopardy-dark">
@@ -601,17 +635,10 @@ export default function PlayPage() {
 
           {/* Bottom controls */}
           <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-3 pb-[env(safe-area-inset-bottom,12px)]">
-            {game.phase === 'daily_double_wager' && isMyTurn ? (
-              <div className="w-full max-w-sm mx-auto space-y-2">
-                <p className="text-jeopardy-gold text-center font-bold text-lg">Daily Double!</p>
-                <input type="number" value={wager} onChange={(e) => setWager(e.target.value)}
-                  placeholder="Enter wager" className="input-base text-xl text-center" autoFocus />
-                <button onClick={handleSubmitWager} className="btn-primary w-full py-3 text-lg">Lock In Wager</button>
-              </div>
-            ) : (game.phase === 'daily_double_wager' || game.phase === 'daily_double_answering') && !isMyTurn ? (
+            {game.phase === 'daily_double_answering' && !isMyTurn ? (
               <div className="text-center py-4">
                 <p className="text-jeopardy-gold font-bold text-lg animate-pulse">Daily Double!</p>
-                <p className="text-gray-400 text-sm">{currentPlayer?.name} {game.phase === 'daily_double_wager' ? 'is wagering...' : 'is answering...'}</p>
+                <p className="text-gray-400 text-sm">{currentPlayer?.name} is answering...</p>
               </div>
             ) : game.phase === 'daily_double_answering' && isMyTurn ? (
               <div className="w-full max-w-sm mx-auto space-y-2">
