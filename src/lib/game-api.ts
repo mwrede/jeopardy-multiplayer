@@ -811,7 +811,21 @@ export async function passOnClue(gameId: string, clueId: string, playerId: strin
   const allPassed = playerIds.size > 0 && [...playerIds].every((id) => passedIds.has(id))
 
   if (allPassed) {
-    await skipClue(gameId, clueId)
+    // All passed — skip clue and go straight to board selection (no result screen)
+    await supabase.from('clues').update({ is_answered: true, answered_by: null }).eq('id', clueId)
+
+    // Check if round is complete
+    const { data: gameRow } = await supabase.from('games').select('current_round').eq('id', gameId).single()
+    const roundComplete = await checkRoundComplete(gameId, gameRow?.current_round || 1)
+
+    if (!roundComplete) {
+      // Round continues — go back to board selection
+      await supabase.from('games').update({
+        current_clue_id: null,
+        phase: 'board_selection',
+        updated_at: new Date().toISOString(),
+      }).eq('id', gameId)
+    }
   }
 }
 
