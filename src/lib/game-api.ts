@@ -307,23 +307,44 @@ export async function startGame(gameId: string) {
 
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
-    // Fetch categories in pages to handle large datasets
-    let allCats: Array<{ category: string }> = []
-    let page = 0
-    const pageSize = 10000
-    while (true) {
-      let query = supabase.from('clue_pool').select('category').eq('round', roundName)
-        .range(page * pageSize, (page + 1) * pageSize - 1)
+    // Strategy: sample random games, collect their categories, filter by theme
+    // This avoids scanning the entire 558K row table
+    const sampleSize = allowedGameIds ? allowedGameIds.length : 200
+    let gameIdsToSample: number[]
 
-      if (allowedGameIds) {
-        query = query.in('game_id_source', allowedGameIds)
+    if (allowedGameIds) {
+      // Use all allowed game IDs (tournament type filter)
+      gameIdsToSample = allowedGameIds
+    } else {
+      // Pick 200 random game IDs by sampling from the pool
+      const { data: sampleRows } = await supabase
+        .from('clue_pool')
+        .select('game_id_source')
+        .not('game_id_source', 'is', null)
+        .limit(5000)
+
+      if (!sampleRows || sampleRows.length === 0) throw new Error(`No clues found for round: ${roundName}`)
+
+      const uniqueIds = [...new Set(sampleRows.map(r => r.game_id_source))]
+      // Shuffle and take 200
+      for (let i = uniqueIds.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [uniqueIds[i], uniqueIds[j]] = [uniqueIds[j], uniqueIds[i]]
       }
+      gameIdsToSample = uniqueIds.slice(0, 200)
+    }
 
-      const { data } = await query
-      if (!data || data.length === 0) break
-      allCats.push(...data)
-      if (data.length < pageSize) break
-      page++
+    // Fetch categories from sampled games in batches
+    let allCats: Array<{ category: string }> = []
+    for (let i = 0; i < gameIdsToSample.length; i += 100) {
+      const batch = gameIdsToSample.slice(i, i + 100)
+      const { data } = await supabase
+        .from('clue_pool')
+        .select('category')
+        .eq('round', roundName)
+        .in('game_id_source', batch)
+
+      if (data) allCats.push(...data)
     }
 
     if (allCats.length === 0) throw new Error(`No clues found for round: ${roundName}`)
