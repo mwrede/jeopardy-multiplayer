@@ -151,9 +151,7 @@ export default function HostPage() {
     { label: 'College Championship', notesFilter: 'College' },
     { label: 'Tournament of Champions', notesFilter: 'Tournament of Champions' },
     { label: 'Jeopardy Masters', season: 'jm' },
-    { label: 'GOAT Tournament', season: 'goattournament' },
     { label: 'Pop Culture Jeopardy', season: 'pcj' },
-    { label: 'Super Jeopardy', season: 'superjeopardy' },
   ]
 
   async function handleCreateGame(sourceGameId?: number) {
