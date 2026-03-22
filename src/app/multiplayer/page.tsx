@@ -9,6 +9,7 @@ import type { GameLength } from '@/types/game'
 type Screen = 'landing' | 'join' | 'host'
 type JoinTab = 'code' | 'public'
 type GameType = 'regular' | 'kids' | 'teen' | 'toc'
+type CategoryTheme = '' | 'geography' | 'history' | 'corporate'
 
 interface PublicGame {
   id: string
@@ -27,6 +28,7 @@ export default function MultiplayerPage() {
   const [gameLength, setGameLength] = useState<GameLength>('rapid')
   const [isPublic, setIsPublic] = useState(true)
   const [gameType, setGameType] = useState<GameType>('regular')
+  const [categoryTheme, setCategoryTheme] = useState<CategoryTheme>('')
   const [joinTab, setJoinTab] = useState<JoinTab>('public')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -70,6 +72,7 @@ export default function MultiplayerPage() {
         gameMode: 'multiplayer' as const,
         gameLength,
         gameType,
+        ...(categoryTheme && { categoryTheme }),
       }
       const { game } = await createGame(settings, isPublic)
       const { player } = await joinGame(game.room_code, playerName.trim())
@@ -310,6 +313,31 @@ export default function MultiplayerPage() {
               }`}
             >
               {gt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Category theme (optional) */}
+      <div className="w-full max-w-sm mb-6">
+        <p className="text-gray-400 text-sm mb-2 text-center">Category Theme <span className="text-gray-600">(optional)</span></p>
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            { id: '' as CategoryTheme, label: 'Any' },
+            { id: 'geography' as CategoryTheme, label: 'Geography' },
+            { id: 'history' as CategoryTheme, label: 'History' },
+            { id: 'corporate' as CategoryTheme, label: 'Corporate' },
+          ]).map((ct) => (
+            <button
+              key={ct.id}
+              onClick={() => setCategoryTheme(ct.id)}
+              className={`px-4 py-3 rounded-xl text-center transition-all text-sm font-medium ${
+                categoryTheme === ct.id
+                  ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                  : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
+              }`}
+            >
+              {ct.label}
             </button>
           ))}
         </div>

@@ -254,6 +254,33 @@ export async function startGame(gameId: string) {
   const tournamentKey = gameType ? GAME_TYPE_TO_IDS[gameType] : undefined
   const allowedGameIds = tournamentKey ? TOURNAMENT_GAME_IDS[tournamentKey] : undefined
 
+  // Determine category theme filter
+  const categoryTheme = (settings as any)?.categoryTheme as string | undefined
+  const CATEGORY_THEME_KEYWORDS: Record<string, { include: string[]; exclude: string[] }> = {
+    geography: {
+      include: ['geography', 'geograph', 'capital city', 'capital cities', 'capitals of', 'continent', 'on the map', 'atlas', 'latitude', 'longitude', 'border', 'island', 'islands', 'ocean', 'oceans', 'river', 'rivers', 'mountain', 'mountains', 'countries', 'country', 'lake', 'lakes', 'peninsula', 'strait', 'gulf', 'archipelago', 'hemisphere', 'topography', 'landform', 'u.s. state', 'u.s. cities', 'world cities', 'african', 'european', 'asian', 'south american'],
+      exclude: ['country music', 'country song', 'country singer', 'country road', 'country cook', 'mountain dew', 'fantasy island', 'gilligan', 'rock island'],
+    },
+    history: {
+      include: ['history', 'historic', 'century', 'ancient', 'civil war', 'world war', 'revolution', 'medieval', 'colonial', 'dynasty', 'empire', 'the 1', 'the 2', 'b.c.', 'a.d.', 'founding father', 'declaration of', 'constitution', 'pharaoh', 'roman', 'greek', 'vikings', 'crusade'],
+      exclude: ['cooking', 'cook', 'kitchen', 'recipe', 'food', 'wine', 'film history', 'rock history', 'music history', 'tv history', 'movie', 'fashion history'],
+    },
+    corporate: {
+      include: ['business', 'corporate', 'company', 'companies', 'brand', 'brands', 'ceo', 'stock', 'wall street', 'fortune 500', 'entrepreneur', 'industry', 'industries', 'commerce', 'finance', 'banking', 'corporation', 'advertising', 'marketing'],
+      exclude: ['monkey business', 'show business', 'funny business', 'risky business', 'unfinished business', 'nobody', "three's company"],
+    },
+  }
+  const themeFilter = categoryTheme ? CATEGORY_THEME_KEYWORDS[categoryTheme] : undefined
+
+  // Helper: check if a category name matches the theme
+  function matchesTheme(catName: string): boolean {
+    if (!themeFilter) return true
+    const cl = catName.toLowerCase()
+    const included = themeFilter.include.some(k => cl.includes(k))
+    const excluded = themeFilter.exclude.some(k => cl.includes(k))
+    return included && !excluded
+  }
+
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
     let query = supabase.from('clue_pool').select('category').eq('round', roundName)
@@ -273,8 +300,8 @@ export async function startGame(gameId: string) {
       counts[row.category] = (counts[row.category] || 0) + 1
     }
 
-    // Filter to categories with enough clues, then shuffle and pick
-    const eligible = Object.keys(counts).filter(c => counts[c] >= CLUES_PER_CAT)
+    // Filter to categories with enough clues and matching theme
+    const eligible = Object.keys(counts).filter(c => counts[c] >= CLUES_PER_CAT && matchesTheme(c))
     if (eligible.length < count) throw new Error(`Not enough categories for ${roundName} (need ${count}, found ${eligible.length})`)
 
     // Fisher-Yates shuffle
