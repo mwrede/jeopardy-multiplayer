@@ -2,6 +2,7 @@ export type GameStatus = 'lobby' | 'active' | 'round_end' | 'final_jeopardy' | '
 
 export type GamePhase =
   | 'lobby'
+  | 'game_voting'
   | 'board_selection'
   | 'clue_reading'
   | 'buzz_window'
@@ -33,6 +34,10 @@ export interface Game {
   final_category_name: string | null
   final_clue_text: string | null
   final_answer: string | null
+  is_public: boolean
+  vote_options: Array<{ sourceGameId: number; title: string; airDate: string | null; season: string }> | null
+  vote_deadline: string | null
+  rematch_room_code: string | null
 }
 
 export type GameLength = 'full' | 'half' | 'rapid'
@@ -120,6 +125,8 @@ export interface Player {
   join_order: number
   latency_ms: number | null
   is_ready: boolean
+  is_creator: boolean
+  vote_choice: number | null
   final_wager: number | null
   final_answer: string | null
   final_correct: boolean | null

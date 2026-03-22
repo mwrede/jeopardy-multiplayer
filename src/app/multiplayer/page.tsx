@@ -1,43 +1,77 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createGame, joinGame } from '@/lib/game-api'
-import { supabase } from '@/lib/supabase'
+import { createGame, joinGame, listPublicGames } from '@/lib/game-api'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameLength } from '@/types/game'
 
-/**
- * MULTIPLAYER LOBBY
- *
- * Create or join a multiplayer game (no TV needed).
- * - Public: find an open room or create one
- * - Private: create a room and share the code
- * - Join: enter a room code
- */
-export default function MultiplayerLobby() {
+type Screen = 'landing' | 'join' | 'host'
+type JoinTab = 'code' | 'public'
+type GameType = 'regular' | 'kids' | 'teen' | 'toc'
+
+interface PublicGame {
+  id: string
+  room_code: string
+  gameLength: string
+  playerCount: number
+  creatorName: string
+  created_at: string
+}
+
+export default function MultiplayerPage() {
   const router = useRouter()
+  const [screen, setScreen] = useState<Screen>('landing')
   const [playerName, setPlayerName] = useState('')
   const [roomCode, setRoomCode] = useState('')
   const [gameLength, setGameLength] = useState<GameLength>('rapid')
+  const [isPublic, setIsPublic] = useState(true)
+  const [gameType, setGameType] = useState<GameType>('regular')
+  const [joinTab, setJoinTab] = useState<JoinTab>('public')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [publicGames, setPublicGames] = useState<PublicGame[]>([])
+  const [loadingGames, setLoadingGames] = useState(false)
 
-  async function handleCreate() {
-    if (!playerName.trim()) {
-      setError('Enter your name')
-      return
+  // Load saved name
+  useEffect(() => {
+    const saved = localStorage.getItem('playerName')
+    if (saved) setPlayerName(saved)
+  }, [])
+
+  // Fetch public games when on join screen
+  const fetchPublicGames = useCallback(async () => {
+    setLoadingGames(true)
+    try {
+      const games = await listPublicGames()
+      setPublicGames(games)
+    } catch {
+      // Silently fail
+    } finally {
+      setLoadingGames(false)
     }
+  }, [])
+
+  useEffect(() => {
+    if (screen === 'join' && joinTab === 'public') {
+      fetchPublicGames()
+      const interval = setInterval(fetchPublicGames, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [screen, joinTab, fetchPublicGames])
+
+  async function handleHost() {
+    if (!playerName.trim()) { setError('Enter your name'); return }
     setLoading(true)
     setError('')
     try {
-      const settings = {
+      const settings: any = {
         ...DEFAULT_CASUAL_SETTINGS,
         gameMode: 'multiplayer' as const,
         gameLength,
+        gameType,
       }
-      const { game } = await createGame(settings)
-      // Join the game we just created
+      const { game } = await createGame(settings, isPublic)
       const { player } = await joinGame(game.room_code, playerName.trim())
       localStorage.setItem('playerId', player.id)
       localStorage.setItem('playerName', player.name)
@@ -49,15 +83,9 @@ export default function MultiplayerLobby() {
     }
   }
 
-  async function handleJoin() {
-    if (!playerName.trim()) {
-      setError('Enter your name')
-      return
-    }
-    if (!roomCode.trim() || roomCode.trim().length < 4) {
-      setError('Enter a room code')
-      return
-    }
+  async function handleJoinByCode() {
+    if (!playerName.trim()) { setError('Enter your name'); return }
+    if (!roomCode.trim() || roomCode.trim().length < 4) { setError('Enter a room code'); return }
     setLoading(true)
     setError('')
     try {
@@ -72,57 +100,182 @@ export default function MultiplayerLobby() {
     }
   }
 
-  async function handlePublic() {
-    if (!playerName.trim()) {
-      setError('Enter your name')
-      return
-    }
+  async function handleJoinPublic(code: string) {
+    if (!playerName.trim()) { setError('Enter your name first'); return }
     setLoading(true)
     setError('')
     try {
-      // Try to find an open multiplayer lobby
-      const { data: openGames } = await supabase
-        .from('games')
-        .select('room_code')
-        .eq('status', 'lobby')
-        .order('created_at', { ascending: false })
-        .limit(10)
-
-      // Filter to multiplayer games by checking settings
-      let joinedRoom: string | null = null
-      if (openGames) {
-        for (const g of openGames) {
-          try {
-            const { game, player } = await joinGame(g.room_code, playerName.trim())
-            if ((game.settings as any)?.gameMode === 'multiplayer') {
-              localStorage.setItem('playerId', player.id)
-              localStorage.setItem('playerName', player.name)
-              joinedRoom = game.room_code
-              break
-            }
-          } catch {
-            // Room full or name taken, try next
-          }
-        }
-      }
-
-      if (joinedRoom) {
-        router.push(`/game/${joinedRoom}/play`)
-      } else {
-        // No open rooms — create a new one
-        await handleCreate()
-      }
+      const { game, player } = await joinGame(code, playerName.trim())
+      localStorage.setItem('playerId', player.id)
+      localStorage.setItem('playerName', player.name)
+      router.push(`/game/${game.room_code}/play`)
     } catch (e: any) {
-      setError(e.message || 'Failed to find a game')
+      setError(e.message || 'Failed to join game')
     } finally {
       setLoading(false)
     }
   }
 
+  const gameLengthOptions: Array<{ id: GameLength; label: string; desc: string }> = [
+    { id: 'full', label: 'Full', desc: '6x5' },
+    { id: 'half', label: 'Half', desc: '6x3' },
+    { id: 'rapid', label: 'Rapid', desc: '3x3' },
+  ]
+
+  // === LANDING SCREEN ===
+  if (screen === 'landing') {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-jeopardy-dark">
+        <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-20 md:h-32 w-auto mb-8" />
+        <h2 className="text-2xl font-bold text-white mb-10">Multiplayer</h2>
+
+        <div className="w-full max-w-sm space-y-4">
+          <button
+            onClick={() => setScreen('join')}
+            className="btn-primary w-full py-5 text-xl"
+          >
+            Join Game
+          </button>
+          <button
+            onClick={() => setScreen('host')}
+            className="btn-secondary w-full py-5 text-xl"
+          >
+            Host Game
+          </button>
+        </div>
+
+        <a href="/" className="text-gray-500 hover:text-white text-sm mt-10 transition-colors">
+          Back
+        </a>
+      </main>
+    )
+  }
+
+  // === JOIN SCREEN ===
+  if (screen === 'join') {
+    return (
+      <main className="min-h-screen flex flex-col items-center p-6 bg-jeopardy-dark">
+        <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-16 w-auto mb-4" />
+        <h2 className="text-xl font-bold text-white mb-6">Join Game</h2>
+
+        {/* Name input */}
+        <div className="w-full max-w-sm mb-6">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            maxLength={30}
+            className="input-base text-lg"
+            autoFocus
+          />
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 w-full max-w-sm">
+          <button
+            onClick={() => setJoinTab('public')}
+            className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+              joinTab === 'public'
+                ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                : 'bg-white/5 border-2 border-transparent text-gray-400'
+            }`}
+          >
+            Public Games
+          </button>
+          <button
+            onClick={() => setJoinTab('code')}
+            className={`flex-1 py-3 rounded-xl font-medium transition-all ${
+              joinTab === 'code'
+                ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                : 'bg-white/5 border-2 border-transparent text-gray-400'
+            }`}
+          >
+            Enter Code
+          </button>
+        </div>
+
+        <div className="w-full max-w-sm">
+          {joinTab === 'code' ? (
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Room code"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                className="input-base text-2xl tracking-[0.3em] text-center font-mono"
+              />
+              <button
+                onClick={handleJoinByCode}
+                disabled={loading}
+                className="btn-primary w-full py-4 text-lg"
+              >
+                {loading ? 'Joining...' : 'Join'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {loadingGames ? (
+                <p className="text-gray-500 text-center py-8">Loading games...</p>
+              ) : publicGames.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500 mb-2">No open games right now</p>
+                  <button
+                    onClick={() => setScreen('host')}
+                    className="text-jeopardy-gold hover:text-jeopardy-gold/80 text-sm"
+                  >
+                    Host your own game
+                  </button>
+                </div>
+              ) : (
+                publicGames.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => handleJoinPublic(g.room_code)}
+                    disabled={loading}
+                    className="w-full text-left bg-white/5 hover:bg-white/10 rounded-2xl p-4 transition-all border border-white/10 hover:border-jeopardy-gold/30"
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-white font-semibold">{g.creatorName}&apos;s Game</p>
+                        <p className="text-gray-500 text-sm">
+                          {g.playerCount} player{g.playerCount !== 1 ? 's' : ''} &middot; {g.gameLength}
+                        </p>
+                      </div>
+                      <span className="text-jeopardy-gold font-mono text-sm">{g.room_code}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+              <button
+                onClick={fetchPublicGames}
+                disabled={loadingGames}
+                className="w-full text-gray-500 hover:text-white text-sm py-2 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+          )}
+        </div>
+
+        {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
+
+        <button
+          onClick={() => { setScreen('landing'); setError('') }}
+          className="text-gray-500 hover:text-white text-sm mt-8 transition-colors"
+        >
+          Back
+        </button>
+      </main>
+    )
+  }
+
+  // === HOST SCREEN ===
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-jeopardy-dark">
-      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-20 md:h-32 w-auto mb-6" />
-      <h2 className="text-2xl font-bold text-white mb-8">Multiplayer</h2>
+    <main className="min-h-screen flex flex-col items-center p-6 bg-jeopardy-dark">
+      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-16 w-auto mb-4" />
+      <h2 className="text-xl font-bold text-white mb-6">Host Game</h2>
 
       {/* Name input */}
       <div className="w-full max-w-sm mb-6">
@@ -137,70 +290,100 @@ export default function MultiplayerLobby() {
         />
       </div>
 
+      {/* Game type */}
+      <div className="w-full max-w-sm mb-6">
+        <p className="text-gray-400 text-sm mb-2 text-center">Game Type</p>
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            { id: 'regular' as GameType, label: 'Regular' },
+            { id: 'kids' as GameType, label: 'Kids' },
+            { id: 'teen' as GameType, label: 'Teen' },
+            { id: 'toc' as GameType, label: 'Tournament of Champions' },
+          ]).map((gt) => (
+            <button
+              key={gt.id}
+              onClick={() => setGameType(gt.id)}
+              className={`px-4 py-3 rounded-xl text-center transition-all text-sm font-medium ${
+                gameType === gt.id
+                  ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                  : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
+              }`}
+            >
+              {gt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Game length */}
-      <div className="flex gap-3 mb-8">
-        {([
-          { id: 'full' as GameLength, label: 'Full', desc: '6×5' },
-          { id: 'half' as GameLength, label: 'Half', desc: '6×3' },
-          { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3' },
-        ]).map((gl) => (
+      <div className="w-full max-w-sm mb-6">
+        <p className="text-gray-400 text-sm mb-2 text-center">Game Length</p>
+        <div className="flex gap-3">
+          {gameLengthOptions.map((gl) => (
+            <button
+              key={gl.id}
+              onClick={() => setGameLength(gl.id)}
+              className={`flex-1 px-4 py-3 rounded-xl text-center transition-all ${
+                gameLength === gl.id
+                  ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                  : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
+              }`}
+            >
+              <span className="font-bold block">{gl.label}</span>
+              <span className="text-xs opacity-60">{gl.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Public / Private */}
+      <div className="w-full max-w-sm mb-8">
+        <p className="text-gray-400 text-sm mb-2 text-center">Visibility</p>
+        <div className="flex gap-3">
           <button
-            key={gl.id}
-            onClick={() => setGameLength(gl.id)}
-            className={`px-5 py-2 rounded-xl text-center transition-all ${
-              gameLength === gl.id
+            onClick={() => setIsPublic(true)}
+            className={`flex-1 px-4 py-3 rounded-xl text-center transition-all ${
+              isPublic
                 ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
                 : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
             }`}
           >
-            <span className="font-bold block">{gl.label}</span>
-            <span className="text-xs opacity-60">{gl.desc}</span>
+            <span className="font-bold block">Public</span>
+            <span className="text-xs opacity-60">Anyone can join</span>
           </button>
-        ))}
-      </div>
-
-      {/* Action buttons */}
-      <div className="w-full max-w-sm space-y-3">
-        <button
-          onClick={handlePublic}
-          disabled={loading}
-          className="btn-primary w-full py-4 text-lg"
-        >
-          {loading ? 'Finding game...' : '🌐 Quick Match'}
-        </button>
-
-        <button
-          onClick={handleCreate}
-          disabled={loading}
-          className="btn-secondary w-full py-4 text-lg"
-        >
-          🔒 Create Private Room
-        </button>
-
-        <div className="flex gap-2 pt-2">
-          <input
-            type="text"
-            placeholder="Room code"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            className="input-base text-lg tracking-[0.2em] text-center font-mono flex-1"
-          />
           <button
-            onClick={handleJoin}
-            disabled={loading}
-            className="btn-primary px-6 py-3"
+            onClick={() => setIsPublic(false)}
+            className={`flex-1 px-4 py-3 rounded-xl text-center transition-all ${
+              !isPublic
+                ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
+            }`}
           >
-            Join
+            <span className="font-bold block">Private</span>
+            <span className="text-xs opacity-60">Share code</span>
           </button>
         </div>
       </div>
 
+      {/* Create button */}
+      <div className="w-full max-w-sm">
+        <button
+          onClick={handleHost}
+          disabled={loading}
+          className="btn-primary w-full py-4 text-lg"
+        >
+          {loading ? 'Creating...' : 'Create Game'}
+        </button>
+      </div>
+
       {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
 
-      <a href="/" className="text-gray-500 hover:text-white text-sm mt-8 transition-colors">
-        ← Back
-      </a>
+      <button
+        onClick={() => { setScreen('landing'); setError('') }}
+        className="text-gray-500 hover:text-white text-sm mt-8 transition-colors"
+      >
+        Back
+      </button>
     </main>
   )
 }

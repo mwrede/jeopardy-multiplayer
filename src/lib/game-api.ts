@@ -124,7 +124,7 @@ function generateRoomCode(): string {
   return code
 }
 
-export async function createGame(settings: GameSettings) {
+export async function createGame(settings: GameSettings, isPublic: boolean = false) {
   const roomCode = generateRoomCode()
 
   const { data: game, error: gameError } = await supabase
@@ -135,6 +135,7 @@ export async function createGame(settings: GameSettings) {
       current_round: 1,
       phase: 'lobby',
       settings,
+      is_public: isPublic,
     })
     .select()
     .single()
@@ -187,6 +188,7 @@ export async function joinGame(roomCode: string, playerName: string) {
 
   // For mid-game joins, auto-set ready and start with 0 score
   const isActive = game.status !== 'lobby'
+  const isFirstPlayer = (count ?? 0) === 0
 
   const { data: player, error: playerError } = await supabase
     .from('players')
@@ -195,6 +197,7 @@ export async function joinGame(roomCode: string, playerName: string) {
       name: playerName,
       join_order: (count ?? 0) + 1,
       is_ready: isActive, // auto-ready if game already started
+      is_creator: isFirstPlayer, // first player to join is the creator
     })
     .select()
     .single()
@@ -227,7 +230,7 @@ export async function setReady(playerId: string, isReady: boolean) {
  */
 export async function startGame(gameId: string) {
   console.log('[startGame] Starting RANDOM game (no sourceGameId)')
-  // Get game settings to determine game length
+  // Get game settings to determine game length and game type
   const { data: gameRow } = await supabase
     .from('games')
     .select('settings')
@@ -241,12 +244,26 @@ export async function startGame(gameId: string) {
   const NUM_CATEGORIES = lengthConfig.categories
   const CLUES_PER_CAT = lengthConfig.cluesPerCat
 
+  // Determine which game IDs to pull from based on gameType
+  const gameType = (settings as any)?.gameType as string | undefined
+  const GAME_TYPE_TO_IDS: Record<string, string> = {
+    kids: 'Kids Week',
+    teen: 'Teen Tournament',
+    toc: 'Tournament of Champions',
+  }
+  const tournamentKey = gameType ? GAME_TYPE_TO_IDS[gameType] : undefined
+  const allowedGameIds = tournamentKey ? TOURNAMENT_GAME_IDS[tournamentKey] : undefined
+
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
-    const { data: allCats } = await supabase
-      .from('clue_pool')
-      .select('category')
-      .eq('round', roundName)
+    let query = supabase.from('clue_pool').select('category').eq('round', roundName)
+
+    // Filter to allowed game IDs if a specific game type is selected
+    if (allowedGameIds) {
+      query = query.in('game_id_source', allowedGameIds)
+    }
+
+    const { data: allCats } = await query
 
     if (!allCats || allCats.length === 0) throw new Error(`No clues found for round: ${roundName}`)
 
@@ -271,12 +288,17 @@ export async function startGame(gameId: string) {
 
   // Helper: pick random clues from a category
   async function pickClues(categoryName: string, roundName: string) {
-    const { data: pool } = await supabase
+    let clueQuery = supabase
       .from('clue_pool')
       .select('question, answer')
       .eq('category', categoryName)
       .eq('round', roundName)
-      .limit(50)
+
+    if (allowedGameIds) {
+      clueQuery = clueQuery.in('game_id_source', allowedGameIds)
+    }
+
+    const { data: pool } = await clueQuery.limit(50)
 
     if (!pool || pool.length < CLUES_PER_CAT) throw new Error(`Not enough clues for category: ${categoryName}`)
 
@@ -375,11 +397,16 @@ export async function startGame(gameId: string) {
   let finalClueText = 'No Final Jeopardy clue available.'
   let finalAnswerText = ''
 
-  const { data: fjCats } = await supabase
+  let fjQuery = supabase
     .from('clue_pool')
     .select('category, question, answer')
     .eq('round', 'Final Jeopardy')
-    .limit(50)
+
+  if (allowedGameIds) {
+    fjQuery = fjQuery.in('game_id_source', allowedGameIds)
+  }
+
+  const { data: fjCats } = await fjQuery.limit(50)
 
   if (fjCats && fjCats.length > 0) {
     const pick = fjCats[Math.floor(Math.random() * fjCats.length)]
@@ -734,29 +761,16 @@ export async function selectClue(gameId: string, clueId: string, playerId: strin
  * Records the buzz and sets the player as the current answerer.
  */
 export async function submitBuzz(gameId: string, clueId: string, playerId: string) {
-  // Record the buzz
-  const { error: buzzError } = await supabase
-    .from('buzzes')
-    .insert({
-      game_id: gameId,
-      clue_id: clueId,
-      player_id: playerId,
-      client_timestamp: performance.now(),
-    })
-
-  if (buzzError) throw buzzError
-
-  // Set this player as the answerer
-  const { error } = await supabase
-    .from('games')
-    .update({
-      current_player_id: playerId,
-      phase: 'player_answering',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', gameId)
+  // Use atomic DB function to prevent race conditions in multiplayer
+  const { data, error } = await supabase.rpc('resolve_buzz', {
+    p_game_id: gameId,
+    p_clue_id: clueId,
+    p_player_id: playerId,
+  })
 
   if (error) throw error
+  // data is true if this player won the buzz, false if someone else beat them
+  return data as boolean
 }
 
 /**
@@ -1283,4 +1297,145 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
     .eq('id', gameId)
 
   if (error) throw error
+}
+
+/**
+ * Start the voting phase: pick 3 random games from clue_pool for players to vote on.
+ */
+export async function startVoting(gameId: string) {
+  const { data: randomGames } = await supabase
+    .from('clue_pool')
+    .select('game_id_source, game_title, air_date, season')
+    .not('game_id_source', 'is', null)
+    .limit(3000)
+
+  if (!randomGames || randomGames.length === 0) throw new Error('No games in clue pool')
+
+  const gameMap = new Map<number, { sourceGameId: number; title: string; airDate: string | null; season: string }>()
+  for (const row of randomGames) {
+    if (!gameMap.has(row.game_id_source)) {
+      gameMap.set(row.game_id_source, {
+        sourceGameId: row.game_id_source,
+        title: row.game_title || `Game #${row.game_id_source}`,
+        airDate: row.air_date,
+        season: row.season || '',
+      })
+    }
+  }
+
+  const allGames = Array.from(gameMap.values())
+  for (let i = allGames.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allGames[i], allGames[j]] = [allGames[j], allGames[i]]
+  }
+  const options = allGames.slice(0, 3)
+  const deadline = new Date(Date.now() + 30000).toISOString()
+
+  await supabase.from('games').update({
+    phase: 'game_voting',
+    vote_options: options,
+    vote_deadline: deadline,
+    updated_at: new Date().toISOString(),
+  }).eq('id', gameId)
+}
+
+/** Submit a player's vote for a game option. */
+export async function submitVote(playerId: string, sourceGameId: number) {
+  await supabase.from('players').update({ vote_choice: sourceGameId }).eq('id', playerId)
+}
+
+/** Resolve the vote: tally votes, pick the winner, start the game. */
+export async function resolveVote(gameId: string) {
+  const [{ data: players }, { data: gameRow }] = await Promise.all([
+    supabase.from('players').select('id, vote_choice').eq('game_id', gameId),
+    supabase.from('games').select('vote_options').eq('id', gameId).single(),
+  ])
+
+  if (!players || !gameRow?.vote_options) throw new Error('Missing vote data')
+  const options = gameRow.vote_options as Array<{ sourceGameId: number }>
+
+  const counts = new Map<number, number>()
+  for (const opt of options) counts.set(opt.sourceGameId, 0)
+  counts.set(-1, 0)
+
+  for (const p of players) {
+    if (p.vote_choice != null && counts.has(p.vote_choice)) {
+      counts.set(p.vote_choice, (counts.get(p.vote_choice) || 0) + 1)
+    }
+  }
+
+  let maxVotes = -1
+  let winners: number[] = []
+  for (const [id, count] of counts) {
+    if (count > maxVotes) { maxVotes = count; winners = [id] }
+    else if (count === maxVotes) winners.push(id)
+  }
+
+  const winnerId = winners[Math.floor(Math.random() * winners.length)]
+  if (winnerId === -1) await startGame(gameId)
+  else await startGameFromSource(gameId, winnerId)
+}
+
+/** List public multiplayer games in lobby state. */
+export async function listPublicGames() {
+  const { data: games, error } = await supabase
+    .from('games')
+    .select('id, room_code, settings, created_at')
+    .eq('is_public', true)
+    .eq('status', 'lobby')
+    .eq('phase', 'lobby')
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  if (error) throw error
+  if (!games || games.length === 0) return []
+
+  const gameIds = games.map(g => g.id)
+  const { data: players } = await supabase
+    .from('players')
+    .select('game_id, name, is_creator')
+    .in('game_id', gameIds)
+
+  const playerMap = new Map<string, { count: number; creator: string }>()
+  for (const p of players || []) {
+    const entry = playerMap.get(p.game_id) || { count: 0, creator: '' }
+    entry.count++
+    if (p.is_creator) entry.creator = p.name
+    playerMap.set(p.game_id, entry)
+  }
+
+  return games.map(g => ({
+    id: g.id,
+    room_code: g.room_code,
+    gameLength: (g.settings as any)?.gameLength || 'full',
+    playerCount: playerMap.get(g.id)?.count || 0,
+    creatorName: playerMap.get(g.id)?.creator || 'Unknown',
+    created_at: g.created_at,
+  }))
+}
+
+/** Create a rematch: new game with same settings and players. */
+export async function rematchGame(gameId: string) {
+  const [{ data: oldGame }, { data: oldPlayers }] = await Promise.all([
+    supabase.from('games').select('settings, is_public').eq('id', gameId).single(),
+    supabase.from('players').select('name, is_creator, join_order').eq('game_id', gameId).order('join_order'),
+  ])
+
+  if (!oldGame || !oldPlayers) throw new Error('Game not found')
+
+  const settings = oldGame.settings as GameSettings
+  const { game: newGame } = await createGame(settings, oldGame.is_public)
+
+  for (const p of oldPlayers) {
+    await supabase.from('players').insert({
+      game_id: newGame.id,
+      name: p.name,
+      join_order: p.join_order,
+      is_creator: p.is_creator,
+      is_ready: false,
+    })
+  }
+
+  await supabase.from('games').update({ rematch_room_code: newGame.room_code }).eq('id', gameId)
+  return newGame
 }

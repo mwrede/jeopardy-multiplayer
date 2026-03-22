@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { BuzzerButton } from '@/components/BuzzerButton'
@@ -28,6 +28,8 @@ import {
   passOnClue,
   passAfterBuzz,
   removePlayer,
+  rematchGame,
+  joinGame,
 } from '@/lib/game-api'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 import {
@@ -44,6 +46,7 @@ import {
  */
 export default function PlayPage() {
   const params = useParams()
+  const router = useRouter()
   const roomCode = params.roomCode as string
   const {
     game,
@@ -259,6 +262,25 @@ export default function PlayPage() {
     if (players.length > 0 && players.every((p) => p.final_answer != null && p.final_answer !== '')) startFinalReveal(game.id)
   }, [game?.phase, game?.id, players])
 
+  // Auto-redirect on rematch
+  useEffect(() => {
+    if (!game?.rematch_room_code) return
+    // Find this player's new ID in the rematch game
+    const newCode = game.rematch_room_code
+    const myName = myPlayer?.name || localStorage.getItem('playerName')
+    if (!myName) {
+      router.push(`/game/${newCode}/play`)
+      return
+    }
+    // Join the new game (reconnect with same name)
+    joinGame(newCode, myName).then(({ player }) => {
+      localStorage.setItem('playerId', player.id)
+      router.push(`/game/${newCode}/play`)
+    }).catch(() => {
+      router.push(`/game/${newCode}/play`)
+    })
+  }, [game?.rematch_room_code])
+
   // === ACTION HANDLERS ===
   async function doAction(fn: () => Promise<void>) {
     if (busy) return
@@ -394,10 +416,16 @@ export default function PlayPage() {
         </button>
 
         {players.every((p) => p.is_ready) && players.length >= 1 && (
+          (game.settings as any)?.gameMode !== 'multiplayer' || myPlayer.is_creator
+        ) && (
           <button onClick={handleStartGame} disabled={busy}
             className="btn-primary w-full max-w-sm mt-3 py-4 text-xl">
             {busy ? 'Starting...' : 'Start Game'}
           </button>
+        )}
+        {players.every((p) => p.is_ready) && players.length >= 1 &&
+          (game.settings as any)?.gameMode === 'multiplayer' && !myPlayer.is_creator && (
+          <p className="text-gray-500 text-center mt-3">Waiting for host to start...</p>
         )}
 
         {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
@@ -551,7 +579,29 @@ export default function PlayPage() {
           ))}
         </div>
         {game.phase === 'game_over' && (
-          <a href="/multiplayer" className="btn-primary px-8 py-4 text-lg mt-8">New Game</a>
+          <div className="flex flex-col items-center gap-3 mt-8">
+            {myPlayer.is_creator && (
+              <button
+                onClick={async () => {
+                  try {
+                    await rematchGame(game.id)
+                  } catch (e: any) {
+                    console.error('Rematch failed:', e)
+                  }
+                }}
+                disabled={busy}
+                className="btn-primary px-8 py-4 text-lg"
+              >
+                Rematch
+              </button>
+            )}
+            {!myPlayer.is_creator && !game.rematch_room_code && (
+              <p className="text-gray-500 text-sm">Waiting for host to start rematch...</p>
+            )}
+            <a href="/multiplayer" className="text-gray-500 hover:text-white text-sm transition-colors">
+              Back to Lobby
+            </a>
+          </div>
         )}
       </div>
     )
