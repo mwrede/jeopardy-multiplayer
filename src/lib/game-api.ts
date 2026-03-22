@@ -306,7 +306,7 @@ export async function startGame(gameId: string) {
     return eligible.slice(0, count)
   }
 
-  // Helper: pick random clues from a category
+  // Helper: pick random clues from a category (returns null if not enough)
   async function pickClues(categoryName: string, roundName: string) {
     let clueQuery = supabase
       .from('clue_pool')
@@ -315,12 +315,12 @@ export async function startGame(gameId: string) {
       .eq('round', roundName)
 
     if (allowedGameIds) {
-      clueQuery = clueQuery.in('game_id_source', allowedGameIds)
+      clueQuery = clueQuery.in('game_id_source', allowedGameIds.slice(0, 100))
     }
 
     const { data: pool } = await clueQuery.limit(50)
 
-    if (!pool || pool.length < CLUES_PER_CAT) throw new Error(`Not enough clues for category: ${categoryName}`)
+    if (!pool || pool.length < CLUES_PER_CAT) return null // not enough clues, skip this category
 
     // Shuffle and take CLUES_PER_CAT
     for (let i = pool.length - 1; i > 0; i--) {
@@ -331,65 +331,51 @@ export async function startGame(gameId: string) {
     return pool.slice(0, CLUES_PER_CAT)
   }
 
-  // --- Round 1 ---
-  const round1Cats = await pickCategories('Jeopardy Round', NUM_CATEGORIES)
-  const round1ClueIds: string[] = []
+  // Helper: pick categories and build clues, skipping any that don't have enough clues
+  async function buildRound(roundName: string, roundNumber: number, values: number[]) {
+    const candidates = await pickCategories(roundName, NUM_CATEGORIES * 3) // get extra candidates
+    const clueIds: string[] = []
+    let pos = 0
 
-  for (let pos = 0; pos < round1Cats.length; pos++) {
-    const { data: cat, error: catErr } = await supabase
-      .from('categories')
-      .insert({ game_id: gameId, name: round1Cats[pos], round_number: 1, position: pos })
-      .select('id')
-      .single()
-    if (catErr || !cat) throw catErr || new Error('Failed to create category')
+    for (const catName of candidates) {
+      if (pos >= NUM_CATEGORIES) break
 
-    const clueData = await pickClues(round1Cats[pos], 'Jeopardy Round')
-    for (let i = 0; i < CLUES_PER_CAT; i++) {
-      const { data: clue, error: clueErr } = await supabase
-        .from('clues')
-        .insert({
-          category_id: cat.id,
-          value: ROUND_1_VALUES[i],
-          question: clueData[i].question,
-          answer: clueData[i].answer,
-          is_daily_double: false,
-        })
+      const clueData = await pickClues(catName, roundName)
+      if (!clueData) continue // skip categories without enough clues
+
+      const { data: cat, error: catErr } = await supabase
+        .from('categories')
+        .insert({ game_id: gameId, name: catName, round_number: roundNumber, position: pos })
         .select('id')
         .single()
-      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
-      round1ClueIds.push(clue.id)
+      if (catErr || !cat) continue
+
+      for (let i = 0; i < CLUES_PER_CAT; i++) {
+        const { data: clue } = await supabase
+          .from('clues')
+          .insert({
+            category_id: cat.id,
+            value: values[i],
+            question: clueData[i].question,
+            answer: clueData[i].answer,
+            is_daily_double: false,
+          })
+          .select('id')
+          .single()
+        if (clue) clueIds.push(clue.id)
+      }
+      pos++
     }
+
+    if (pos < NUM_CATEGORIES) throw new Error(`Not enough valid categories for ${roundName} (found ${pos}, need ${NUM_CATEGORIES})`)
+    return clueIds
   }
+
+  // --- Round 1 ---
+  const round1ClueIds = await buildRound('Jeopardy Round', 1, ROUND_1_VALUES)
 
   // --- Round 2 ---
-  const round2Cats = await pickCategories('Double Jeopardy', NUM_CATEGORIES)
-  const round2ClueIds: string[] = []
-
-  for (let pos = 0; pos < round2Cats.length; pos++) {
-    const { data: cat, error: catErr } = await supabase
-      .from('categories')
-      .insert({ game_id: gameId, name: round2Cats[pos], round_number: 2, position: pos })
-      .select('id')
-      .single()
-    if (catErr || !cat) throw catErr || new Error('Failed to create category')
-
-    const clueData = await pickClues(round2Cats[pos], 'Double Jeopardy')
-    for (let i = 0; i < CLUES_PER_CAT; i++) {
-      const { data: clue, error: clueErr } = await supabase
-        .from('clues')
-        .insert({
-          category_id: cat.id,
-          value: ROUND_2_VALUES[i],
-          question: clueData[i].question,
-          answer: clueData[i].answer,
-          is_daily_double: false,
-        })
-        .select('id')
-        .single()
-      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
-      round2ClueIds.push(clue.id)
-    }
-  }
+  const round2ClueIds = await buildRound('Double Jeopardy', 2, ROUND_2_VALUES)
 
   // --- Daily Doubles (count based on game length) ---
   // Round 1 DDs
