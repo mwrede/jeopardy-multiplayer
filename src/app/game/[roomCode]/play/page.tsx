@@ -315,6 +315,9 @@ export default function PlayPage() {
 
   const handlePass = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id) return
+    // Cancel auto-skip timeout so passOnClue can handle the skip
+    if (buzzTimeoutRef.current) { clearTimeout(buzzTimeoutRef.current); buzzTimeoutRef.current = null }
+    // Record pass and check if all players have passed
     await passOnClue(game.id, game.current_clue_id, myPlayer.id)
     setHasPassed(true)
   })
@@ -435,17 +438,25 @@ export default function PlayPage() {
 
   // === SCOREBOARD (shared across phases) ===
   const Scoreboard = () => (
-    <div className="flex gap-2 px-2 py-2 overflow-x-auto bg-black/40 flex-shrink-0">
-      {players.sort((a, b) => b.score - a.score).map((p) => (
-        <div key={p.id} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-center min-w-[80px] border-b-3 ${
-          p.id === game.current_player_id ? 'bg-jeopardy-blue-cell/50 border-b-2 border-jeopardy-gold' : 'bg-jeopardy-blue-dark/30'
-        } ${p.id === myPlayerId ? 'ring-1 ring-blue-400/30' : ''}`}>
-          <p className="text-[10px] text-white/60 truncate font-semibold uppercase">{p.name}</p>
-          <p className={`text-sm font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}>
-            ${p.score.toLocaleString()}
-          </p>
-        </div>
-      ))}
+    <div className="bg-black/40 flex-shrink-0">
+      <div className="flex items-center justify-between px-3 py-1">
+        <span className="text-[10px] text-gray-500 font-mono">{game.room_code}</span>
+        <span className="text-[10px] text-gray-500">
+          {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </span>
+      </div>
+      <div className="flex gap-2 px-2 pb-2 overflow-x-auto">
+        {players.sort((a, b) => b.score - a.score).map((p) => (
+          <div key={p.id} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-center min-w-[80px] border-b-3 ${
+            p.id === game.current_player_id ? 'bg-jeopardy-blue-cell/50 border-b-2 border-jeopardy-gold' : 'bg-jeopardy-blue-dark/30'
+          } ${p.id === myPlayerId ? 'ring-1 ring-blue-400/30' : ''}`}>
+            <p className="text-[10px] text-white/60 truncate font-semibold uppercase">{p.name}</p>
+            <p className={`text-sm font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}>
+              ${p.score.toLocaleString()}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 
