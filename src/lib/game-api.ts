@@ -254,100 +254,39 @@ export async function startGame(gameId: string) {
   const tournamentKey = gameType ? GAME_TYPE_TO_IDS[gameType] : undefined
   const allowedGameIds = tournamentKey ? TOURNAMENT_GAME_IDS[tournamentKey] : undefined
 
-  // Determine category theme filter
+  // Category theme uses the pre-computed category_type column (indexed)
   const categoryTheme = (settings as any)?.categoryTheme as string | undefined
-  const CATEGORY_THEME_KEYWORDS: Record<string, { include: string[]; exclude: string[] }> = {
-    geography: {
-      include: ['geography', 'geograph', 'capital city', 'capital cities', 'capitals of', 'continent', 'on the map', 'atlas', 'latitude', 'longitude', 'border', 'island', 'islands', 'ocean', 'oceans', 'river', 'rivers', 'mountain', 'mountains', 'countries', 'country', 'lake', 'lakes', 'peninsula', 'strait', 'gulf', 'archipelago', 'hemisphere', 'topography', 'landform', 'u.s. state', 'u.s. cities', 'world cities', 'african', 'european', 'asian', 'south american'],
-      exclude: ['country music', 'country song', 'country singer', 'country road', 'country cook', 'mountain dew', 'fantasy island', 'gilligan', 'rock island'],
-    },
-    history: {
-      include: ['history', 'historic', 'century', 'ancient', 'civil war', 'world war', 'revolution', 'medieval', 'colonial', 'dynasty', 'empire', 'the 1', 'the 2', 'b.c.', 'a.d.', 'founding father', 'declaration of', 'constitution', 'pharaoh', 'roman', 'greek', 'vikings', 'crusade'],
-      exclude: ['cooking', 'cook', 'kitchen', 'recipe', 'food', 'wine', 'film history', 'rock history', 'music history', 'tv history', 'movie', 'fashion history'],
-    },
-    corporate: {
-      include: ['business', 'corporate', 'company', 'companies', 'brand', 'brands', 'ceo', 'stock', 'wall street', 'fortune 500', 'entrepreneur', 'industry', 'industries', 'commerce', 'finance', 'banking', 'corporation', 'advertising', 'marketing'],
-      exclude: ['monkey business', 'show business', 'funny business', 'risky business', 'unfinished business', 'nobody', "three's company"],
-    },
-    science: {
-      include: ['science', 'scientist', 'biology', 'chemistry', 'physics', 'element', 'atom', 'molecule', 'dna', 'laboratory', 'experiment', 'periodic table', 'astronomy', 'planet', 'planets', 'space', 'nasa', 'dinosaur', 'fossil', 'evolution', 'anatomy', 'medicine', 'medical', 'geology', 'meteorology', 'botany', 'zoology', 'genetics'],
-      exclude: ['political science', 'science fiction', 'rocket science'],
-    },
-    sports: {
-      include: ['sport', 'football', 'baseball', 'basketball', 'hockey', 'soccer', 'tennis', 'golf', 'olympic', 'nfl', 'nba', 'mlb', 'nhl', 'athlete', 'touchdown', 'home run', 'super bowl', 'world series', 'boxing', 'wrestling', 'marathon', 'swimming', 'track and field', 'world cup'],
-      exclude: ['good sport', 'transport'],
-    },
-    pop_culture: {
-      include: ['pop culture', 'celebrity', 'celebrities', 'tv show', 'television', 'sitcom', 'reality tv', 'movie', 'movies', 'film', 'hollywood', 'oscar', 'grammy', 'emmy', 'broadway', 'musical', 'cartoon', 'anime', 'comic', 'comics', 'superhero', 'video game', 'viral', 'meme', 'streaming', 'netflix'],
-      exclude: ['musical instrument', 'musical term'],
-    },
-    food: {
-      include: ['food', 'cooking', 'cook', 'cuisine', 'recipe', 'chef', 'restaurant', 'wine', 'beer', 'cocktail', 'drink', 'dessert', 'baking', 'kitchen', 'spice', 'chocolate', 'pasta', 'pizza', 'sushi', 'vegetable', 'fruit', 'meat', 'seafood', 'gourmet', 'appetizer', 'breakfast', 'lunch', 'dinner'],
-      exclude: ['cook county', "captain cook", 'cooked up'],
-    },
-    literature: {
-      include: ['literature', 'literary', 'novel', 'novels', 'author', 'authors', 'book', 'books', 'poetry', 'poet', 'poem', 'shakespeare', 'fiction', 'nonfiction', 'bestseller', 'classic', 'library', 'chapter', 'playwright', 'memoir'],
-      exclude: ['book of the bible', 'booking', 'facebook', 'textbook', 'notebook', 'comic book'],
-    },
-    music: {
-      include: ['music', 'musician', 'song', 'songs', 'singer', 'band', 'album', 'rock & roll', 'jazz', 'classical music', 'opera', 'composer', 'symphony', 'lyric', 'lyrics', 'concert', 'hip hop', 'rap', 'r&b', 'country music', 'pop music'],
-      exclude: ['musical instrument', 'face the music'],
-    },
-  }
-  const themeFilter = categoryTheme ? CATEGORY_THEME_KEYWORDS[categoryTheme] : undefined
-
-  // Helper: check if a category name matches the theme
-  function matchesTheme(catName: string): boolean {
-    if (!themeFilter) return true
-    const cl = catName.toLowerCase()
-    const included = themeFilter.include.some(k => cl.includes(k))
-    const excluded = themeFilter.exclude.some(k => cl.includes(k))
-    return included && !excluded
-  }
 
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
-    // Strategy: sample random games, collect their categories, filter by theme
-    // This avoids scanning the entire 558K row table
-    const sampleSize = allowedGameIds ? allowedGameIds.length : 200
-    let gameIdsToSample: number[]
+    let query = supabase.from('clue_pool').select('category').eq('round', roundName)
 
+    // Filter by game IDs (tournament type) or category_type (theme)
     if (allowedGameIds) {
-      // Use all allowed game IDs (tournament type filter)
-      gameIdsToSample = allowedGameIds
-    } else {
-      // Pick 200 random game IDs by sampling from the pool
-      const { data: sampleRows } = await supabase
-        .from('clue_pool')
-        .select('game_id_source')
-        .not('game_id_source', 'is', null)
-        .limit(5000)
-
-      if (!sampleRows || sampleRows.length === 0) throw new Error(`No clues found for round: ${roundName}`)
-
-      const uniqueIds = [...new Set(sampleRows.map(r => r.game_id_source))]
-      // Shuffle and take 200
-      for (let i = uniqueIds.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [uniqueIds[i], uniqueIds[j]] = [uniqueIds[j], uniqueIds[i]]
+      // Batch game IDs to avoid URL length limits
+      let allCats: Array<{ category: string }> = []
+      for (let i = 0; i < allowedGameIds.length; i += 100) {
+        const batch = allowedGameIds.slice(i, i + 100)
+        const { data } = await supabase.from('clue_pool').select('category')
+          .eq('round', roundName).in('game_id_source', batch)
+        if (data) allCats.push(...data)
       }
-      gameIdsToSample = uniqueIds.slice(0, 200)
+      const counts: Record<string, number> = {}
+      for (const row of allCats) counts[row.category] = (counts[row.category] || 0) + 1
+      const eligible = Object.keys(counts).filter(c => counts[c] >= CLUES_PER_CAT)
+      if (eligible.length < count) throw new Error(`Not enough categories for ${roundName} (need ${count}, found ${eligible.length})`)
+      for (let i = eligible.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [eligible[i], eligible[j]] = [eligible[j], eligible[i]] }
+      return eligible.slice(0, count)
     }
 
-    // Fetch categories from sampled games in batches
-    let allCats: Array<{ category: string }> = []
-    for (let i = 0; i < gameIdsToSample.length; i += 100) {
-      const batch = gameIdsToSample.slice(i, i + 100)
-      const { data } = await supabase
-        .from('clue_pool')
-        .select('category')
-        .eq('round', roundName)
-        .in('game_id_source', batch)
-
-      if (data) allCats.push(...data)
+    // Use indexed category_type column for theme filtering
+    if (categoryTheme) {
+      query = query.eq('category_type', categoryTheme)
     }
 
-    if (allCats.length === 0) throw new Error(`No clues found for round: ${roundName}`)
+    const { data: allCats } = await query.limit(10000)
+
+    if (!allCats || allCats.length === 0) throw new Error(`No clues found for round: ${roundName}`)
 
     // Count clues per category
     const counts: Record<string, number> = {}
@@ -355,8 +294,7 @@ export async function startGame(gameId: string) {
       counts[row.category] = (counts[row.category] || 0) + 1
     }
 
-    // Filter to categories with enough clues and matching theme
-    const eligible = Object.keys(counts).filter(c => counts[c] >= CLUES_PER_CAT && matchesTheme(c))
+    const eligible = Object.keys(counts).filter(c => counts[c] >= CLUES_PER_CAT)
     if (eligible.length < count) throw new Error(`Not enough categories for ${roundName} (need ${count}, found ${eligible.length})`)
 
     // Fisher-Yates shuffle
@@ -484,8 +422,11 @@ export async function startGame(gameId: string) {
     .select('category, question, answer')
     .eq('round', 'Final Jeopardy')
 
+  if (categoryTheme) {
+    fjQuery = fjQuery.eq('category_type', categoryTheme)
+  }
   if (allowedGameIds) {
-    fjQuery = fjQuery.in('game_id_source', allowedGameIds)
+    fjQuery = fjQuery.in('game_id_source', allowedGameIds.slice(0, 100))
   }
 
   const { data: fjCats } = await fjQuery.limit(50)
