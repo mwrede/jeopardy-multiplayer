@@ -47,8 +47,8 @@ export default function Home() {
     <main className="min-h-screen flex flex-col items-center justify-center p-6">
       <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 w-auto mb-8" />
 
-      {/* Two mode cards */}
-      <div className="w-full max-w-lg grid gap-4 md:grid-cols-2 mb-10">
+      {/* Mode cards */}
+      <div className="w-full max-w-lg grid gap-4 md:grid-cols-3 mb-10">
         {/* Multiplayer */}
         <a
           href="/multiplayer"
@@ -67,6 +67,16 @@ export default function Home() {
           <p className="text-3xl mb-2">📺</p>
           <h2 className="text-xl font-bold text-jeopardy-gold mb-1">Party</h2>
           <p className="text-gray-400 text-sm">Host on a TV, players buzz in on phones.</p>
+        </a>
+
+        {/* Create Your Own */}
+        <a
+          href="/create"
+          className="group bg-green-900/20 hover:bg-green-900/30 border-2 border-green-500/40 rounded-2xl p-6 text-center transition-all hover:scale-[1.02]"
+        >
+          <p className="text-3xl mb-2">✏️</p>
+          <h2 className="text-xl font-bold text-green-400 mb-1">Create Board</h2>
+          <p className="text-gray-400 text-sm">Build your own categories, clues, and answers.</p>
         </a>
       </div>
 

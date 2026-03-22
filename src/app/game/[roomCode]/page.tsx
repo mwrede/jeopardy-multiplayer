@@ -8,6 +8,7 @@ import {
   removePlayer,
   startGame,
   startGameFromSource,
+  startCustomGame,
   selectClue,
   submitAnswer,
   submitWager,
@@ -189,10 +190,11 @@ export default function PlayerPage() {
 
   const handleStartGame = () => doAction(async () => {
     if (!game) return
-    // Check if a specific J-Archive game was selected by the host (stored in settings)
-    const sourceGameId = (game.settings as any)?.sourceGameId
-    if (sourceGameId) {
-      await startGameFromSource(game.id, sourceGameId)
+    const settings = game.settings as any
+    if (settings?.customBoard) {
+      await startCustomGame(game.id, settings.customBoard)
+    } else if (settings?.sourceGameId) {
+      await startGameFromSource(game.id, settings.sourceGameId)
     } else {
       await startGame(game.id)
     }

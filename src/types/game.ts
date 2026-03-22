@@ -203,3 +203,29 @@ export interface BoardColumn {
 }
 
 export type Board = BoardColumn[]
+
+// Custom board builder types
+export interface CustomClue {
+  question: string
+  answer: string
+  value: number
+  isDailyDouble?: boolean
+}
+
+export interface CustomCategory {
+  name: string
+  clues: CustomClue[]
+}
+
+export interface CustomRound {
+  categories: CustomCategory[]
+}
+
+export interface CustomBoard {
+  rounds: CustomRound[]
+  finalJeopardy?: {
+    categoryName: string
+    question: string
+    answer: string
+  }
+}

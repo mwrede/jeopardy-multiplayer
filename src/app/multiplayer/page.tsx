@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createGame, joinGame, listPublicGames } from '@/lib/game-api'
+import { createGame, joinGame, listPublicGames, listCustomBoards, loadCustomBoard } from '@/lib/game-api'
+import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameLength } from '@/types/game'
 
@@ -29,6 +30,10 @@ export default function MultiplayerPage() {
   const [isPublic, setIsPublic] = useState(true)
   const [gameType, setGameType] = useState<GameType>('regular')
   const [categoryTheme, setCategoryTheme] = useState<CategoryTheme>('')
+  const [customBoardId, setCustomBoardId] = useState<string | null>(null)
+  const [customBoards, setCustomBoards] = useState<Array<{ id: string; title: string; created_at: string }>>([])
+  const [customSearch, setCustomSearch] = useState('')
+  const [loadingCustom, setLoadingCustom] = useState(false)
   const [joinTab, setJoinTab] = useState<JoinTab>('public')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -62,6 +67,18 @@ export default function MultiplayerPage() {
     }
   }, [screen, joinTab, fetchPublicGames])
 
+  async function searchCustom() {
+    setLoadingCustom(true)
+    try {
+      const boards = await listCustomBoards(customSearch || undefined)
+      setCustomBoards(boards)
+    } catch (e) {
+      console.error('Failed to load custom boards:', e)
+    } finally {
+      setLoadingCustom(false)
+    }
+  }
+
   async function handleHost() {
     if (!playerName.trim()) { setError('Enter your name'); return }
     setLoading(true)
@@ -75,6 +92,15 @@ export default function MultiplayerPage() {
         ...(categoryTheme && { categoryTheme }),
       }
       const { game } = await createGame(settings, isPublic)
+
+      // If a custom board is selected, store its data in settings
+      if (customBoardId) {
+        const board = await loadCustomBoard(customBoardId)
+        await supabase.from('games').update({
+          settings: { ...settings, customBoard: board.board_data, customBoardId },
+        }).eq('id', game.id)
+      }
+
       const { player } = await joinGame(game.room_code, playerName.trim())
       localStorage.setItem('playerId', player.id)
       localStorage.setItem('playerName', player.name)
@@ -347,6 +373,39 @@ export default function MultiplayerPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Custom board (optional) */}
+      <div className="w-full max-w-sm mb-6">
+        <p className="text-gray-400 text-sm mb-2 text-center">Custom Board <span className="text-gray-600">(optional)</span></p>
+        <div className="flex gap-2 mb-2">
+          <input type="text" value={customSearch}
+            onChange={(e) => setCustomSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') searchCustom() }}
+            placeholder="Search custom boards..." className="input-base text-sm flex-1 py-2" />
+          <button onClick={searchCustom} disabled={loadingCustom}
+            className="btn-secondary px-3 py-2 text-xs">{loadingCustom ? '...' : 'Search'}</button>
+        </div>
+        {customBoards.length > 0 && (
+          <div className="space-y-1 max-h-40 overflow-y-auto">
+            {customBoards.map((cb) => (
+              <button key={cb.id}
+                onClick={() => setCustomBoardId(customBoardId === cb.id ? null : cb.id)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all ${
+                  customBoardId === cb.id
+                    ? 'bg-green-900/30 border border-green-500 text-green-400'
+                    : 'bg-white/5 border border-transparent text-gray-400 hover:bg-white/10'
+                }`}>
+                {cb.title}
+              </button>
+            ))}
+          </div>
+        )}
+        {customBoardId && (
+          <p className="text-green-400 text-xs text-center mt-1">
+            Custom board selected — will use this instead of random categories
+          </p>
+        )}
       </div>
 
       {/* Game length */}

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Game, Player, Category, Clue, GameSettings, GameSearchResult, GameSearchFilters } from '@/types/game'
+import type { Game, Player, Category, Clue, GameSettings, GameSearchResult, GameSearchFilters, CustomBoard } from '@/types/game'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
 /**
@@ -1356,6 +1356,102 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
     .eq('id', gameId)
 
   if (error) throw error
+}
+
+/**
+ * Start a game with a custom board (user-created categories/clues).
+ */
+export async function startCustomGame(gameId: string, board: CustomBoard) {
+  for (let roundIdx = 0; roundIdx < board.rounds.length; roundIdx++) {
+    const round = board.rounds[roundIdx]
+    const roundNumber = roundIdx + 1
+
+    for (let catIdx = 0; catIdx < round.categories.length; catIdx++) {
+      const cat = round.categories[catIdx]
+      const { data: catRow, error: catErr } = await supabase
+        .from('categories')
+        .insert({ game_id: gameId, name: cat.name, round_number: roundNumber, position: catIdx })
+        .select('id')
+        .single()
+      if (catErr || !catRow) throw catErr || new Error('Failed to create category')
+
+      for (const clue of cat.clues) {
+        await supabase.from('clues').insert({
+          category_id: catRow.id,
+          value: clue.value,
+          question: clue.question,
+          answer: clue.answer,
+          is_daily_double: clue.isDailyDouble || false,
+        })
+      }
+    }
+  }
+
+  // Pick random first player
+  const { data: players } = await supabase
+    .from('players')
+    .select('id')
+    .eq('game_id', gameId)
+  if (!players || players.length === 0) throw new Error('No players in game')
+  const firstPlayer = players[Math.floor(Math.random() * players.length)]
+
+  // Activate game
+  await supabase.from('games').update({
+    status: 'active',
+    phase: 'board_selection',
+    current_round: 1,
+    current_player_id: firstPlayer.id,
+    final_category_name: board.finalJeopardy?.categoryName || null,
+    final_clue_text: board.finalJeopardy?.question || null,
+    final_answer: board.finalJeopardy?.answer || null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', gameId)
+}
+
+/**
+ * Save a custom board to the custom_boards table.
+ */
+export async function saveCustomBoard(title: string, boardData: CustomBoard, isPublic: boolean = true) {
+  const { data, error } = await supabase
+    .from('custom_boards')
+    .insert({ title, board_data: boardData, is_public: isPublic })
+    .select('id, title')
+    .single()
+  if (error) throw error
+  return data
+}
+
+/**
+ * List public custom boards for browsing.
+ */
+export async function listCustomBoards(search?: string) {
+  let query = supabase
+    .from('custom_boards')
+    .select('id, title, is_public, created_at')
+    .eq('is_public', true)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (search) {
+    query = query.ilike('title', `%${search}%`)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
+
+/**
+ * Load a custom board by ID.
+ */
+export async function loadCustomBoard(boardId: string) {
+  const { data, error } = await supabase
+    .from('custom_boards')
+    .select('*')
+    .eq('id', boardId)
+    .single()
+  if (error) throw error
+  return data as { id: string; title: string; board_data: CustomBoard; is_public: boolean; created_at: string }
 }
 
 /**

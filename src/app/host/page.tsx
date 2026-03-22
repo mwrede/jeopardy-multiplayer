@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createGame, searchGames, getSeasons } from '@/lib/game-api'
+import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
 
-type Tab = 'random' | 'season' | 'search' | 'tournaments' | 'category'
+type Tab = 'random' | 'season' | 'search' | 'tournaments' | 'category' | 'custom'
 
 /**
  * HOST / TV SCREEN - Game Selection
@@ -47,6 +47,12 @@ export default function HostPage() {
 
   // Category theme tab state
   const [selectedTheme, setSelectedTheme] = useState('')
+
+  // Custom boards tab state
+  const [customBoards, setCustomBoards] = useState<Array<{ id: string; title: string; created_at: string }>>([])
+  const [customSearch, setCustomSearch] = useState('')
+  const [loadingCustom, setLoadingCustom] = useState(false)
+  const [selectedCustomBoard, setSelectedCustomBoard] = useState<string | null>(null)
 
   const categoryThemes = [
     { id: 'geography', label: 'Geography' },
@@ -189,6 +195,36 @@ export default function HostPage() {
     }
   }
 
+  async function handleSearchCustomBoards() {
+    setLoadingCustom(true)
+    try {
+      const boards = await listCustomBoards(customSearch || undefined)
+      setCustomBoards(boards)
+    } catch (e) {
+      console.error('Failed to load custom boards:', e)
+    } finally {
+      setLoadingCustom(false)
+    }
+  }
+
+  async function handleCreateCustomGame(boardId: string) {
+    setCreating(true)
+    try {
+      const board = await loadCustomBoard(boardId)
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, customBoardId: boardId }
+      const { game } = await createGame(settings)
+      // Store custom board data in settings so startCustomGame can use it
+      await supabase.from('games').update({
+        settings: { ...settings, customBoard: board.board_data },
+      }).eq('id', game.id)
+      router.push(`/game/${game.room_code}/display`)
+    } catch (e) {
+      console.error('Failed to create custom game:', e)
+    } finally {
+      setCreating(false)
+    }
+  }
+
   // Do free-text search from Search tab
   function handleSearch() {
     setSelectedGame(null)
@@ -297,6 +333,7 @@ export default function HostPage() {
     { id: 'search', label: 'Search', icon: '🔍' },
     { id: 'tournaments', label: 'Tournaments', icon: '🏆' },
     { id: 'category', label: 'By Category', icon: '📋' },
+    { id: 'custom', label: 'Custom Boards', icon: '✏️' },
   ]
 
   // Numeric seasons for the dropdown
@@ -586,6 +623,55 @@ export default function HostPage() {
                 Select a category theme
               </p>
             )}
+          </div>
+        )}
+
+        {/* ===== CUSTOM BOARDS TAB ===== */}
+        {tab === 'custom' && (
+          <div>
+            <p className="text-gray-400 text-center text-sm mb-6">
+              Play a custom board created by you or the community
+            </p>
+            <div className="flex gap-2 mb-6 max-w-md mx-auto">
+              <input type="text" value={customSearch}
+                onChange={(e) => setCustomSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearchCustomBoards() }}
+                placeholder="Search by title..." className="input-base text-base flex-1" />
+              <button onClick={handleSearchCustomBoards} disabled={loadingCustom}
+                className="btn-primary px-5 py-3 text-sm">{loadingCustom ? '...' : 'Search'}</button>
+            </div>
+            {customBoards.length === 0 && !loadingCustom && (
+              <p className="text-gray-500 text-center py-8">
+                No custom boards found. <a href="/create" className="text-blue-400 underline">Create one!</a>
+              </p>
+            )}
+            <div className="space-y-3">
+              {customBoards.map((cb) => (
+                <button key={cb.id}
+                  onClick={() => setSelectedCustomBoard(selectedCustomBoard === cb.id ? null : cb.id)}
+                  className={`w-full text-left px-6 py-4 rounded-xl transition-all border ${
+                    selectedCustomBoard === cb.id
+                      ? 'bg-jeopardy-blue/30 border-jeopardy-gold'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  }`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-white font-bold text-lg">{cb.title}</p>
+                      <p className="text-gray-500 text-sm">
+                        Created {new Date(cb.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {selectedCustomBoard === cb.id && (
+                      <button onClick={(e) => { e.stopPropagation(); handleCreateCustomGame(cb.id) }}
+                        disabled={creating}
+                        className="bg-jeopardy-gold hover:bg-jeopardy-gold/80 text-black font-bold px-6 py-3 rounded-xl text-base transition-all disabled:opacity-50">
+                        {creating ? 'Creating...' : 'Play This Board'}
+                      </button>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
