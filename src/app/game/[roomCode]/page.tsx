@@ -19,6 +19,7 @@ import {
   startFinalReveal,
   passOnClue,
   passAfterBuzz,
+  skipClue,
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
@@ -188,11 +189,10 @@ export default function PlayerPage() {
 
   const handleStartGame = () => doAction(async () => {
     if (!game) return
-    // Check if a specific J-Archive game was selected by the host
-    const sourceGameId = localStorage.getItem(`game_source_${game.id}`)
+    // Check if a specific J-Archive game was selected by the host (stored in settings)
+    const sourceGameId = (game.settings as any)?.sourceGameId
     if (sourceGameId) {
-      await startGameFromSource(game.id, parseInt(sourceGameId))
-      localStorage.removeItem(`game_source_${game.id}`)
+      await startGameFromSource(game.id, sourceGameId)
     } else {
       await startGame(game.id)
     }
@@ -526,12 +526,12 @@ export default function PlayerPage() {
 
   // ===== CLUE RESULT (show who got it right/wrong) =====
   if (game.phase === 'clue_result' && currentClue) {
-    const answerer = game.current_player_id
-      ? players.find((p) => p.id === game.current_player_id)
+    const wasCorrect = currentClue.answered_correct === true
+    const noOneAnswered = !currentClue.answered_by
+    const answerer = currentClue.answered_by
+      ? players.find((p) => p.id === currentClue.answered_by)
       : null
-    const wasCorrect = currentClue.answered_by != null
-    const noOneAnswered = !game.current_player_id
-    const iWasAnswerer = game.current_player_id === myPlayerId
+    const iWasAnswerer = currentClue.answered_by === myPlayerId
     const clueCategory = categories.find((c) => c.id === currentClue.category_id)
 
     return (

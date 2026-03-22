@@ -226,6 +226,7 @@ export async function setReady(playerId: string, isReady: boolean) {
  * Respects gameLength setting (full/half/rapid).
  */
 export async function startGame(gameId: string) {
+  console.log('[startGame] Starting RANDOM game (no sourceGameId)')
   // Get game settings to determine game length
   const { data: gameRow } = await supabase
     .from('games')
@@ -765,7 +766,7 @@ export async function submitBuzz(gameId: string, clueId: string, playerId: strin
  */
 export async function passOnClue(gameId: string, clueId: string, playerId: string) {
   // Record the pass as a buzz with is_pass = true
-  await supabase
+  const { error: upsertErr } = await supabase
     .from('buzzes')
     .upsert({
       game_id: gameId,
@@ -775,22 +776,22 @@ export async function passOnClue(gameId: string, clueId: string, playerId: strin
       is_pass: true,
     }, { onConflict: 'game_id,clue_id,player_id' })
 
-  // Check if all players have passed
-  const { data: allPlayers } = await supabase
-    .from('players')
-    .select('id')
-    .eq('game_id', gameId)
+  if (upsertErr) {
+    console.error('[passOnClue] upsert failed:', upsertErr.message)
+    return
+  }
 
-  const { data: passes } = await supabase
-    .from('buzzes')
-    .select('player_id')
-    .eq('game_id', gameId)
-    .eq('clue_id', clueId)
-    .eq('is_pass', true)
+  // Check if all players have passed
+  const [{ data: allPlayers }, { data: passes }] = await Promise.all([
+    supabase.from('players').select('id').eq('game_id', gameId),
+    supabase.from('buzzes').select('player_id').eq('game_id', gameId).eq('clue_id', clueId).eq('is_pass', true),
+  ])
 
   const playerIds = new Set(allPlayers?.map((p) => p.id) || [])
   const passedIds = new Set(passes?.map((b) => b.player_id) || [])
   const allPassed = playerIds.size > 0 && [...playerIds].every((id) => passedIds.has(id))
+
+  console.log('[passOnClue]', { playerId, players: playerIds.size, passed: passedIds.size, allPassed })
 
   if (allPassed) {
     await skipClue(gameId, clueId)
@@ -1086,6 +1087,7 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
  * Preserves the original categories, clue order, and daily doubles.
  */
 export async function startGameFromSource(gameId: string, sourceGameId: number) {
+  console.log('[startGameFromSource] Starting with sourceGameId:', sourceGameId)
   // Get game settings for game length
   const { data: gameRow } = await supabase
     .from('games')

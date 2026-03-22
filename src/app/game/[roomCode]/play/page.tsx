@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { BuzzerButton } from '@/components/BuzzerButton'
+import { GameKeyboard } from '@/components/GameKeyboard'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
@@ -274,10 +275,11 @@ export default function PlayPage() {
 
   const handleStartGame = () => doAction(async () => {
     if (!game) return
-    const sourceGameId = localStorage.getItem(`game_source_${game.id}`)
+    // Check if a specific J-Archive game was selected by the host (stored in settings)
+    const sourceGameId = (game.settings as any)?.sourceGameId
+    console.log('[handleStartGame] game.settings:', JSON.stringify(game.settings), 'sourceGameId:', sourceGameId)
     if (sourceGameId) {
-      await startGameFromSource(game.id, parseInt(sourceGameId))
-      localStorage.removeItem(`game_source_${game.id}`)
+      await startGameFromSource(game.id, sourceGameId)
     } else {
       await startGame(game.id)
     }
@@ -433,9 +435,9 @@ export default function PlayPage() {
 
   // === CLUE RESULT ===
   if (game.phase === 'clue_result' && currentClue) {
-    const answerer = game.current_player_id ? players.find((p) => p.id === game.current_player_id) : null
     const wasCorrect = currentClue.answered_correct === true
     const noOneAnswered = !currentClue.answered_by
+    const answerer = currentClue.answered_by ? players.find((p) => p.id === currentClue.answered_by) : null
     const clueCategory = categories.find((c) => c.id === currentClue.category_id)
 
     return (

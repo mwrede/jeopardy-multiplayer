@@ -49,20 +49,20 @@ export default function DisplayPage() {
   const [sourceGameInfo, setSourceGameInfo] = useState<{ title: string; airDate: string | null } | null>(null)
   useEffect(() => {
     if (!game?.id) return
-    const sourceId = localStorage.getItem(`game_source_${game.id}`)
+    const sourceId = (game.settings as any)?.sourceGameId
     if (!sourceId) return
 
     supabase
       .from('clue_pool')
       .select('game_title, air_date')
-      .eq('game_id_source', parseInt(sourceId))
+      .eq('game_id_source', sourceId)
       .limit(1)
       .then(({ data }) => {
         if (data?.[0]) {
           setSourceGameInfo({ title: data[0].game_title, airDate: data[0].air_date })
         }
       })
-  }, [game?.id])
+  }, [game?.id, game?.settings])
 
   // === SOUND EFFECTS ===
   const prevPhaseRef = useRef<string | null>(null)
@@ -565,11 +565,11 @@ export default function DisplayPage() {
     const resultClue = game.current_clue_id
       ? clues.find((c) => c.id === game.current_clue_id)
       : null
-    const answerer = game.current_player_id
-      ? players.find((p) => p.id === game.current_player_id)
+    const wasCorrect = resultClue?.answered_correct === true
+    const noOneAnswered = !resultClue?.answered_by
+    const answerer = resultClue?.answered_by
+      ? players.find((p) => p.id === resultClue.answered_by)
       : null
-    const wasCorrect = resultClue?.answered_by != null
-    const noOneAnswered = !game.current_player_id
     const clueCategory = resultClue
       ? categories.find((c) => c.id === resultClue.category_id)
       : null
@@ -584,7 +584,7 @@ export default function DisplayPage() {
               <div
                 key={p.id}
                 className={`flex-shrink-0 px-5 py-2 rounded-xl text-center min-w-[120px] transition-all border-b-4 ${
-                  p.id === game.current_player_id
+                  p.id === resultClue?.answered_by
                     ? wasCorrect
                       ? 'bg-green-900/30 border-green-500 scale-105'
                       : 'bg-red-900/30 border-red-500 scale-105'

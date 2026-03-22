@@ -161,11 +161,11 @@ export default function HostPage() {
     setCreating(true)
     try {
       const baseSettings = DEFAULT_CASUAL_SETTINGS
-      const settings = { ...baseSettings, gameLength }
-      const { game } = await createGame(settings)
+      const settings: any = { ...baseSettings, gameLength }
       if (sourceGameId) {
-        localStorage.setItem(`game_source_${game.id}`, String(sourceGameId))
+        settings.sourceGameId = sourceGameId
       }
+      const { game } = await createGame(settings)
       router.push(`/game/${game.room_code}/display`)
     } catch (e) {
       console.error('Failed to create game:', e)
