@@ -307,16 +307,26 @@ export async function startGame(gameId: string) {
 
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
-    let query = supabase.from('clue_pool').select('category').eq('round', roundName)
+    // Fetch categories in pages to handle large datasets
+    let allCats: Array<{ category: string }> = []
+    let page = 0
+    const pageSize = 10000
+    while (true) {
+      let query = supabase.from('clue_pool').select('category').eq('round', roundName)
+        .range(page * pageSize, (page + 1) * pageSize - 1)
 
-    // Filter to allowed game IDs if a specific game type is selected
-    if (allowedGameIds) {
-      query = query.in('game_id_source', allowedGameIds)
+      if (allowedGameIds) {
+        query = query.in('game_id_source', allowedGameIds)
+      }
+
+      const { data } = await query
+      if (!data || data.length === 0) break
+      allCats.push(...data)
+      if (data.length < pageSize) break
+      page++
     }
 
-    const { data: allCats } = await query
-
-    if (!allCats || allCats.length === 0) throw new Error(`No clues found for round: ${roundName}`)
+    if (allCats.length === 0) throw new Error(`No clues found for round: ${roundName}`)
 
     // Count clues per category
     const counts: Record<string, number> = {}
