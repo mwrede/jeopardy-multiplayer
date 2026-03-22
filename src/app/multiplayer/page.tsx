@@ -9,7 +9,7 @@ import type { GameLength } from '@/types/game'
 type Screen = 'landing' | 'join' | 'host'
 type JoinTab = 'code' | 'public'
 type GameType = 'regular' | 'kids' | 'teen' | 'toc'
-type CategoryTheme = '' | 'geography' | 'history' | 'corporate'
+type CategoryTheme = '' | 'geography' | 'history' | 'corporate' | 'science' | 'sports' | 'pop_culture' | 'food' | 'literature' | 'music'
 
 interface PublicGame {
   id: string
@@ -326,6 +326,12 @@ export default function MultiplayerPage() {
             { id: '' as CategoryTheme, label: 'Any' },
             { id: 'geography' as CategoryTheme, label: 'Geography' },
             { id: 'history' as CategoryTheme, label: 'History' },
+            { id: 'science' as CategoryTheme, label: 'Science' },
+            { id: 'sports' as CategoryTheme, label: 'Sports' },
+            { id: 'pop_culture' as CategoryTheme, label: 'Pop Culture' },
+            { id: 'food' as CategoryTheme, label: 'Food & Drink' },
+            { id: 'literature' as CategoryTheme, label: 'Literature' },
+            { id: 'music' as CategoryTheme, label: 'Music' },
             { id: 'corporate' as CategoryTheme, label: 'Corporate' },
           ]).map((ct) => (
             <button

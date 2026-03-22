@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
 
-type Tab = 'random' | 'season' | 'search' | 'tournaments'
+type Tab = 'random' | 'season' | 'search' | 'tournaments' | 'category'
 
 /**
  * HOST / TV SCREEN - Game Selection
@@ -44,6 +44,21 @@ export default function HostPage() {
 
   // Tournament tab state
   const [activeTournament, setActiveTournament] = useState('')
+
+  // Category theme tab state
+  const [selectedTheme, setSelectedTheme] = useState('')
+
+  const categoryThemes = [
+    { id: 'geography', label: 'Geography' },
+    { id: 'history', label: 'History' },
+    { id: 'science', label: 'Science' },
+    { id: 'sports', label: 'Sports' },
+    { id: 'pop_culture', label: 'Pop Culture' },
+    { id: 'food', label: 'Food & Drink' },
+    { id: 'literature', label: 'Literature' },
+    { id: 'music', label: 'Music' },
+    { id: 'corporate', label: 'Corporate' },
+  ]
 
   // Load clue pool stats
   useEffect(() => {
@@ -154,13 +169,16 @@ export default function HostPage() {
     { label: 'Pop Culture Jeopardy', season: 'pcj' },
   ]
 
-  async function handleCreateGame(sourceGameId?: number) {
+  async function handleCreateGame(sourceGameId?: number, categoryTheme?: string) {
     setCreating(true)
     try {
       const baseSettings = DEFAULT_CASUAL_SETTINGS
       const settings: any = { ...baseSettings, gameLength }
       if (sourceGameId) {
         settings.sourceGameId = sourceGameId
+      }
+      if (categoryTheme) {
+        settings.categoryTheme = categoryTheme
       }
       const { game } = await createGame(settings)
       router.push(`/game/${game.room_code}/display`)
@@ -278,6 +296,7 @@ export default function HostPage() {
     { id: 'season', label: 'By Season', icon: '📅' },
     { id: 'search', label: 'Search', icon: '🔍' },
     { id: 'tournaments', label: 'Tournaments', icon: '🏆' },
+    { id: 'category', label: 'By Category', icon: '📋' },
   ]
 
   // Numeric seasons for the dropdown
@@ -522,6 +541,49 @@ export default function HostPage() {
             ) : (
               <p className="text-gray-500 text-center py-12 text-lg">
                 Select a tournament type to browse games
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ===== CATEGORY THEME TAB ===== */}
+        {tab === 'category' && (
+          <div>
+            <p className="text-gray-400 text-center text-sm mb-6">
+              Pick a theme — categories will be a mix from across all games
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+              {categoryThemes.map((theme) => (
+                <button
+                  key={theme.id}
+                  onClick={() => setSelectedTheme(theme.id === selectedTheme ? '' : theme.id)}
+                  className={`px-5 py-4 rounded-xl text-base font-medium transition-all text-center ${
+                    selectedTheme === theme.id
+                      ? 'bg-jeopardy-gold text-black shadow-lg'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+                  }`}
+                >
+                  {theme.label}
+                </button>
+              ))}
+            </div>
+
+            {selectedTheme ? (
+              <div className="text-center">
+                <p className="text-gray-400 mb-4">
+                  Start a game with <span className="text-jeopardy-gold font-semibold">{categoryThemes.find(t => t.id === selectedTheme)?.label}</span> themed categories
+                </p>
+                <button
+                  onClick={() => handleCreateGame(undefined, selectedTheme)}
+                  disabled={creating}
+                  className="bg-jeopardy-gold hover:bg-jeopardy-gold/80 text-black font-bold px-8 py-4 rounded-xl text-lg transition-all disabled:opacity-50"
+                >
+                  {creating ? 'Creating...' : 'Play This Theme'}
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-12 text-lg">
+                Select a category theme
               </p>
             )}
           </div>

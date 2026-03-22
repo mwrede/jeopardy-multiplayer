@@ -269,6 +269,30 @@ export async function startGame(gameId: string) {
       include: ['business', 'corporate', 'company', 'companies', 'brand', 'brands', 'ceo', 'stock', 'wall street', 'fortune 500', 'entrepreneur', 'industry', 'industries', 'commerce', 'finance', 'banking', 'corporation', 'advertising', 'marketing'],
       exclude: ['monkey business', 'show business', 'funny business', 'risky business', 'unfinished business', 'nobody', "three's company"],
     },
+    science: {
+      include: ['science', 'scientist', 'biology', 'chemistry', 'physics', 'element', 'atom', 'molecule', 'dna', 'laboratory', 'experiment', 'periodic table', 'astronomy', 'planet', 'planets', 'space', 'nasa', 'dinosaur', 'fossil', 'evolution', 'anatomy', 'medicine', 'medical', 'geology', 'meteorology', 'botany', 'zoology', 'genetics'],
+      exclude: ['political science', 'science fiction', 'rocket science'],
+    },
+    sports: {
+      include: ['sport', 'football', 'baseball', 'basketball', 'hockey', 'soccer', 'tennis', 'golf', 'olympic', 'nfl', 'nba', 'mlb', 'nhl', 'athlete', 'touchdown', 'home run', 'super bowl', 'world series', 'boxing', 'wrestling', 'marathon', 'swimming', 'track and field', 'world cup'],
+      exclude: ['good sport', 'transport'],
+    },
+    pop_culture: {
+      include: ['pop culture', 'celebrity', 'celebrities', 'tv show', 'television', 'sitcom', 'reality tv', 'movie', 'movies', 'film', 'hollywood', 'oscar', 'grammy', 'emmy', 'broadway', 'musical', 'cartoon', 'anime', 'comic', 'comics', 'superhero', 'video game', 'viral', 'meme', 'streaming', 'netflix'],
+      exclude: ['musical instrument', 'musical term'],
+    },
+    food: {
+      include: ['food', 'cooking', 'cook', 'cuisine', 'recipe', 'chef', 'restaurant', 'wine', 'beer', 'cocktail', 'drink', 'dessert', 'baking', 'kitchen', 'spice', 'chocolate', 'pasta', 'pizza', 'sushi', 'vegetable', 'fruit', 'meat', 'seafood', 'gourmet', 'appetizer', 'breakfast', 'lunch', 'dinner'],
+      exclude: ['cook county', "captain cook", 'cooked up'],
+    },
+    literature: {
+      include: ['literature', 'literary', 'novel', 'novels', 'author', 'authors', 'book', 'books', 'poetry', 'poet', 'poem', 'shakespeare', 'fiction', 'nonfiction', 'bestseller', 'classic', 'library', 'chapter', 'playwright', 'memoir'],
+      exclude: ['book of the bible', 'booking', 'facebook', 'textbook', 'notebook', 'comic book'],
+    },
+    music: {
+      include: ['music', 'musician', 'song', 'songs', 'singer', 'band', 'album', 'rock & roll', 'jazz', 'classical music', 'opera', 'composer', 'symphony', 'lyric', 'lyrics', 'concert', 'hip hop', 'rap', 'r&b', 'country music', 'pop music'],
+      exclude: ['musical instrument', 'face the music'],
+    },
   }
   const themeFilter = categoryTheme ? CATEGORY_THEME_KEYWORDS[categoryTheme] : undefined
 
