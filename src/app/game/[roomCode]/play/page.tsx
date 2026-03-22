@@ -72,6 +72,16 @@ export default function PlayPage() {
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
+  const [gameAirDate, setGameAirDate] = useState<string | null>(null)
+
+  // Fetch air date of the source game
+  useEffect(() => {
+    if (!game?.settings) return
+    const sourceId = (game.settings as any)?.sourceGameId
+    if (!sourceId) return
+    supabase.from('clue_pool').select('air_date').eq('game_id_source', sourceId).limit(1)
+      .then(({ data }) => { if (data?.[0]?.air_date) setGameAirDate(data[0].air_date) })
+  }, [game?.settings])
   const buzzIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const answerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const answerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -441,9 +451,11 @@ export default function PlayPage() {
     <div className="bg-black/40 flex-shrink-0">
       <div className="flex items-center justify-between px-3 py-1">
         <span className="text-[10px] text-gray-500 font-mono">{game.room_code}</span>
-        <span className="text-[10px] text-gray-500">
-          {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-        </span>
+        {gameAirDate && (
+          <span className="text-[10px] text-gray-500">
+            {new Date(gameAirDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+        )}
       </div>
       <div className="flex gap-2 px-2 pb-2 overflow-x-auto">
         {players.sort((a, b) => b.score - a.score).map((p) => (
