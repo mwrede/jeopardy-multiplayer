@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   advanceFromRoundEnd,
@@ -20,9 +20,24 @@ import {
 import type { Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
 
+function QRCode({ roomCode }: { roomCode: string }) {
+  const [origin, setOrigin] = useState('')
+  useEffect(() => { setOrigin(window.location.origin) }, [])
+  if (!origin) return null
+  const url = `${origin}/game/${roomCode}/play`
+  return (
+    <div className="flex flex-col items-center">
+      <img
+        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`}
+        alt="Scan to join"
+        className="w-48 h-48 rounded-xl bg-white p-2"
+      />
+      <p className="text-gray-500 text-sm mt-2">Scan to join</p>
+    </div>
+  )
+}
+
 /**
- * TV/DISPLAY VIEW
- *
  * This is the "Jackbox-style" display meant to be shown on a TV or large monitor.
  * It shows:
  * - The room code for players to join
@@ -347,14 +362,7 @@ export default function DisplayPage() {
               {game.room_code}
             </p>
           </div>
-          <div className="flex flex-col items-center">
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${typeof window !== 'undefined' ? window.location.origin : ''}/game/${game.room_code}/play`)}`}
-              alt="Scan to join"
-              className="w-48 h-48 rounded-xl bg-white p-2"
-            />
-            <p className="text-gray-500 text-sm mt-2">Scan to join</p>
-          </div>
+          <QRCode roomCode={game.room_code} />
         </div>
 
         {/* Players who have joined */}
