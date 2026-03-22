@@ -37,13 +37,51 @@ import {
   playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound,
 } from '@/lib/sounds'
 
-/**
- * MULTIPLAYER PLAY PAGE
- *
- * Combined view: board + clues + buzzer + answers all on one screen.
- * No separate TV display needed. Each player sees everything on their device.
- * Auto-transitions (timers) run on every client.
- */
+function JoinForm({ roomCode, onJoined }: { roomCode: string; onJoined: (playerId: string) => void }) {
+  const [name, setName] = useState('')
+  const [joining, setJoining] = useState(false)
+  const [joinError, setJoinError] = useState('')
+
+  async function handleJoin() {
+    if (!name.trim()) { setJoinError('Enter your name'); return }
+    setJoining(true)
+    setJoinError('')
+    try {
+      const { player } = await joinGame(roomCode, name.trim())
+      localStorage.setItem('playerName', player.name)
+      onJoined(player.id)
+    } catch (e: any) {
+      setJoinError(e.message || 'Failed to join')
+    } finally {
+      setJoining(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-jeopardy-dark">
+      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-16 w-auto mb-4" />
+      <p className="text-gray-400 text-lg mb-2">Room <span className="text-white font-mono font-bold tracking-widest">{roomCode}</span></p>
+      <h2 className="text-xl font-bold text-white mb-6">Enter your name to join</h2>
+      <div className="w-full max-w-sm space-y-3">
+        <input
+          type="text"
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleJoin() }}
+          maxLength={30}
+          className="input-base text-lg"
+          autoFocus
+        />
+        <button onClick={handleJoin} disabled={joining} className="btn-primary w-full py-4 text-lg">
+          {joining ? 'Joining...' : 'Join Game'}
+        </button>
+      </div>
+      {joinError && <p className="text-red-400 text-center text-sm mt-4">{joinError}</p>}
+    </div>
+  )
+}
+
 export default function PlayPage() {
   const params = useParams()
   const router = useRouter()
@@ -368,7 +406,7 @@ export default function PlayPage() {
   })
 
   // === LOADING ===
-  if (!game || !myPlayer) {
+  if (!game) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-jeopardy-dark">
         <div className="text-center">
@@ -377,6 +415,14 @@ export default function PlayPage() {
         </div>
       </div>
     )
+  }
+
+  // === JOIN FORM (no player yet — e.g. scanned QR code) ===
+  if (!myPlayer) {
+    return <JoinForm roomCode={roomCode} onJoined={(playerId) => {
+      localStorage.setItem('playerId', playerId)
+      refreshState()
+    }} />
   }
 
   const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
