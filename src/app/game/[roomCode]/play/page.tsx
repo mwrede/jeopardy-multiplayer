@@ -592,10 +592,10 @@ export default function PlayPage() {
       )
     }
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
+      <div className="h-[100dvh] flex flex-col items-center justify-center bg-jeopardy-dark p-6 overflow-hidden">
         <h2 className="text-2xl font-bold text-jeopardy-gold mb-2">Final Jeopardy!</h2>
-        <p className="text-gray-400 mb-4 uppercase">{game.final_category_name}</p>
-        <p className="text-gray-500 mb-6">Wager $0 - ${maxWager.toLocaleString()}</p>
+        <p className="text-gray-400 mb-2 uppercase">{game.final_category_name}</p>
+        <p className="text-gray-500 mb-4">Wager $0 - ${maxWager.toLocaleString()}</p>
         <div className="w-full max-w-xs">
           <GameKeyboard value={finalWagerInput} onChange={setFinalWagerInput} onSubmit={handleFinalWager}
             mode="numbers" placeholder="Enter wager" submitLabel="Lock In Wager"
@@ -615,12 +615,12 @@ export default function PlayPage() {
       )
     }
     return (
-      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
-        <div className="flex-1 flex flex-col items-center justify-center p-6">
-          <h2 className="text-xl font-bold text-jeopardy-gold mb-2 uppercase">{game.final_category_name}</h2>
-          <p className="text-2xl text-white text-center leading-relaxed font-serif max-w-lg mb-6">{game.final_clue_text}</p>
+      <div className="h-[100dvh] flex flex-col bg-jeopardy-dark overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2 overflow-y-auto">
+          <h2 className="text-lg font-bold text-jeopardy-gold mb-1 uppercase flex-shrink-0">{game.final_category_name}</h2>
+          <p className="text-xl text-white text-center leading-relaxed font-serif max-w-lg flex-shrink-0">{game.final_clue_text}</p>
         </div>
-        <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
+        <div className="flex-shrink-0 bg-jeopardy-dark/95 border-t border-white/10 p-2 pb-[env(safe-area-inset-bottom,8px)]">
           <div className="w-full max-w-sm mx-auto">
             <GameKeyboard value={finalAnswerInput} onChange={setFinalAnswerInput} onSubmit={handleFinalAnswer}
               mode="letters" placeholder="What is..." submitLabel="Submit Final Answer"
@@ -692,21 +692,21 @@ export default function PlayPage() {
   if (game.phase === 'daily_double_wager' && currentClue) {
     const clueCategory = categories.find((c) => c.id === currentClue.category_id)
     return (
-      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+      <div className="h-[100dvh] flex flex-col bg-jeopardy-dark overflow-hidden">
         <Scoreboard />
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-4">
-          <h2 className="text-4xl font-bold text-jeopardy-gold mb-4 animate-pulse">Daily Double!</h2>
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2">
+          <h2 className="text-3xl font-bold text-jeopardy-gold mb-2 animate-pulse">Daily Double!</h2>
           {clueCategory && (
-            <p className="text-blue-300 text-lg font-bold uppercase tracking-wide mb-2">{clueCategory.name}</p>
+            <p className="text-blue-300 text-base font-bold uppercase tracking-wide mb-1">{clueCategory.name}</p>
           )}
-          <p className="text-jeopardy-gold text-xl font-bold mb-6">${currentClue.value.toLocaleString()}</p>
+          <p className="text-jeopardy-gold text-lg font-bold mb-4">${currentClue.value.toLocaleString()}</p>
           {isMyTurn ? (
-            <p className="text-white text-lg">Make your wager below</p>
+            <p className="text-white text-base">Make your wager below</p>
           ) : (
-            <p className="text-gray-400 text-lg">{currentPlayer?.name} is making their wager...</p>
+            <p className="text-gray-400 text-base">{currentPlayer?.name} is making their wager...</p>
           )}
         </div>
-        <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-3 pb-[env(safe-area-inset-bottom,12px)]">
+        <div className="flex-shrink-0 bg-jeopardy-dark/95 border-t border-white/10 p-2 pb-[env(safe-area-inset-bottom,8px)]">
           {isMyTurn ? (
             <div className="w-full max-w-sm mx-auto">
               <GameKeyboard value={wager} onChange={setWager} onSubmit={handleSubmitWager}
@@ -724,35 +724,35 @@ export default function PlayPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+    <div className="h-[100dvh] flex flex-col bg-jeopardy-dark overflow-hidden">
       <Scoreboard />
 
       {showClue && currentClue ? (
         <>
-          {/* Clue display */}
-          <div className="flex-1 flex flex-col items-center justify-center px-6 py-4">
+          {/* Clue display — scrollable if text is long */}
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2 overflow-y-auto">
             {(() => {
               const cat = categories.find((c) => c.id === currentClue.category_id)
-              return cat ? <p className="text-blue-300 text-sm font-bold uppercase tracking-wide mb-1">{cat.name}</p> : null
+              return cat ? <p className="text-blue-300 text-sm font-bold uppercase tracking-wide mb-1 flex-shrink-0">{cat.name}</p> : null
             })()}
-            <p className="text-jeopardy-gold text-xl font-bold mb-4">${currentClue.value.toLocaleString()}</p>
-            <p className="text-xl md:text-2xl text-white text-center leading-relaxed font-serif max-w-lg">
+            <p className="text-jeopardy-gold text-lg font-bold mb-2 flex-shrink-0">${currentClue.value.toLocaleString()}</p>
+            <p className="text-lg md:text-xl text-white text-center leading-relaxed font-serif max-w-lg flex-shrink-0">
               {currentClue.question}
             </p>
 
             {/* Phase indicators */}
             {game.phase === 'buzz_window' && buzzCountdown !== null && (
-              <p className={`text-3xl font-bold font-mono mt-4 ${buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'}`}>
+              <p className={`text-2xl font-bold font-mono mt-2 flex-shrink-0 ${buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'}`}>
                 {buzzCountdown}
               </p>
             )}
             {game.phase === 'player_answering' && (
-              <div className="mt-4 text-center">
-                <p className="text-green-400 font-bold">
+              <div className="mt-2 text-center flex-shrink-0">
+                <p className="text-green-400 font-bold text-sm">
                   {game.current_player_id === myPlayerId ? 'Your turn to answer!' : `${currentPlayer?.name} is answering...`}
                 </p>
                 {answerCountdown !== null && game.current_player_id === myPlayerId && (
-                  <p className={`text-2xl font-bold mt-1 ${answerCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  <p className={`text-xl font-bold mt-1 ${answerCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
                     {answerCountdown}s
                   </p>
                 )}
@@ -761,7 +761,7 @@ export default function PlayPage() {
           </div>
 
           {/* Bottom controls */}
-          <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-3 pb-[env(safe-area-inset-bottom,12px)]">
+          <div className="flex-shrink-0 bg-jeopardy-dark/95 border-t border-white/10 p-2 pb-[env(safe-area-inset-bottom,8px)]">
             {game.phase === 'daily_double_answering' && !isMyTurn ? (
               <div className="text-center py-4">
                 <p className="text-jeopardy-gold font-bold text-lg animate-pulse">Daily Double!</p>

@@ -60,8 +60,8 @@ export function GameKeyboard({
     <div className="w-full">
       {/* Display field (read-only, no native keyboard) */}
       <div
-        className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white mb-2 min-h-[48px] flex items-center"
-        style={{ fontSize: mode === 'numbers' ? '1.5rem' : '1.125rem' }}
+        className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-white mb-1.5 min-h-[40px] flex items-center"
+        style={{ fontSize: mode === 'numbers' ? '1.5rem' : '1rem' }}
       >
         {value || <span className="text-gray-500">{placeholder}</span>}
         <span className="animate-pulse text-jeopardy-gold ml-0.5">|</span>
@@ -69,13 +69,13 @@ export function GameKeyboard({
 
       {mode === 'letters' ? (
         /* QWERTY keyboard */
-        <div className="space-y-1">
+        <div className="space-y-[3px]">
           {letterRows.map((row, rowIdx) => (
             <div key={rowIdx} className="flex justify-center gap-[3px]">
               {rowIdx === 2 && (
                 <button
                   onClick={() => setShift(!shift)}
-                  className={`px-2 py-3 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-2 py-2.5 rounded-lg text-xs font-bold transition-all touch-manipulation ${
                     shift ? 'bg-jeopardy-gold/30 text-jeopardy-gold' : 'bg-white/10 text-gray-400'
                   }`}
                 >
@@ -86,7 +86,7 @@ export function GameKeyboard({
                 <button
                   key={key}
                   onClick={() => handleKey(key)}
-                  className="flex-1 max-w-[36px] py-3 rounded-lg bg-white/10 text-white text-sm font-semibold
+                  className="flex-1 max-w-[36px] py-2.5 rounded-lg bg-white/10 text-white text-sm font-semibold
                              active:bg-white/25 active:scale-95 transition-all touch-manipulation"
                 >
                   {shift ? key : key.toLowerCase()}
@@ -95,7 +95,7 @@ export function GameKeyboard({
               {rowIdx === 2 && (
                 <button
                   onClick={handleBackspace}
-                  className="px-2 py-3 rounded-lg bg-white/10 text-gray-400 text-xs font-bold
+                  className="px-2 py-2.5 rounded-lg bg-white/10 text-gray-400 text-xs font-bold
                              active:bg-red-500/30 active:text-red-300 transition-all touch-manipulation"
                 >
                   ⌫
@@ -107,7 +107,7 @@ export function GameKeyboard({
           <div className="flex gap-[3px]">
             <button
               onClick={handleSpace}
-              className="flex-1 py-3 rounded-lg bg-white/10 text-gray-400 text-sm
+              className="flex-1 py-2.5 rounded-lg bg-white/10 text-gray-400 text-sm
                          active:bg-white/25 transition-all touch-manipulation"
             >
               space
@@ -115,7 +115,7 @@ export function GameKeyboard({
             <button
               onClick={onSubmit}
               disabled={submitDisabled}
-              className="px-6 py-3 btn-primary text-sm touch-manipulation"
+              className="px-6 py-2.5 btn-primary text-sm touch-manipulation"
             >
               {submitLabel}
             </button>
@@ -123,7 +123,7 @@ export function GameKeyboard({
               <button
                 onClick={secondaryAction.onClick}
                 disabled={secondaryAction.disabled}
-                className="px-4 py-3 rounded-lg bg-white/10 text-gray-400 text-sm font-semibold
+                className="px-4 py-2.5 rounded-lg bg-white/10 text-gray-400 text-sm font-semibold
                            active:bg-white/25 transition-all touch-manipulation disabled:opacity-40"
               >
                 {secondaryAction.label}
@@ -133,13 +133,13 @@ export function GameKeyboard({
         </div>
       ) : (
         /* Number pad */
-        <div className="space-y-1">
+        <div className="space-y-[3px]">
           <div className="grid grid-cols-3 gap-[3px]">
             {numberKeys.slice(0, 9).map((key) => (
               <button
                 key={key}
                 onClick={() => handleKey(key)}
-                className="py-4 rounded-lg bg-white/10 text-white text-xl font-bold
+                className="py-3 rounded-lg bg-white/10 text-white text-xl font-bold
                            active:bg-white/25 active:scale-95 transition-all touch-manipulation"
               >
                 {key}
@@ -149,21 +149,21 @@ export function GameKeyboard({
           <div className="grid grid-cols-3 gap-[3px]">
             <button
               onClick={() => handleKey('0')}
-              className="py-4 rounded-lg bg-white/10 text-white text-xl font-bold
+              className="py-3 rounded-lg bg-white/10 text-white text-xl font-bold
                          active:bg-white/25 active:scale-95 transition-all touch-manipulation"
             >
               0
             </button>
             <button
               onClick={() => handleKey('00')}
-              className="py-4 rounded-lg bg-white/10 text-white text-xl font-bold
+              className="py-3 rounded-lg bg-white/10 text-white text-xl font-bold
                          active:bg-white/25 active:scale-95 transition-all touch-manipulation"
             >
               00
             </button>
             <button
               onClick={handleBackspace}
-              className="py-4 rounded-lg bg-white/10 text-gray-400 text-xl font-bold
+              className="py-3 rounded-lg bg-white/10 text-gray-400 text-xl font-bold
                          active:bg-red-500/30 active:text-red-300 transition-all touch-manipulation"
             >
               ⌫
@@ -172,7 +172,7 @@ export function GameKeyboard({
           <button
             onClick={onSubmit}
             disabled={submitDisabled}
-            className="w-full py-4 btn-primary text-lg touch-manipulation"
+            className="w-full py-3 btn-primary text-lg touch-manipulation"
           >
             {submitLabel}
           </button>
