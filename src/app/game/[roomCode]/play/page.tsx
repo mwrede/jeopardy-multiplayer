@@ -503,9 +503,13 @@ export default function PlayPage() {
                 : 'bg-red-600/15 border-2 border-red-500'
           }`}>
             <p className={`text-4xl font-bold mb-2 ${noOneAnswered ? 'text-gray-400' : wasCorrect ? 'text-green-400' : 'text-red-400'}`}>
-              {noOneAnswered ? "Time's Up!" : wasCorrect ? '✓ Correct!' : '✗ Incorrect'}
+              {noOneAnswered ? "Time's Up!" : wasCorrect ? '✓ Correct!' : '✗ Wrong!'}
             </p>
-            {answerer && <p className="text-white text-lg">{answerer.name}</p>}
+            {answerer && (
+              <p className="text-white text-lg">
+                {answerer.name} {wasCorrect ? `+$${currentClue.value.toLocaleString()}` : `-$${currentClue.value.toLocaleString()}`}
+              </p>
+            )}
           </div>
           <div className="mt-4 text-center">
             <p className="text-gray-500 text-sm mb-1">Answer:</p>
