@@ -1003,10 +1003,11 @@ export async function getSeasons(): Promise<string[]> {
  * (faster than a single OR across 5 ilike columns on 558K rows).
  */
 export async function searchGames(filters: GameSearchFilters = {}): Promise<GameSearchResult[]> {
-  const { query, season, dateFrom, dateTo, page = 0, limit = 50 } = filters
+  const { query, season, notesFilter, dateFrom, dateTo, page = 0, limit = 50 } = filters
 
   function addDateFilters(qb: any) {
     if (season) qb = qb.eq('season', season)
+    if (notesFilter) qb = qb.ilike('notes', `%${notesFilter}%`)
     if (dateFrom) qb = qb.gte('air_date', dateFrom)
     if (dateTo) qb = qb.lte('air_date', dateTo)
     return qb

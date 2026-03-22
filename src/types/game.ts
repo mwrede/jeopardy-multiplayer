@@ -92,6 +92,7 @@ export interface GameSearchResult {
 export interface GameSearchFilters {
   query?: string       // free text search (title, notes, player names)
   season?: string      // exact season match
+  notesFilter?: string // ilike filter on notes field (for tournament types)
   dateFrom?: string    // YYYY-MM-DD
   dateTo?: string      // YYYY-MM-DD
   page?: number

@@ -144,17 +144,16 @@ export default function HostPage() {
     setSelectedYear(y ? String(y) : '')
   }
 
-  // Tournament filters — use season-based lookups (fast, indexed)
-  // ilike text search times out on 558K rows on free Supabase tier
-  const tournamentFilters = [
+  // Tournament filters — mix of season-based and notes-based lookups
+  const tournamentFilters: Array<{ label: string; season?: string; notesFilter?: string }> = [
+    { label: 'Kids Week', notesFilter: 'Kids Week' },
+    { label: 'Teen Tournament', notesFilter: 'Teen Tournament' },
+    { label: 'College Championship', notesFilter: 'College' },
+    { label: 'Tournament of Champions', notesFilter: 'Tournament of Champions' },
     { label: 'Jeopardy Masters', season: 'jm' },
     { label: 'GOAT Tournament', season: 'goattournament' },
     { label: 'Pop Culture Jeopardy', season: 'pcj' },
-    { label: 'College Championship', season: 'ncc' },
     { label: 'Super Jeopardy', season: 'superjeopardy' },
-    { label: 'Trebek Pilots', season: 'trebekpilots' },
-    { label: 'Celebrity Crossover', season: 'cwcpi' },
-    { label: 'Bay Area Brains', season: 'bbab' },
   ]
 
   async function handleCreateGame(sourceGameId?: number) {
@@ -181,10 +180,10 @@ export default function HostPage() {
   }
 
   // Do tournament search (by season, not text search)
-  function handleTournamentClick(season: string) {
-    setActiveTournament(season)
+  function handleTournamentClick(filter: { season?: string; notesFilter?: string; label: string }) {
+    setActiveTournament(filter.label)
     setSelectedGame(null)
-    doSearch({ season, page: 0 })
+    doSearch({ season: filter.season, notesFilter: filter.notesFilter, page: 0 })
   }
 
   // Shared game card renderer
@@ -503,10 +502,10 @@ export default function HostPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
               {tournamentFilters.map((filter) => (
                 <button
-                  key={filter.season}
-                  onClick={() => handleTournamentClick(filter.season)}
+                  key={filter.label}
+                  onClick={() => handleTournamentClick(filter)}
                   className={`px-5 py-4 rounded-xl text-base font-medium transition-all text-center ${
-                    activeTournament === filter.season
+                    activeTournament === filter.label
                       ? 'bg-jeopardy-gold text-black shadow-lg'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
                   }`}
@@ -517,7 +516,11 @@ export default function HostPage() {
             </div>
 
             {activeTournament ? (
-              <ResultsList currentFilters={{ season: activeTournament }} />
+              <ResultsList currentFilters={
+                tournamentFilters.find(f => f.label === activeTournament)?.season
+                  ? { season: tournamentFilters.find(f => f.label === activeTournament)!.season }
+                  : { notesFilter: tournamentFilters.find(f => f.label === activeTournament)?.notesFilter }
+              } />
             ) : (
               <p className="text-gray-500 text-center py-12 text-lg">
                 Select a tournament type to browse games
