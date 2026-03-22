@@ -48,8 +48,9 @@ function JoinForm({ roomCode, onJoined }: { roomCode: string; onJoined: (playerI
     setJoinError('')
     try {
       const { player } = await joinGame(roomCode, name.trim())
+      localStorage.setItem('playerId', player.id)
       localStorage.setItem('playerName', player.name)
-      onJoined(player.id)
+      window.location.reload()
     } catch (e: any) {
       setJoinError(e.message || 'Failed to join')
     } finally {
