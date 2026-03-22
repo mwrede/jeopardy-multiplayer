@@ -765,20 +765,25 @@ export async function submitBuzz(gameId: string, clueId: string, playerId: strin
  * If all players have passed, skips the clue and returns to board.
  */
 export async function passOnClue(gameId: string, clueId: string, playerId: string) {
-  // Record the pass as a buzz with is_pass = true
-  const { error: upsertErr } = await supabase
+  // Record the pass — use insert first, fall back to update if row exists
+  const { error: insertErr } = await supabase
     .from('buzzes')
-    .upsert({
+    .insert({
       game_id: gameId,
       clue_id: clueId,
       player_id: playerId,
       client_timestamp: performance.now(),
       is_pass: true,
-    }, { onConflict: 'game_id,clue_id,player_id' })
+    })
 
-  if (upsertErr) {
-    console.error('[passOnClue] upsert failed:', upsertErr.message)
-    return
+  if (insertErr) {
+    // Row already exists (player buzzed earlier) — update it to mark as pass
+    await supabase
+      .from('buzzes')
+      .update({ is_pass: true })
+      .eq('game_id', gameId)
+      .eq('clue_id', clueId)
+      .eq('player_id', playerId)
   }
 
   // Check if all players have passed
@@ -790,8 +795,6 @@ export async function passOnClue(gameId: string, clueId: string, playerId: strin
   const playerIds = new Set(allPlayers?.map((p) => p.id) || [])
   const passedIds = new Set(passes?.map((b) => b.player_id) || [])
   const allPassed = playerIds.size > 0 && [...playerIds].every((id) => passedIds.has(id))
-
-  console.log('[passOnClue]', { playerId, players: playerIds.size, passed: passedIds.size, allPassed })
 
   if (allPassed) {
     await skipClue(gameId, clueId)
