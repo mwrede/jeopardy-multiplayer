@@ -1014,16 +1014,29 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
   let allData: any[] = []
 
   if (query?.trim()) {
-    // Text search — only search player names (shorter fields, faster)
-    // Note: ilike on notes/game_title times out on 558K rows on free Supabase
-    // Tournament search uses season filters instead (indexed, fast)
-    const result = await addDateFilters(
-      supabase.from('clue_pool').select(cols)
-        .or(`player1.ilike.%${query}%,player2.ilike.%${query}%,player3.ilike.%${query}%`)
-    ).order('air_date', { ascending: false }).limit(fetchLimit)
+    const trimmed = query.trim()
+    const gameIdNum = parseInt(trimmed, 10)
 
-    if (result.error) throw result.error
-    allData = result.data || []
+    if (!isNaN(gameIdNum) && String(gameIdNum) === trimmed) {
+      // Numeric query — search by game_id_source
+      const result = await addDateFilters(
+        supabase.from('clue_pool').select(cols)
+          .eq('game_id_source', gameIdNum)
+      ).order('air_date', { ascending: false }).limit(fetchLimit)
+
+      if (result.error) throw result.error
+      allData = result.data || []
+    } else {
+      // Text search — only search player names (shorter fields, faster)
+      // Note: ilike on notes/game_title times out on 558K rows on free Supabase
+      const result = await addDateFilters(
+        supabase.from('clue_pool').select(cols)
+          .or(`player1.ilike.%${trimmed}%,player2.ilike.%${trimmed}%,player3.ilike.%${trimmed}%`)
+      ).order('air_date', { ascending: false }).limit(fetchLimit)
+
+      if (result.error) throw result.error
+      allData = result.data || []
+    }
   } else {
     // No text query — just apply date/season filters
     const result = await addDateFilters(
