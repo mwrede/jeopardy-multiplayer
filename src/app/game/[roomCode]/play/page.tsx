@@ -364,11 +364,12 @@ export default function PlayPage() {
 
   const handlePass = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id) return
-    // Cancel auto-skip timeout so passOnClue can handle the skip
-    if (buzzTimeoutRef.current) { clearTimeout(buzzTimeoutRef.current); buzzTimeoutRef.current = null }
     // Record pass and check if all players have passed
     await passOnClue(game.id, game.current_clue_id, myPlayer.id)
     setHasPassed(true)
+    // Note: we do NOT cancel buzzTimeoutRef here — if the all-passed check
+    // fails due to a race condition (concurrent passes), the buzz timeout
+    // will fire skipClue as a fallback to advance the game.
   })
 
   const handleSubmitAnswer = () => doAction(async () => {

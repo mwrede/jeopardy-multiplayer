@@ -809,15 +809,24 @@ export async function passOnClue(gameId: string, clueId: string, playerId: strin
       .eq('player_id', playerId)
   }
 
-  // Check if all players have passed
-  const [{ data: allPlayers }, { data: passes }] = await Promise.all([
-    supabase.from('players').select('id').eq('game_id', gameId),
-    supabase.from('buzzes').select('player_id').eq('game_id', gameId).eq('clue_id', clueId).eq('is_pass', true),
-  ])
+  // Check if all players have passed (with retry to handle concurrent pass race condition)
+  const checkAllPassed = async (): Promise<boolean> => {
+    const [{ data: allPlayers }, { data: passes }] = await Promise.all([
+      supabase.from('players').select('id').eq('game_id', gameId),
+      supabase.from('buzzes').select('player_id').eq('game_id', gameId).eq('clue_id', clueId).eq('is_pass', true),
+    ])
 
-  const playerIds = new Set(allPlayers?.map((p) => p.id) || [])
-  const passedIds = new Set(passes?.map((b) => b.player_id) || [])
-  const allPassed = playerIds.size > 0 && [...playerIds].every((id) => passedIds.has(id))
+    const playerIds = new Set(allPlayers?.map((p) => p.id) || [])
+    const passedIds = new Set(passes?.map((b) => b.player_id) || [])
+    return playerIds.size > 0 && [...playerIds].every((id) => passedIds.has(id))
+  }
+
+  let allPassed = await checkAllPassed()
+  // Retry once after a short delay to handle near-simultaneous passes
+  if (!allPassed) {
+    await new Promise((r) => setTimeout(r, 500))
+    allPassed = await checkAllPassed()
+  }
 
   if (allPassed) {
     // All passed — skip clue and go straight to board selection (no result screen)
@@ -843,6 +852,16 @@ export async function passOnClue(gameId: string, clueId: string, playerId: strin
  * Marks clue as answered with no answerer, shows result, then moves on.
  */
 export async function skipClue(gameId: string, clueId: string) {
+  // Guard: only skip if we're still in buzz_window (avoid overwriting a phase
+  // transition that already happened, e.g. passOnClue → board_selection or final_category)
+  const { data: gameRow } = await supabase
+    .from('games')
+    .select('phase')
+    .eq('id', gameId)
+    .single()
+
+  if (gameRow?.phase !== 'buzz_window') return
+
   // Mark clue as answered with no one getting it
   await supabase
     .from('clues')
@@ -933,11 +952,28 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
 export async function advanceFromClueResult(gameId: string) {
   const { data: game } = await supabase
     .from('games')
-    .select('current_round, current_player_id')
+    .select('current_round, current_player_id, phase')
     .eq('id', gameId)
     .single()
 
+  // Guard: if we're already past clue_result (e.g. race with passOnClue setting
+  // final_category or board_selection), don't overwrite
+  if (game?.phase !== 'clue_result') return
+
   const currentRound = game?.current_round ?? 1
+
+  // If current_round is already 3, we're heading to Final Jeopardy — don't
+  // fall through to board_selection (checkRoundComplete won't find round 3 categories)
+  if (currentRound >= 3) {
+    await supabase.from('games').update({
+      status: 'final_jeopardy',
+      phase: 'final_category',
+      current_clue_id: null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', gameId)
+    return
+  }
+
   const roundComplete = await checkRoundComplete(gameId, currentRound)
 
   if (!roundComplete) {
