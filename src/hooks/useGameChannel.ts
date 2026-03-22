@@ -30,7 +30,7 @@ async function fetchFullState(gameId: string) {
   if (catIds.length > 0) {
     const { data } = await supabase
       .from('clues')
-      .select('id, category_id, value, question, answer, is_daily_double, is_answered, answered_by')
+      .select('id, category_id, value, question, answer, is_daily_double, is_answered, answered_by, answered_correct')
       .in('category_id', catIds)
     cluesData = (data as Clue[]) || []
   }
