@@ -596,9 +596,11 @@ export default function PlayPage() {
         <h2 className="text-2xl font-bold text-jeopardy-gold mb-2">Final Jeopardy!</h2>
         <p className="text-gray-400 mb-4 uppercase">{game.final_category_name}</p>
         <p className="text-gray-500 mb-6">Wager $0 - ${maxWager.toLocaleString()}</p>
-        <input type="number" value={finalWagerInput} onChange={(e) => setFinalWagerInput(e.target.value)}
-          min={0} max={maxWager} placeholder="Enter wager" className="input-base max-w-xs text-2xl text-center" autoFocus />
-        <button onClick={handleFinalWager} disabled={busy} className="btn-primary w-full max-w-xs mt-4 py-4 text-xl">Lock In Wager</button>
+        <div className="w-full max-w-xs">
+          <GameKeyboard value={finalWagerInput} onChange={setFinalWagerInput} onSubmit={handleFinalWager}
+            mode="numbers" placeholder="Enter wager" submitLabel="Lock In Wager"
+            submitDisabled={!finalWagerInput.trim() || busy} />
+        </div>
       </div>
     )
   }
@@ -619,12 +621,10 @@ export default function PlayPage() {
           <p className="text-2xl text-white text-center leading-relaxed font-serif max-w-lg mb-6">{game.final_clue_text}</p>
         </div>
         <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
-          <div className="w-full max-w-sm mx-auto space-y-3">
-            <input type="text" value={finalAnswerInput} onChange={(e) => setFinalAnswerInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleFinalAnswer() }}
-              placeholder="What is..." maxLength={200} className="input-base text-xl" autoFocus autoComplete="off" />
-            <button onClick={handleFinalAnswer} disabled={!finalAnswerInput.trim() || busy}
-              className="btn-primary w-full py-4 text-xl">Submit Final Answer</button>
+          <div className="w-full max-w-sm mx-auto">
+            <GameKeyboard value={finalAnswerInput} onChange={setFinalAnswerInput} onSubmit={handleFinalAnswer}
+              mode="letters" placeholder="What is..." submitLabel="Submit Final Answer"
+              submitDisabled={!finalAnswerInput.trim() || busy} maxLength={200} />
           </div>
         </div>
       </div>
@@ -708,10 +708,10 @@ export default function PlayPage() {
         </div>
         <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-3 pb-[env(safe-area-inset-bottom,12px)]">
           {isMyTurn ? (
-            <div className="w-full max-w-sm mx-auto space-y-2">
-              <input type="number" value={wager} onChange={(e) => setWager(e.target.value)}
-                placeholder="Enter wager" className="input-base text-xl text-center" autoFocus />
-              <button onClick={handleSubmitWager} className="btn-primary w-full py-3 text-lg">Lock In Wager</button>
+            <div className="w-full max-w-sm mx-auto">
+              <GameKeyboard value={wager} onChange={setWager} onSubmit={handleSubmitWager}
+                mode="numbers" placeholder="Enter wager" submitLabel="Lock In Wager"
+                submitDisabled={!wager.trim()} />
             </div>
           ) : (
             <div className="text-center py-4">
@@ -768,21 +768,17 @@ export default function PlayPage() {
                 <p className="text-gray-400 text-sm">{currentPlayer?.name} is answering...</p>
               </div>
             ) : game.phase === 'daily_double_answering' && isMyTurn ? (
-              <div className="w-full max-w-sm mx-auto space-y-2">
-                <input ref={inputRef} type="text" value={answer} onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitAnswer() }}
-                  placeholder="Type your answer..." maxLength={200} className="input-base text-lg" autoFocus autoComplete="off" />
-                <button onClick={handleSubmitAnswer} disabled={!answer.trim()} className="btn-primary w-full py-3 text-lg">Submit Answer</button>
+              <div className="w-full max-w-sm mx-auto">
+                <GameKeyboard value={answer} onChange={setAnswer} onSubmit={handleSubmitAnswer}
+                  mode="letters" placeholder="Type your answer..." submitLabel="Submit Answer"
+                  submitDisabled={!answer.trim()} maxLength={200} />
               </div>
             ) : game.phase === 'player_answering' && game.current_player_id === myPlayerId ? (
-              <div className="w-full max-w-sm mx-auto space-y-2">
-                <input ref={inputRef} type="text" value={answer} onChange={(e) => setAnswer(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitAnswer() }}
-                  placeholder="Type your answer..." maxLength={200} className="input-base text-lg" autoFocus autoComplete="off" />
-                <div className="flex gap-2">
-                  <button onClick={handleSubmitAnswer} disabled={!answer.trim()} className="btn-primary flex-1 py-3 text-lg">Submit</button>
-                  <button onClick={handlePassAfterBuzz} disabled={busy} className="btn-secondary px-4 py-3 text-sm">Pass</button>
-                </div>
+              <div className="w-full max-w-sm mx-auto">
+                <GameKeyboard value={answer} onChange={setAnswer} onSubmit={handleSubmitAnswer}
+                  mode="letters" placeholder="Type your answer..." submitLabel="Submit"
+                  submitDisabled={!answer.trim()} maxLength={200}
+                  secondaryAction={{ label: 'Pass', onClick: handlePassAfterBuzz, disabled: busy }} />
               </div>
             ) : (game.phase === 'buzz_window' || game.phase === 'clue_reading') ? (
               hasPassed ? (

@@ -10,6 +10,8 @@ interface GameKeyboardProps {
   placeholder?: string
   submitLabel?: string
   submitDisabled?: boolean
+  secondaryAction?: { label: string; onClick: () => void; disabled?: boolean }
+  maxLength?: number
 }
 
 /**
@@ -25,6 +27,8 @@ export function GameKeyboard({
   placeholder = '',
   submitLabel = 'Submit',
   submitDisabled = false,
+  secondaryAction,
+  maxLength,
 }: GameKeyboardProps) {
   const [shift, setShift] = useState(false)
 
@@ -37,12 +41,10 @@ export function GameKeyboard({
   const numberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '00']
 
   function handleKey(key: string) {
-    if (mode === 'letters') {
-      onChange(value + (shift ? key.toUpperCase() : key.toLowerCase()))
-      if (shift) setShift(false)
-    } else {
-      onChange(value + key)
-    }
+    const newChar = mode === 'letters' ? (shift ? key.toUpperCase() : key.toLowerCase()) : key
+    if (maxLength && (value + newChar).length > maxLength) return
+    onChange(value + newChar)
+    if (mode === 'letters' && shift) setShift(false)
   }
 
   function handleBackspace() {
@@ -50,6 +52,7 @@ export function GameKeyboard({
   }
 
   function handleSpace() {
+    if (maxLength && value.length >= maxLength) return
     onChange(value + ' ')
   }
 
@@ -100,7 +103,7 @@ export function GameKeyboard({
               )}
             </div>
           ))}
-          {/* Bottom row: space + submit */}
+          {/* Bottom row: space + submit (+ optional secondary action) */}
           <div className="flex gap-[3px]">
             <button
               onClick={handleSpace}
@@ -116,6 +119,16 @@ export function GameKeyboard({
             >
               {submitLabel}
             </button>
+            {secondaryAction && (
+              <button
+                onClick={secondaryAction.onClick}
+                disabled={secondaryAction.disabled}
+                className="px-4 py-3 rounded-lg bg-white/10 text-gray-400 text-sm font-semibold
+                           active:bg-white/25 transition-all touch-manipulation disabled:opacity-40"
+              >
+                {secondaryAction.label}
+              </button>
+            )}
           </div>
         </div>
       ) : (
