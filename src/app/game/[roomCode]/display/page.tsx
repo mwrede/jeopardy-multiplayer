@@ -339,12 +339,22 @@ export default function DisplayPage() {
 
         <p className="text-2xl text-blue-300 mb-12">Join on your phone</p>
 
-        {/* Room code */}
-        <div className="bg-white/5 rounded-3xl px-12 py-8 mb-8 border border-white/10">
-          <p className="text-gray-400 text-lg mb-2 text-center">Room Code</p>
-          <p className="text-8xl md:text-9xl font-mono font-bold tracking-[0.4em] text-white text-center">
-            {game.room_code}
-          </p>
+        {/* Room code + QR */}
+        <div className="flex items-center gap-8 mb-8">
+          <div className="bg-white/5 rounded-3xl px-12 py-8 border border-white/10">
+            <p className="text-gray-400 text-lg mb-2 text-center">Room Code</p>
+            <p className="text-8xl md:text-9xl font-mono font-bold tracking-[0.4em] text-white text-center">
+              {game.room_code}
+            </p>
+          </div>
+          <div className="flex flex-col items-center">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${typeof window !== 'undefined' ? window.location.origin : ''}/game/${game.room_code}/play`)}`}
+              alt="Scan to join"
+              className="w-48 h-48 rounded-xl bg-white p-2"
+            />
+            <p className="text-gray-500 text-sm mt-2">Scan to join</p>
+          </div>
         </div>
 
         {/* Players who have joined */}
