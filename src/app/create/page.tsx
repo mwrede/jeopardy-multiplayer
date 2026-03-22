@@ -404,13 +404,17 @@ export default function CreateBoardPage() {
                       <button
                         key={`${ri}-${ci}`}
                         onClick={() => openCell(activeRound as 1 | 2, ri, ci)}
-                        className={`board-cell aspect-[4/3] text-lg md:text-xl relative ${
-                          filled ? 'ring-2 ring-green-500/40' : ''
+                        className={`board-cell aspect-[4/3] relative overflow-hidden ${
+                          filled ? 'ring-2 ring-green-500/40' : 'text-lg md:text-xl'
                         }`}
                       >
-                        {val}
-                        {filled && (
-                          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-400" />
+                        {filled ? (
+                          <span className="text-[10px] md:text-xs text-white/80 leading-tight line-clamp-3 px-1 text-center"
+                            style={{ textShadow: 'none' }}>
+                            {cell!.question}
+                          </span>
+                        ) : (
+                          val
                         )}
                       </button>
                     )
