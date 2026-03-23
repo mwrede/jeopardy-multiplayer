@@ -45,38 +45,38 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6">
-      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 w-auto mb-8" />
+      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 lg:h-52 w-auto mb-8" />
 
       {/* Mode cards */}
-      <div className="w-full max-w-lg grid gap-4 md:grid-cols-3 mb-10">
+      <div className="w-full max-w-lg lg:max-w-4xl grid gap-4 md:grid-cols-3 lg:gap-6 mb-10">
         {/* Multiplayer */}
         <a
           href="/multiplayer"
-          className="group bg-jeopardy-blue-cell/30 hover:bg-jeopardy-blue-cell/50 border-2 border-jeopardy-blue rounded-2xl p-6 text-center transition-all hover:scale-[1.02]"
+          className="group bg-jeopardy-blue-cell/30 hover:bg-jeopardy-blue-cell/50 border-2 border-jeopardy-blue rounded-2xl p-6 lg:p-10 text-center transition-all hover:scale-[1.02]"
         >
-          <p className="text-3xl mb-2">🌐</p>
-          <h2 className="text-xl font-bold text-white mb-1">Multiplayer</h2>
-          <p className="text-gray-400 text-sm">Play on your phone or computer. No TV needed.</p>
+          <p className="text-3xl lg:text-5xl mb-2">🌐</p>
+          <h2 className="text-xl lg:text-2xl font-bold text-white mb-1">Multiplayer</h2>
+          <p className="text-gray-400 text-sm lg:text-base">Play on your phone or computer. No TV needed.</p>
         </a>
 
         {/* Party */}
         <a
           href="/host"
-          className="group bg-jeopardy-gold/10 hover:bg-jeopardy-gold/20 border-2 border-jeopardy-gold/50 rounded-2xl p-6 text-center transition-all hover:scale-[1.02]"
+          className="group bg-jeopardy-gold/10 hover:bg-jeopardy-gold/20 border-2 border-jeopardy-gold/50 rounded-2xl p-6 lg:p-10 text-center transition-all hover:scale-[1.02]"
         >
-          <p className="text-3xl mb-2">📺</p>
-          <h2 className="text-xl font-bold text-jeopardy-gold mb-1">Party</h2>
-          <p className="text-gray-400 text-sm">Host on a TV, players buzz in on phones.</p>
+          <p className="text-3xl lg:text-5xl mb-2">📺</p>
+          <h2 className="text-xl lg:text-2xl font-bold text-jeopardy-gold mb-1">Party</h2>
+          <p className="text-gray-400 text-sm lg:text-base">Host on a TV, players buzz in on phones.</p>
         </a>
 
         {/* Create Your Own */}
         <a
           href="/create"
-          className="group bg-green-900/20 hover:bg-green-900/30 border-2 border-green-500/40 rounded-2xl p-6 text-center transition-all hover:scale-[1.02]"
+          className="group bg-green-900/20 hover:bg-green-900/30 border-2 border-green-500/40 rounded-2xl p-6 lg:p-10 text-center transition-all hover:scale-[1.02]"
         >
-          <p className="text-3xl mb-2">✏️</p>
-          <h2 className="text-xl font-bold text-green-400 mb-1">Create Board</h2>
-          <p className="text-gray-400 text-sm">Build your own categories, clues, and answers.</p>
+          <p className="text-3xl lg:text-5xl mb-2">✏️</p>
+          <h2 className="text-xl lg:text-2xl font-bold text-green-400 mb-1">Create Board</h2>
+          <p className="text-gray-400 text-sm lg:text-base">Build your own categories, clues, and answers.</p>
         </a>
       </div>
 

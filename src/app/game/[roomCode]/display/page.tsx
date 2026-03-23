@@ -60,6 +60,27 @@ export default function DisplayPage() {
     connected,
   } = useGameChannel(roomCode)
 
+  // Fetch the player's typed answer when we enter clue_result phase
+  const [playerAnswer, setPlayerAnswer] = useState<string | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'clue_result' || !game.current_clue_id) {
+      setPlayerAnswer(null)
+      return
+    }
+    // Get the winning buzz's answer text
+    supabase
+      .from('buzzes')
+      .select('answer')
+      .eq('game_id', game.id)
+      .eq('clue_id', game.current_clue_id)
+      .eq('is_winner', true)
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        setPlayerAnswer(data?.answer ?? null)
+      })
+  }, [game?.phase, game?.id, game?.current_clue_id])
+
   // Load source game info (date, title) from clue_pool if this is a J-Archive game
   const [sourceGameInfo, setSourceGameInfo] = useState<{ title: string; airDate: string | null } | null>(null)
   useEffect(() => {
@@ -649,6 +670,11 @@ export default function DisplayPage() {
             {!noOneAnswered && (
               <p className="text-3xl text-white text-center font-semibold">
                 {answerer?.name || 'Unknown'}
+              </p>
+            )}
+            {!noOneAnswered && playerAnswer && (
+              <p className="text-2xl text-white/70 text-center mt-3 italic">
+                &ldquo;{playerAnswer}&rdquo;
               </p>
             )}
             {resultClue && !noOneAnswered && (

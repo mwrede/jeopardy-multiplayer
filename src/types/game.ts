@@ -75,7 +75,7 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   gameMode: 'party',
   gameLength: 'full',
   reading_period_ms: 0,
-  buzz_window_ms: 15000,
+  buzz_window_ms: 10000,
   answer_time_ms: 15000,
   daily_double_answer_ms: 25000,
   final_answer_ms: 45000,

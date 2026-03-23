@@ -768,13 +768,19 @@ export async function selectClue(gameId: string, clueId: string, playerId: strin
 /**
  * Submit a buzz.
  * Records the buzz and sets the player as the current answerer.
+ * Sends a high-resolution client timestamp so the server can break ties
+ * when two players buzz at nearly the same instant.
  */
 export async function submitBuzz(gameId: string, clueId: string, playerId: string) {
+  // Capture client time as early as possible (milliseconds since page load — monotonic, high-res)
+  const clientTimestamp = performance.now()
+
   // Use atomic DB function to prevent race conditions in multiplayer
   const { data, error } = await supabase.rpc('resolve_buzz', {
     p_game_id: gameId,
     p_clue_id: clueId,
     p_player_id: playerId,
+    p_client_timestamp: clientTimestamp,
   })
 
   if (error) throw error
@@ -925,6 +931,14 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
       answered_correct: correct,
     })
     .eq('id', clueId)
+
+  // Save the player's typed answer to their buzz record for display on result screen
+  await supabase
+    .from('buzzes')
+    .update({ answer, is_correct: correct })
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('player_id', playerId)
 
   // Go to clue_result phase to show the result animation
   // Only change current_player_id to the answerer if they got it right

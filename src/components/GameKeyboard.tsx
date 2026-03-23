@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useEffect } from 'react'
 
 interface GameKeyboardProps {
   value: string
@@ -15,9 +15,8 @@ interface GameKeyboardProps {
 }
 
 /**
- * Custom on-screen keyboard for Jeopardy.
- * Prevents native mobile keyboard from popping up and disrupting the UI.
- * Two modes: letters (QWERTY) for answers, numbers for wagers.
+ * Styled input + submit button for Jeopardy.
+ * Uses the native device keyboard on all platforms (mobile + desktop).
  */
 export function GameKeyboard({
   value,
@@ -30,154 +29,64 @@ export function GameKeyboard({
   secondaryAction,
   maxLength,
 }: GameKeyboardProps) {
-  const [shift, setShift] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const letterRows = [
-    ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-    ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
-  ]
+  // Auto-focus the input when it mounts
+  useEffect(() => {
+    // Small delay so iOS reliably opens the keyboard
+    const t = setTimeout(() => inputRef.current?.focus(), 100)
+    return () => clearTimeout(t)
+  }, [])
 
-  const numberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '00']
-
-  function handleKey(key: string) {
-    const newChar = mode === 'letters' ? (shift ? key.toUpperCase() : key.toLowerCase()) : key
-    if (maxLength && (value + newChar).length > maxLength) return
-    onChange(value + newChar)
-    if (mode === 'letters' && shift) setShift(false)
-  }
-
-  function handleBackspace() {
-    onChange(value.slice(0, -1))
-  }
-
-  function handleSpace() {
-    if (maxLength && value.length >= maxLength) return
-    onChange(value + ' ')
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !submitDisabled) {
+      e.preventDefault()
+      onSubmit()
+    }
   }
 
   return (
     <div className="w-full">
-      {/* Display field (read-only, no native keyboard) */}
-      <div
-        className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white mb-2 min-h-[48px] flex items-center"
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode={mode === 'numbers' ? 'numeric' : 'text'}
+        value={value}
+        onChange={(e) => {
+          let v = e.target.value
+          if (mode === 'numbers') v = v.replace(/[^0-9]/g, '')
+          if (maxLength && v.length > maxLength) return
+          onChange(v)
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white mb-2 min-h-[48px]
+                   placeholder:text-gray-500 focus:outline-none focus:border-jeopardy-gold/60 focus:ring-1 focus:ring-jeopardy-gold/30 transition-colors"
         style={{ fontSize: mode === 'numbers' ? '1.5rem' : '1.125rem' }}
-      >
-        {value || <span className="text-gray-500">{placeholder}</span>}
-        <span className="animate-pulse text-jeopardy-gold ml-0.5">|</span>
-      </div>
-
-      {mode === 'letters' ? (
-        /* QWERTY keyboard */
-        <div className="space-y-1">
-          {letterRows.map((row, rowIdx) => (
-            <div key={rowIdx} className="flex justify-center gap-[3px]">
-              {rowIdx === 2 && (
-                <button
-                  onClick={() => setShift(!shift)}
-                  className={`px-2 py-3 rounded-lg text-xs font-bold transition-all touch-manipulation ${
-                    shift ? 'bg-jeopardy-gold/30 text-jeopardy-gold' : 'bg-white/10 text-gray-400'
-                  }`}
-                >
-                  ⇧
-                </button>
-              )}
-              {row.map((key) => (
-                <button
-                  key={key}
-                  onClick={() => handleKey(key)}
-                  className="flex-1 max-w-[36px] py-3 rounded-lg bg-white/10 text-white text-sm font-semibold
-                             active:bg-white/25 active:scale-95 transition-all touch-manipulation"
-                >
-                  {shift ? key : key.toLowerCase()}
-                </button>
-              ))}
-              {rowIdx === 2 && (
-                <button
-                  onClick={handleBackspace}
-                  className="px-2 py-3 rounded-lg bg-white/10 text-gray-400 text-xs font-bold
-                             active:bg-red-500/30 active:text-red-300 transition-all touch-manipulation"
-                >
-                  ⌫
-                </button>
-              )}
-            </div>
-          ))}
-          {/* Bottom row: space + submit (+ optional secondary action) */}
-          <div className="flex gap-[3px]">
-            <button
-              onClick={handleSpace}
-              className="flex-1 py-3 rounded-lg bg-white/10 text-gray-400 text-sm
-                         active:bg-white/25 transition-all touch-manipulation"
-            >
-              space
-            </button>
-            <button
-              onClick={onSubmit}
-              disabled={submitDisabled}
-              className="px-6 py-3 btn-primary text-sm touch-manipulation"
-            >
-              {submitLabel}
-            </button>
-            {secondaryAction && (
-              <button
-                onClick={secondaryAction.onClick}
-                disabled={secondaryAction.disabled}
-                className="px-4 py-3 rounded-lg bg-white/10 text-gray-400 text-sm font-semibold
-                           active:bg-white/25 transition-all touch-manipulation disabled:opacity-40"
-              >
-                {secondaryAction.label}
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        /* Number pad */
-        <div className="space-y-1">
-          <div className="grid grid-cols-3 gap-[3px]">
-            {numberKeys.slice(0, 9).map((key) => (
-              <button
-                key={key}
-                onClick={() => handleKey(key)}
-                className="py-4 rounded-lg bg-white/10 text-white text-xl font-bold
-                           active:bg-white/25 active:scale-95 transition-all touch-manipulation"
-              >
-                {key}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-3 gap-[3px]">
-            <button
-              onClick={() => handleKey('0')}
-              className="py-4 rounded-lg bg-white/10 text-white text-xl font-bold
-                         active:bg-white/25 active:scale-95 transition-all touch-manipulation"
-            >
-              0
-            </button>
-            <button
-              onClick={() => handleKey('00')}
-              className="py-4 rounded-lg bg-white/10 text-white text-xl font-bold
-                         active:bg-white/25 active:scale-95 transition-all touch-manipulation"
-            >
-              00
-            </button>
-            <button
-              onClick={handleBackspace}
-              className="py-4 rounded-lg bg-white/10 text-gray-400 text-xl font-bold
-                         active:bg-red-500/30 active:text-red-300 transition-all touch-manipulation"
-            >
-              ⌫
-            </button>
-          </div>
+      />
+      <div className="flex gap-2">
+        <button
+          onClick={onSubmit}
+          disabled={submitDisabled}
+          className="flex-1 py-3 btn-primary text-base touch-manipulation"
+        >
+          {submitLabel}
+        </button>
+        {secondaryAction && (
           <button
-            onClick={onSubmit}
-            disabled={submitDisabled}
-            className="w-full py-4 btn-primary text-lg touch-manipulation"
+            onClick={secondaryAction.onClick}
+            disabled={secondaryAction.disabled}
+            className="px-6 py-3 rounded-lg bg-white/10 text-gray-400 text-base font-semibold
+                       hover:bg-white/20 transition-all disabled:opacity-40"
           >
-            {submitLabel}
+            {secondaryAction.label}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
