@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
+import { ClueText } from '@/components/ClueText'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
@@ -831,7 +832,7 @@ export default function DisplayPage() {
 
           {/* Clue text */}
           <p className="text-4xl md:text-6xl text-white text-center leading-relaxed font-serif max-w-5xl">
-            {currentClue.question}
+            <ClueText text={currentClue.question} />
           </p>
 
           {/* Phase indicator */}

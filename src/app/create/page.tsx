@@ -8,6 +8,7 @@ import type { CustomBoard } from '@/types/game'
 interface CellData {
   question: string
   answer: string
+  isDailyDouble?: boolean
 }
 
 interface BoardState {
@@ -60,6 +61,7 @@ export default function CreateBoardPage() {
   const [editingCell, setEditingCell] = useState<{ round: 1 | 2; row: number; col: number } | null>(null)
   const [cellQuestion, setCellQuestion] = useState('')
   const [cellAnswer, setCellAnswer] = useState('')
+  const [cellIsDailyDouble, setCellIsDailyDouble] = useState(false)
   const [history, setHistory] = useState<BoardState[]>([])
   const [future, setFuture] = useState<BoardState[]>([])
   const [saving, setSaving] = useState(false)
@@ -152,6 +154,34 @@ export default function CreateBoardPage() {
     setEditingCell({ round, row, col })
     setCellQuestion(cell?.question || '')
     setCellAnswer(cell?.answer || '')
+    setCellIsDailyDouble(cell?.isDailyDouble || false)
+  }
+
+  function insertTag(tag: string) {
+    const textarea = document.getElementById('clue-editor') as HTMLTextAreaElement | null
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selected = cellQuestion.substring(start, end)
+    let insert: string
+    if (tag === 'img') {
+      const url = prompt('Enter image URL:')
+      if (!url) return
+      insert = `[img:${url}]`
+    } else if (tag === 'big') {
+      insert = `[big]${selected}[/big]`
+    } else {
+      const open = tag === 'b' ? '**' : '*'
+      insert = `${open}${selected}${open}`
+    }
+    const newQ = cellQuestion.substring(0, start) + insert + cellQuestion.substring(end)
+    setCellQuestion(newQ)
+    // Restore focus after React re-render
+    requestAnimationFrame(() => {
+      textarea.focus()
+      const cursor = start + insert.length
+      textarea.setSelectionRange(cursor, cursor)
+    })
   }
 
   function saveCell() {
@@ -159,7 +189,7 @@ export default function CreateBoardPage() {
     pushHistory()
     const { round, row, col } = editingCell
     const cellData = cellQuestion.trim() || cellAnswer.trim()
-      ? { question: cellQuestion.trim(), answer: cellAnswer.trim() }
+      ? { question: cellQuestion.trim(), answer: cellAnswer.trim(), isDailyDouble: cellIsDailyDouble }
       : null
     if (round === 1) {
       setBoard((b) => ({
@@ -209,6 +239,7 @@ export default function CreateBoardPage() {
           question: cell?.question || '',
           answer: cell?.answer || '',
           value,
+          isDailyDouble: cell?.isDailyDouble || false,
         }
       }),
     }))
@@ -226,6 +257,7 @@ export default function CreateBoardPage() {
             question: cell?.question || '',
             answer: cell?.answer || '',
             value,
+            isDailyDouble: cell?.isDailyDouble || false,
           }
         }),
       }))
@@ -406,8 +438,13 @@ export default function CreateBoardPage() {
                         onClick={() => openCell(activeRound as 1 | 2, ri, ci)}
                         className={`board-cell aspect-[4/3] relative overflow-hidden ${
                           filled ? 'ring-2 ring-green-500/40' : 'text-lg md:text-xl'
-                        }`}
+                        } ${cell?.isDailyDouble ? 'ring-2 ring-jeopardy-gold' : ''}`}
                       >
+                        {cell?.isDailyDouble && (
+                          <span className="absolute top-0.5 right-0.5 text-[8px] md:text-[10px] bg-jeopardy-gold/90 text-black font-bold px-1 rounded">
+                            DD
+                          </span>
+                        )}
                         {filled ? (
                           <span className="text-[10px] md:text-xs text-white/80 leading-tight line-clamp-3 px-1 text-center"
                             style={{ textShadow: 'none' }}>
@@ -431,17 +468,45 @@ export default function CreateBoardPage() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) saveCell() }}>
           <div className="bg-jeopardy-dark border border-white/20 rounded-2xl p-6 w-full max-w-md space-y-4">
-            <h3 className="text-lg font-bold text-jeopardy-gold">
-              {editingCell.round === 1 ? '' : 'DJ! — '}
-              {(editingCell.round === 1 ? board.categories : board.dj_categories)[editingCell.col] || `Category ${editingCell.col + 1}`}
-              {' — $'}
-              {(editingCell.round === 1 ? board.values : board.dj_values)[editingCell.row]}
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-jeopardy-gold">
+                {editingCell.round === 1 ? '' : 'DJ! — '}
+                {(editingCell.round === 1 ? board.categories : board.dj_categories)[editingCell.col] || `Category ${editingCell.col + 1}`}
+                {' — $'}
+                {(editingCell.round === 1 ? board.values : board.dj_values)[editingCell.row]}
+              </h3>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={cellIsDailyDouble}
+                  onChange={(e) => setCellIsDailyDouble(e.target.checked)}
+                  className="accent-jeopardy-gold w-4 h-4" />
+                <span className={`text-sm font-bold ${cellIsDailyDouble ? 'text-jeopardy-gold' : 'text-gray-500'}`}>
+                  Daily Double
+                </span>
+              </label>
+            </div>
             <div>
               <label className="text-gray-400 text-sm mb-1 block">Clue (shown to players)</label>
-              <textarea value={cellQuestion} onChange={(e) => setCellQuestion(e.target.value)}
+              {/* Formatting toolbar */}
+              <div className="flex items-center gap-1 mb-1.5">
+                <button type="button" onClick={() => insertTag('b')}
+                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors"
+                  title="Bold — wraps selection in **">B</button>
+                <button type="button" onClick={() => insertTag('i')}
+                  className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-sm italic transition-colors"
+                  title="Italic — wraps selection in *">I</button>
+                <button type="button" onClick={() => insertTag('big')}
+                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-xs transition-colors"
+                  title="Large text — wraps in [big]...[/big]">
+                  <span className="text-sm">A</span><span className="text-[10px]">A</span>
+                </button>
+                <button type="button" onClick={() => insertTag('img')}
+                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-sm transition-colors"
+                  title="Insert image URL">🖼️</button>
+                <span className="text-gray-600 text-[10px] ml-2">**bold** *italic* [big]...[/big] [img:url]</span>
+              </div>
+              <textarea id="clue-editor" value={cellQuestion} onChange={(e) => setCellQuestion(e.target.value)}
                 placeholder="Enter the clue..."
-                rows={3} className="input-base text-base" autoFocus />
+                rows={3} className="input-base text-base font-mono" autoFocus />
             </div>
             <div>
               <label className="text-gray-400 text-sm mb-1 block">Answer</label>

@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
+import { ClueText } from '@/components/ClueText'
 import { BuzzerButton } from '@/components/BuzzerButton'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { useState, useEffect, useRef } from 'react'
@@ -739,7 +740,7 @@ export default function PlayPage() {
             })()}
             <p className="text-jeopardy-gold text-lg font-bold mb-2 flex-shrink-0">${currentClue.value.toLocaleString()}</p>
             <p className="text-lg md:text-xl text-white text-center leading-relaxed font-serif max-w-lg flex-shrink-0">
-              {currentClue.question}
+              <ClueText text={currentClue.question} />
             </p>
 
             {/* Phase indicators */}
