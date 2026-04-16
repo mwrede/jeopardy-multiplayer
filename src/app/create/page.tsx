@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveCustomBoard } from '@/lib/game-api'
+import { supabase } from '@/lib/supabase'
 import type { CustomBoard } from '@/types/game'
 
 interface CellData {
@@ -70,6 +71,10 @@ export default function CreateBoardPage() {
   const [activeRound, setActiveRound] = useState<1 | 2 | 'fj'>(1)
   const [editingValue, setEditingValue] = useState<{ round: 1 | 2; row: number } | null>(null)
   const [valueInput, setValueInput] = useState('')
+  const [showImagePicker, setShowImagePicker] = useState(false)
+  const [imageUrl, setImageUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const pushHistory = useCallback(() => {
     setHistory((h) => [...h.slice(-30), board])
@@ -158,17 +163,18 @@ export default function CreateBoardPage() {
   }
 
   function insertTag(tag: string) {
+    if (tag === 'img') {
+      setImageUrl('')
+      setShowImagePicker(true)
+      return
+    }
     const textarea = document.getElementById('clue-editor') as HTMLTextAreaElement | null
     if (!textarea) return
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
     const selected = cellQuestion.substring(start, end)
     let insert: string
-    if (tag === 'img') {
-      const url = prompt('Enter image URL:')
-      if (!url) return
-      insert = `[img:${url}]`
-    } else if (tag === 'big') {
+    if (tag === 'big') {
       insert = `[big]${selected}[/big]`
     } else {
       const open = tag === 'b' ? '**' : '*'
@@ -176,12 +182,48 @@ export default function CreateBoardPage() {
     }
     const newQ = cellQuestion.substring(0, start) + insert + cellQuestion.substring(end)
     setCellQuestion(newQ)
-    // Restore focus after React re-render
     requestAnimationFrame(() => {
       textarea.focus()
       const cursor = start + insert.length
       textarea.setSelectionRange(cursor, cursor)
     })
+  }
+
+  function insertImageUrl(url: string) {
+    const insert = `[img:${url}]`
+    setCellQuestion((q) => q + insert)
+    setShowImagePicker(false)
+    setImageUrl('')
+  }
+
+  async function handleFileUpload(file: File) {
+    if (!file.type.startsWith('image/')) return
+    setUploading(true)
+    try {
+      const ext = file.name.split('.').pop() || 'png'
+      const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('clue-images').upload(path, file)
+      if (error) throw error
+      const { data: urlData } = supabase.storage.from('clue-images').getPublicUrl(path)
+      insertImageUrl(urlData.publicUrl)
+    } catch (e: any) {
+      alert('Upload failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) handleFileUpload(file)
+        return
+      }
+    }
   }
 
   function saveCell() {
@@ -505,7 +547,8 @@ export default function CreateBoardPage() {
                 <span className="text-gray-600 text-[10px] ml-2">**bold** *italic* [big]...[/big] [img:url]</span>
               </div>
               <textarea id="clue-editor" value={cellQuestion} onChange={(e) => setCellQuestion(e.target.value)}
-                placeholder="Enter the clue..."
+                onPaste={handlePaste}
+                placeholder="Enter the clue... (paste an image from clipboard!)"
                 rows={3} className="input-base text-base font-mono" autoFocus />
             </div>
             <div>
@@ -519,6 +562,61 @@ export default function CreateBoardPage() {
               <button onClick={saveCell} className="btn-primary flex-1 py-3">Save</button>
               <button onClick={() => setEditingCell(null)} className="btn-secondary flex-1 py-3">Cancel</button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Image picker modal */}
+      {showImagePicker && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowImagePicker(false) }}>
+          <div className="bg-jeopardy-dark border border-white/20 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-bold text-white">Add Image</h3>
+
+            {/* Option 1: Upload from computer */}
+            <div>
+              <p className="text-gray-400 text-sm mb-2">Upload from your computer</p>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }} />
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                className="btn-secondary w-full py-3 text-sm">
+                {uploading ? 'Uploading...' : 'Choose File'}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-white/20" />
+              <span className="text-gray-500 text-xs">OR</span>
+              <div className="flex-1 h-px bg-white/20" />
+            </div>
+
+            {/* Option 2: Paste URL */}
+            <div>
+              <p className="text-gray-400 text-sm mb-2">Paste an image URL</p>
+              <div className="flex gap-2">
+                <input type="text" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="input-base text-sm flex-1"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && imageUrl.trim()) insertImageUrl(imageUrl.trim()) }} />
+                <button onClick={() => { if (imageUrl.trim()) insertImageUrl(imageUrl.trim()) }}
+                  disabled={!imageUrl.trim()}
+                  className="btn-primary px-4 py-2 text-sm">Add</button>
+              </div>
+            </div>
+
+            {/* Preview */}
+            {imageUrl.trim() && (
+              <div className="border border-white/10 rounded-lg p-2 flex items-center justify-center bg-black/30">
+                <img src={imageUrl.trim()} alt="Preview" className="max-h-32 rounded"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              </div>
+            )}
+
+            <p className="text-gray-600 text-xs text-center">
+              Tip: You can also paste an image directly into the clue editor (Ctrl+V / Cmd+V)
+            </p>
+
+            <button onClick={() => setShowImagePicker(false)}
+              className="btn-secondary w-full py-2 text-sm">Cancel</button>
           </div>
         </div>
       )}
