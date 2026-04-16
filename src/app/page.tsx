@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { joinGame } from '@/lib/game-api'
+import { joinGame, listCustomBoards, loadCustomBoard, createPresentationGame } from '@/lib/game-api'
 
 /**
  * LANDING PAGE
@@ -17,6 +17,29 @@ export default function Home() {
   const [roomCode, setRoomCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [boards, setBoards] = useState<Array<{ id: string; title: string; created_at: string }>>([])
+  const [boardsLoading, setBoardsLoading] = useState(true)
+  const [playingBoardId, setPlayingBoardId] = useState<string | null>(null)
+
+  useEffect(() => {
+    listCustomBoards()
+      .then((b) => setBoards(b))
+      .catch(() => setBoards([]))
+      .finally(() => setBoardsLoading(false))
+  }, [])
+
+  async function handlePlayBoard(boardId: string) {
+    setPlayingBoardId(boardId)
+    setError('')
+    try {
+      const board = await loadCustomBoard(boardId)
+      const roomCode = await createPresentationGame(board.board_data)
+      router.push(`/game/${roomCode}/present`)
+    } catch (e: any) {
+      setError(e.message || 'Failed to start presentation')
+      setPlayingBoardId(null)
+    }
+  }
 
   async function handleJoinParty() {
     if (!playerName.trim()) {
@@ -79,6 +102,35 @@ export default function Home() {
           <p className="text-gray-400 text-sm lg:text-base">Build your own categories, clues, and answers.</p>
         </a>
       </div>
+
+      {/* Saved custom boards */}
+      {!boardsLoading && boards.length > 0 && (
+        <div className="w-full max-w-lg lg:max-w-4xl mb-8">
+          <p className="text-gray-400 text-sm text-center mb-3">
+            Saved boards — click ▶ to present
+          </p>
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 max-h-64 overflow-y-auto pr-1">
+            {boards.map((b) => (
+              <div
+                key={b.id}
+                className="flex items-center justify-between gap-2 bg-green-900/10 hover:bg-green-900/20 border border-green-500/30 rounded-lg px-3 py-2 transition-colors"
+              >
+                <span className="text-white text-sm truncate flex-1" title={b.title}>
+                  {b.title}
+                </span>
+                <button
+                  onClick={() => handlePlayBoard(b.id)}
+                  disabled={playingBoardId === b.id}
+                  className="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
+                  title="Present this board"
+                >
+                  {playingBoardId === b.id ? '...' : '▶ Play'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Join existing party game */}
       <div className="w-full max-w-sm">
