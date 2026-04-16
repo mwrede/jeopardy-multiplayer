@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import type { Game, Player, Category, Clue, GameSettings, GameSearchResult, GameSearchFilters, CustomBoard } from '@/types/game'
-import { GAME_LENGTH_CONFIG } from '@/types/game'
+import { GAME_LENGTH_CONFIG, DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 
 /**
  * Jeopardy answer checker.
