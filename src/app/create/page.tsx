@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, Fragment, useEffect } from 'react'
+import { useState, useCallback, useRef, Fragment, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { saveCustomBoard, updateCustomBoard, loadCustomBoard, createPresentationGame } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
@@ -58,6 +58,14 @@ function initialState(): BoardState {
 }
 
 export default function CreateBoardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-jeopardy-dark" />}>
+      <CreateBoardContent />
+    </Suspense>
+  )
+}
+
+function CreateBoardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editBoardId = searchParams.get('boardId')
