@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveCustomBoard } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
@@ -445,9 +445,9 @@ export default function CreateBoardPage() {
 
               {/* Clue rows */}
               {currentValues.map((val, ri) => (
-                <>
+                <Fragment key={`row-${ri}`}>
                   {/* Row value label */}
-                  <div key={`val-${ri}`} className="flex items-center justify-center relative group">
+                  <div className="flex items-center justify-center relative group">
                     {editingValue?.round === (activeRound as 1 | 2) && editingValue?.row === ri ? (
                       <input type="number" value={valueInput}
                         onChange={(e) => setValueInput(e.target.value)}
@@ -498,7 +498,7 @@ export default function CreateBoardPage() {
                       </button>
                     )
                   })}
-                </>
+                </Fragment>
               ))}
             </div>
           </div>
