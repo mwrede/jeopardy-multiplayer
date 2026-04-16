@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { saveCustomBoard } from '@/lib/game-api'
+import { saveCustomBoard, createPresentationGame } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { ClueText } from '@/components/ClueText'
 import type { CustomBoard } from '@/types/game'
@@ -267,13 +267,7 @@ export default function CreateBoardPage() {
     setEditingValue(null)
   }
 
-  async function handleSave() {
-    if (!board.title.trim()) {
-      setError('Please enter a title for your board')
-      return
-    }
-
-    // Build the CustomBoard object
+  function buildCustomBoard(): CustomBoard {
     const round1Categories = board.categories.map((name, colIdx) => ({
       name: name || `Category ${colIdx + 1}`,
       clues: board.values.map((value, rowIdx) => {
@@ -315,13 +309,34 @@ export default function CreateBoardPage() {
       }
     }
 
+    return customBoard
+  }
+
+  async function handleSave() {
+    if (!board.title.trim()) {
+      setError('Please enter a title for your board')
+      return
+    }
     setSaving(true)
     setError('')
     try {
-      await saveCustomBoard(board.title.trim(), customBoard, board.isPublic)
+      await saveCustomBoard(board.title.trim(), buildCustomBoard(), board.isPublic)
       router.push('/?saved=1')
     } catch (e: any) {
       setError(e.message || 'Failed to save board')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handlePresent() {
+    setSaving(true)
+    setError('')
+    try {
+      const roomCode = await createPresentationGame(buildCustomBoard())
+      router.push(`/game/${roomCode}/present`)
+    } catch (e: any) {
+      setError(e.message || 'Failed to start presentation')
     } finally {
       setSaving(false)
     }
@@ -366,6 +381,10 @@ export default function CreateBoardPage() {
           Full Game (J! + DJ! + FJ!)
         </label>
         <div className="flex-1" />
+        <button onClick={handlePresent} disabled={saving}
+          className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 text-sm rounded-lg transition-colors">
+          {saving ? '...' : '▶ Present'}
+        </button>
         <button onClick={handleSave} disabled={saving}
           className="btn-primary px-5 py-2 text-sm">{saving ? 'Saving...' : 'Save & Finish'}</button>
       </div>

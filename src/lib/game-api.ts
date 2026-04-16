@@ -1608,3 +1608,32 @@ export async function rematchGame(gameId: string) {
   await supabase.from('games').update({ rematch_room_code: newGame.room_code }).eq('id', gameId)
   return newGame
 }
+
+/**
+ * Create a game in presentation mode from a CustomBoard.
+ * Adds a dummy "Presenter" player so startCustomGame can activate the game.
+ * Returns the room code for the /present route.
+ */
+export async function createPresentationGame(board: CustomBoard) {
+  const settings: GameSettings = {
+    ...DEFAULT_CASUAL_SETTINGS,
+    gameMode: 'party',
+  }
+
+  const { game } = await createGame(settings, false)
+
+  // Add a dummy presenter player so startCustomGame doesn't fail
+  await supabase.from('players').insert({
+    game_id: game.id,
+    name: 'Presenter',
+    score: 0,
+    is_connected: true,
+    is_ready: true,
+    join_order: 1,
+    is_creator: true,
+  })
+
+  await startCustomGame(game.id, board)
+
+  return game.room_code
+}
