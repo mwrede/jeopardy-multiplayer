@@ -1456,6 +1456,31 @@ export async function listCustomBoards(search?: string) {
 }
 
 /**
+ * Update an existing custom board.
+ */
+export async function updateCustomBoard(boardId: string, title: string, boardData: CustomBoard, isPublic: boolean = true) {
+  const { data, error } = await supabase
+    .from('custom_boards')
+    .update({ title, board_data: boardData, is_public: isPublic })
+    .eq('id', boardId)
+    .select('id, title')
+    .single()
+  if (error) throw error
+  return data
+}
+
+/**
+ * Delete a custom board by ID.
+ */
+export async function deleteCustomBoard(boardId: string) {
+  const { error } = await supabase
+    .from('custom_boards')
+    .delete()
+    .eq('id', boardId)
+  if (error) throw error
+}
+
+/**
  * Load a custom board by ID.
  */
 export async function loadCustomBoard(boardId: string) {

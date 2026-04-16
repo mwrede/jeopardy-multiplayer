@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { joinGame, listCustomBoards, loadCustomBoard, createPresentationGame } from '@/lib/game-api'
+import { joinGame, listCustomBoards, loadCustomBoard, createPresentationGame, deleteCustomBoard } from '@/lib/game-api'
 
 /**
  * LANDING PAGE
@@ -38,6 +38,16 @@ export default function Home() {
     } catch (e: any) {
       setError(e.message || 'Failed to start presentation')
       setPlayingBoardId(null)
+    }
+  }
+
+  async function handleDeleteBoard(boardId: string, title: string) {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return
+    try {
+      await deleteCustomBoard(boardId)
+      setBoards((prev) => prev.filter((b) => b.id !== boardId))
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete board')
     }
   }
 
@@ -113,7 +123,7 @@ export default function Home() {
             {boards.map((b) => (
               <div
                 key={b.id}
-                className="flex items-center justify-between gap-2 bg-green-900/10 hover:bg-green-900/20 border border-green-500/30 rounded-lg px-3 py-2 transition-colors"
+                className="flex items-center gap-1.5 bg-green-900/10 hover:bg-green-900/20 border border-green-500/30 rounded-lg px-3 py-2 transition-colors"
               >
                 <span className="text-white text-sm truncate flex-1" title={b.title}>
                   {b.title}
@@ -121,10 +131,24 @@ export default function Home() {
                 <button
                   onClick={() => handlePlayBoard(b.id)}
                   disabled={playingBoardId === b.id}
-                  className="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
+                  className="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-2.5 py-1.5 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
                   title="Present this board"
                 >
-                  {playingBoardId === b.id ? '...' : '▶ Play'}
+                  {playingBoardId === b.id ? '...' : '▶'}
+                </button>
+                <button
+                  onClick={() => router.push(`/create?boardId=${b.id}`)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap"
+                  title="Edit this board"
+                >
+                  ✏️
+                </button>
+                <button
+                  onClick={() => handleDeleteBoard(b.id, b.title)}
+                  className="bg-red-700/60 hover:bg-red-600 text-white text-xs font-bold px-2 py-1.5 rounded transition-colors whitespace-nowrap"
+                  title="Delete this board"
+                >
+                  ✕
                 </button>
               </div>
             ))}
