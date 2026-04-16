@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveCustomBoard } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
+import { ClueText } from '@/components/ClueText'
 import type { CustomBoard } from '@/types/game'
 
 interface CellData {
@@ -490,7 +491,7 @@ export default function CreateBoardPage() {
                         {filled ? (
                           <span className="text-[10px] md:text-xs text-white/80 leading-tight line-clamp-3 px-1 text-center"
                             style={{ textShadow: 'none' }}>
-                            {cell!.question}
+                            <ClueText text={cell!.question} />
                           </span>
                         ) : (
                           val
