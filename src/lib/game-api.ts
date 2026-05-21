@@ -1501,6 +1501,32 @@ export async function loadCustomBoard(boardId: string) {
   return data as { id: string; title: string; board_data: CustomBoard; is_public: boolean; created_at: string }
 }
 
+export type PlayCountKind = 'game' | 'mashup' | 'custom'
+
+/**
+ * Increment the play counter for a game / mashup / custom board.
+ * Fire-and-forget — failures log but don't block playback.
+ */
+export async function incrementPlayCount(kind: PlayCountKind, key: string) {
+  const { error } = await supabase.rpc('increment_play_count', { p_kind: kind, p_key: key })
+  if (error) console.warn('[play_counts] increment failed:', error.message)
+}
+
+/**
+ * Fetch play counts for one kind, optionally narrowed to a list of keys.
+ * Returns a Map<key, count>; missing keys are absent (treat as 0).
+ */
+export async function getPlayCounts(kind: PlayCountKind, keys?: string[]): Promise<Map<string, number>> {
+  let q = supabase.from('play_counts').select('key, count').eq('kind', kind)
+  if (keys && keys.length > 0) q = q.in('key', keys)
+  const { data, error } = await q
+  if (error) {
+    console.warn('[play_counts] fetch failed:', error.message)
+    return new Map()
+  }
+  return new Map((data || []).map((r: any) => [r.key as string, r.count as number]))
+}
+
 /**
  * Start the voting phase: pick 3 random games from clue_pool for players to vote on.
  */

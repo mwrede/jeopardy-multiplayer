@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard } from '@/lib/game-api'
+import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, incrementPlayCount, getPlayCounts } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
@@ -73,9 +73,22 @@ export function GameBrowser({ compact = false }: Props) {
   const [seasons, setSeasons] = useState<string[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
 
+  const [mashupCounts, setMashupCounts] = useState<Map<string, number>>(new Map())
+  const [gameCounts, setGameCounts] = useState<Map<string, number>>(new Map())
+  const [customCounts, setCustomCounts] = useState<Map<string, number>>(new Map())
+
   useEffect(() => {
     getSeasons().then(setSeasons).catch(console.error)
-    listCustomBoards().then(setCustomResults).catch(() => setCustomResults([]))
+    getPlayCounts('mashup').then(setMashupCounts).catch(() => {})
+    listCustomBoards()
+      .then(async (boards) => {
+        setCustomResults(boards)
+        if (boards.length > 0) {
+          const counts = await getPlayCounts('custom', boards.map((b) => b.id))
+          setCustomCounts(counts)
+        }
+      })
+      .catch(() => setCustomResults([]))
   }, [])
 
   const seasonToYear = (s: string) => {
@@ -122,10 +135,18 @@ export function GameBrowser({ compact = false }: Props) {
         setGameResults((prev) => (append ? [...prev, ...games] : games))
         setHasMore(games.length === 50)
         setPage(p)
+        if (games.length > 0) {
+          const counts = await getPlayCounts('game', games.map((g) => String(g.game_id_source)))
+          setGameCounts((prev) => (append ? new Map([...prev, ...counts]) : counts))
+        }
       }
 
       const boards = await listCustomBoards(query.trim() || undefined)
       setCustomResults(boards)
+      if (boards.length > 0) {
+        const counts = await getPlayCounts('custom', boards.map((b) => b.id))
+        setCustomCounts(counts)
+      }
     } catch (e) {
       console.error('Search failed:', e)
     } finally {
@@ -192,15 +213,34 @@ export function GameBrowser({ compact = false }: Props) {
         if (!queryActive) return true
         return m.label.toLowerCase().includes(query.trim().toLowerCase())
       })
+        .map((m, idx) => ({ m, idx, count: mashupCounts.get(m.id) || 0 }))
+        .sort((a, b) => b.count - a.count || a.idx - b.idx)
+        .map((x) => x.m)
 
-  const customVisible = !showCustom ? [] : (typeFilter === 'all' && filtersActive ? [] : customResults)
-  const gameVisible = showGames ? gameResults : []
+  const customVisible = (!showCustom ? [] : (typeFilter === 'all' && filtersActive ? [] : customResults))
+    .slice()
+    .sort((a, b) => {
+      const ca = customCounts.get(a.id) || 0
+      const cb = customCounts.get(b.id) || 0
+      if (cb !== ca) return cb - ca
+      return (b.created_at || '').localeCompare(a.created_at || '')
+    })
+
+  const gameVisible = (showGames ? gameResults : [])
+    .slice()
+    .sort((a, b) => {
+      const ca = gameCounts.get(String(a.game_id_source)) || 0
+      const cb = gameCounts.get(String(b.game_id_source)) || 0
+      if (cb !== ca) return cb - ca
+      return (b.air_date || '').localeCompare(a.air_date || '')
+    })
 
   async function handlePlayGame(sourceGameId: number) {
     setCreating(true)
     try {
       const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, sourceGameId }
       const { game } = await createGame(settings)
+      void incrementPlayCount('game', String(sourceGameId))
       router.push(`/game/${game.room_code}/display`)
     } catch (e) {
       console.error('Failed to create game:', e)
@@ -215,6 +255,7 @@ export function GameBrowser({ compact = false }: Props) {
       const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength }
       if (mashup.theme) settings.categoryTheme = mashup.theme
       const { game } = await createGame(settings)
+      void incrementPlayCount('mashup', mashup.id)
       router.push(`/game/${game.room_code}/display`)
     } catch (e) {
       console.error('Failed to create mashup:', e)
@@ -232,6 +273,7 @@ export function GameBrowser({ compact = false }: Props) {
       await supabase.from('games').update({
         settings: { ...settings, customBoard: board.board_data },
       }).eq('id', game.id)
+      void incrementPlayCount('custom', boardId)
       router.push(`/game/${game.room_code}/display`)
     } catch (e) {
       console.error('Failed to create custom game:', e)
