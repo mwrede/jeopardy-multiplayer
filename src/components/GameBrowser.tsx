@@ -62,6 +62,7 @@ export function GameBrowser({ compact = false }: Props) {
   const [tournamentFilter, setTournamentFilter] = useState('')
   const [yearFilter, setYearFilter] = useState('')
   const [seasonFilter, setSeasonFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'games' | 'mashups' | 'custom'>('all')
 
   const [gameResults, setGameResults] = useState<GameSearchResult[]>([])
   const [customResults, setCustomResults] = useState<CustomBoardRow[]>([])
@@ -158,21 +159,42 @@ export function GameBrowser({ compact = false }: Props) {
     setTournamentFilter('')
     setYearFilter('')
     setSeasonFilter('')
+    setTypeFilter('all')
     setGameResults([])
     setHasMore(false)
     listCustomBoards().then(setCustomResults).catch(() => setCustomResults([]))
   }
 
+  function handleTypeFilter(next: typeof typeFilter) {
+    const value = typeFilter === next ? 'all' : next
+    setTypeFilter(value)
+    // Tournament/year/season only apply to real games — clear them when switching away.
+    if (value === 'mashups' || value === 'custom') {
+      setTournamentFilter('')
+      setYearFilter('')
+      setSeasonFilter('')
+    }
+  }
+
   const filtersActive = !!(tournamentFilter || seasonFilter || yearFilter)
   const queryActive = !!query.trim()
+  const showGameFilters = typeFilter === 'all' || typeFilter === 'games'
 
-  const mashupResults = MASHUPS.filter((m) => {
-    if (filtersActive) return false
-    if (!queryActive) return true
-    return m.label.toLowerCase().includes(query.trim().toLowerCase())
-  })
+  const showGames = typeFilter === 'all' || typeFilter === 'games'
+  const showMashups = typeFilter === 'all' || typeFilter === 'mashups'
+  const showCustom = typeFilter === 'all' || typeFilter === 'custom'
 
-  const customVisible = filtersActive ? [] : customResults
+  const mashupResults = !showMashups
+    ? []
+    : MASHUPS.filter((m) => {
+        // In 'all' mode, hide mashups when filters apply (they're games-only attributes).
+        if (typeFilter === 'all' && filtersActive) return false
+        if (!queryActive) return true
+        return m.label.toLowerCase().includes(query.trim().toLowerCase())
+      })
+
+  const customVisible = !showCustom ? [] : (typeFilter === 'all' && filtersActive ? [] : customResults)
+  const gameVisible = showGames ? gameResults : []
 
   async function handlePlayGame(sourceGameId: number) {
     setCreating(true)
@@ -219,7 +241,7 @@ export function GameBrowser({ compact = false }: Props) {
   }
 
   const noResults =
-    !searching && mashupResults.length === 0 && gameResults.length === 0 && customVisible.length === 0
+    !searching && mashupResults.length === 0 && gameVisible.length === 0 && customVisible.length === 0
 
   const lengthBtnPad = compact ? 'px-4 py-2' : 'px-6 py-3'
   const lengthBtnLabel = compact ? 'text-base' : 'text-lg'
@@ -251,6 +273,47 @@ export function GameBrowser({ compact = false }: Props) {
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-2 mb-3 text-sm">
+        <button
+          onClick={() => handleTypeFilter('games')}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 transition-all ${
+            typeFilter === 'games'
+              ? 'bg-jeopardy-blue text-white border-jeopardy-blue'
+              : 'bg-jeopardy-blue/15 text-white border-jeopardy-blue/60 hover:bg-jeopardy-blue/25'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-jeopardy-blue" /> Real Games
+        </button>
+        <button
+          onClick={() => handleTypeFilter('mashups')}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 transition-all ${
+            typeFilter === 'mashups'
+              ? 'bg-jeopardy-gold text-black border-jeopardy-gold'
+              : 'bg-jeopardy-gold/15 text-jeopardy-gold border-jeopardy-gold/50 hover:bg-jeopardy-gold/25'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-jeopardy-gold" /> Mashups
+        </button>
+        <button
+          onClick={() => handleTypeFilter('custom')}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 transition-all ${
+            typeFilter === 'custom'
+              ? 'bg-green-500 text-black border-green-400'
+              : 'bg-green-500/15 text-green-400 border-green-500/40 hover:bg-green-500/25'
+          }`}
+        >
+          <span className="w-2 h-2 rounded-full bg-green-400" /> Custom Boards
+        </button>
+        {typeFilter !== 'all' && (
+          <button
+            onClick={() => setTypeFilter('all')}
+            className="text-gray-500 hover:text-white text-xs px-2 transition-colors self-center"
+          >
+            Show all
+          </button>
+        )}
+      </div>
+
       <div className={`flex gap-3 mb-4`}>
         <input
           type="text"
@@ -269,80 +332,70 @@ export function GameBrowser({ compact = false }: Props) {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-4 items-end">
-        <div>
-          <label className="text-gray-500 text-xs block mb-1">Tournament</label>
-          <select
-            value={tournamentFilter}
-            onChange={(e) => setTournamentFilter(e.target.value)}
-            className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
-          >
-            <option value="" className="bg-gray-900">Any tournament</option>
-            {TOURNAMENTS.map((t) => (
-              <option key={t.label} value={t.label} className="bg-gray-900">{t.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-gray-500 text-xs block mb-1">Year</label>
-          <select
-            value={yearFilter}
-            onChange={(e) => handleYearChange(e.target.value)}
-            className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
-          >
-            <option value="" className="bg-gray-900">Any year</option>
-            {years.map((y) => (
-              <option key={y} value={String(y)} className="bg-gray-900">{y}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-gray-500 text-xs block mb-1">Season</label>
-          <select
-            value={seasonFilter}
-            onChange={(e) => handleSeasonChange(e.target.value)}
-            className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
-          >
-            <option value="" className="bg-gray-900">Any season</option>
-            <optgroup label="Regular" className="bg-gray-900">
-              {numericSeasons.map((s) => (
-                <option key={s} value={s} className="bg-gray-900">
-                  Season {s} ({seasonToYear(s) || '?'})
-                </option>
+      {showGameFilters && (
+        <div className="flex flex-wrap gap-3 mb-4 items-end">
+          <div>
+            <label className="text-gray-500 text-xs block mb-1">Tournament</label>
+            <select
+              value={tournamentFilter}
+              onChange={(e) => setTournamentFilter(e.target.value)}
+              className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+            >
+              <option value="" className="bg-gray-900">Any tournament</option>
+              {TOURNAMENTS.map((t) => (
+                <option key={t.label} value={t.label} className="bg-gray-900">{t.label}</option>
               ))}
-            </optgroup>
-            {specialSeasons.length > 0 && (
-              <optgroup label="Special" className="bg-gray-900">
-                {specialSeasons.map((s) => (
+            </select>
+          </div>
+          <div>
+            <label className="text-gray-500 text-xs block mb-1">Year</label>
+            <select
+              value={yearFilter}
+              onChange={(e) => handleYearChange(e.target.value)}
+              className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+            >
+              <option value="" className="bg-gray-900">Any year</option>
+              {years.map((y) => (
+                <option key={y} value={String(y)} className="bg-gray-900">{y}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-gray-500 text-xs block mb-1">Season</label>
+            <select
+              value={seasonFilter}
+              onChange={(e) => handleSeasonChange(e.target.value)}
+              className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+            >
+              <option value="" className="bg-gray-900">Any season</option>
+              <optgroup label="Regular" className="bg-gray-900">
+                {numericSeasons.map((s) => (
                   <option key={s} value={s} className="bg-gray-900">
-                    {SPECIAL_SEASON_LABELS[s] || s}
+                    Season {s} ({seasonToYear(s) || '?'})
                   </option>
                 ))}
               </optgroup>
-            )}
-          </select>
+              {specialSeasons.length > 0 && (
+                <optgroup label="Special" className="bg-gray-900">
+                  {specialSeasons.map((s) => (
+                    <option key={s} value={s} className="bg-gray-900">
+                      {SPECIAL_SEASON_LABELS[s] || s}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          {(queryActive || filtersActive) && (
+            <button
+              onClick={handleClearFilters}
+              className="text-gray-500 hover:text-white text-sm px-3 py-2.5 transition-colors"
+            >
+              Clear all
+            </button>
+          )}
         </div>
-        {(queryActive || filtersActive) && (
-          <button
-            onClick={handleClearFilters}
-            className="text-gray-500 hover:text-white text-sm px-3 py-2.5 transition-colors"
-          >
-            Clear all
-          </button>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-3 mb-4 text-xs">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-jeopardy-blue/20 text-white border border-jeopardy-blue/60">
-          <span className="w-2 h-2 rounded-full bg-jeopardy-blue" /> Real Games
-        </span>
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-jeopardy-gold/20 text-jeopardy-gold border border-jeopardy-gold/50">
-          <span className="w-2 h-2 rounded-full bg-jeopardy-gold" /> Mashups
-        </span>
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/40">
-          <span className="w-2 h-2 rounded-full bg-green-400" /> Custom Boards
-        </span>
-      </div>
+      )}
 
       <div className="space-y-3">
         {mashupResults.map((m) => {
@@ -380,7 +433,7 @@ export function GameBrowser({ compact = false }: Props) {
           )
         })}
 
-        {gameResults.map((g) => {
+        {gameVisible.map((g) => {
           const key = `game:${g.game_id_source}`
           const isSelected = selectedKey === key
           return (
@@ -478,7 +531,7 @@ export function GameBrowser({ compact = false }: Props) {
           )
         })}
 
-        {hasMore && (
+        {hasMore && showGames && (
           <button
             onClick={() => runSearch(true, page + 1)}
             disabled={searching}
@@ -494,7 +547,7 @@ export function GameBrowser({ compact = false }: Props) {
           </p>
         )}
 
-        {!queryActive && !filtersActive && gameResults.length === 0 && (
+        {!queryActive && !filtersActive && showGames && gameVisible.length === 0 && (
           <p className="text-gray-500 text-center py-6 text-sm">
             Type a name or pick a filter above to find real J-Archive games.
           </p>
