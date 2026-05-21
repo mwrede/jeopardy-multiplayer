@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { joinGame } from '@/lib/game-api'
+import { joinGame, deleteCustomBoard } from '@/lib/game-api'
 import { GameBrowser } from '@/components/GameBrowser'
 import { useUser } from '@/lib/auth'
+import { getMyBoards, type BoardSummary } from '@/lib/profile-api'
 
 /**
  * LANDING PAGE
@@ -23,11 +24,31 @@ export default function Home() {
   const [roomCode, setRoomCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [myBoards, setMyBoards] = useState<BoardSummary[]>([])
 
   // Pre-fill the join input with the signed-in user's display name.
   useEffect(() => {
     if (profile?.display_name && !playerName) setPlayerName(profile.display_name)
   }, [profile, playerName])
+
+  // Pull the signed-in user's authored boards so they can find them fast.
+  useEffect(() => {
+    if (!user) {
+      setMyBoards([])
+      return
+    }
+    getMyBoards(user.id).then(setMyBoards).catch(() => setMyBoards([]))
+  }, [user])
+
+  async function handleDeleteBoard(boardId: string, title: string) {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return
+    try {
+      await deleteCustomBoard(boardId)
+      setMyBoards((prev) => prev.filter((b) => b.id !== boardId))
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete board')
+    }
+  }
 
   async function handleJoinParty() {
     if (!playerName.trim()) {
@@ -117,6 +138,49 @@ export default function Home() {
           <p className="text-gray-400 text-sm lg:text-base">Build your own categories, clues, and answers.</p>
         </a>
       </div>
+
+      {/* Your saved boards — only when signed in and you have some */}
+      {user && myBoards.length > 0 && (
+        <div className="w-full max-w-4xl mb-10">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">
+              Your boards ({myBoards.length})
+            </p>
+            <a href="/create" className="text-green-400 hover:text-green-300 text-xs">
+              + New board
+            </a>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {myBoards.map((b) => (
+              <div
+                key={b.id}
+                className="flex items-center gap-1.5 bg-green-900/15 hover:bg-green-900/25 border border-green-500/40 rounded-lg px-3 py-2 transition-colors"
+              >
+                <span className="text-white text-sm truncate flex-1" title={b.title}>
+                  {b.title}
+                </span>
+                {!b.is_public && (
+                  <span className="text-[10px] text-gray-500 uppercase">Private</span>
+                )}
+                <button
+                  onClick={() => router.push(`/create?boardId=${b.id}`)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap"
+                  title="Edit this board"
+                >
+                  ✏️
+                </button>
+                <button
+                  onClick={() => handleDeleteBoard(b.id, b.title)}
+                  className="bg-red-700/60 hover:bg-red-600 text-white text-xs font-bold px-2 py-1.5 rounded transition-colors whitespace-nowrap"
+                  title="Delete this board"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick-start game browser */}
       <div className="w-full max-w-4xl mb-10">

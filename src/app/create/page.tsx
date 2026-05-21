@@ -449,10 +449,20 @@ function CreateBoardContent() {
           className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 text-sm rounded-lg transition-colors">
           {saving ? '...' : '▶ Present'}
         </button>
-        <button onClick={handleSave} disabled={saving}
-          className="btn-primary px-5 py-2 text-sm">
-          {saving ? 'Saving...' : editBoardId ? 'Update Board' : 'Save & Finish'}
-        </button>
+        {user || userLoading ? (
+          <button onClick={handleSave} disabled={saving}
+            className="btn-primary px-5 py-2 text-sm">
+            {saving ? 'Saving...' : editBoardId ? 'Update Board' : 'Save & Finish'}
+          </button>
+        ) : (
+          <a
+            href={`/login?next=${encodeURIComponent('/create')}`}
+            className="btn-primary px-5 py-2 text-sm whitespace-nowrap"
+            title="Sign in so you can come back and edit this board later"
+          >
+            Sign in to save
+          </a>
+        )}
       </div>
 
       {error && <p className="text-red-400 text-center text-sm py-2">{error}</p>}
