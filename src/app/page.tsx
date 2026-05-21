@@ -48,7 +48,38 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center p-6">
-      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 lg:h-52 w-auto mb-8 mt-4" />
+      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 lg:h-52 w-auto mb-6 mt-4" />
+
+      {/* Join existing party game — top spot for fast access */}
+      <div className="w-full max-w-sm mb-10">
+        <p className="text-gray-500 text-sm text-center mb-3">Join a party game by code</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Your name"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            maxLength={30}
+            className="input-base text-base flex-1"
+          />
+          <input
+            type="text"
+            placeholder="Code"
+            value={roomCode}
+            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+            maxLength={6}
+            className="input-base text-lg tracking-[0.2em] text-center font-mono w-28"
+          />
+          <button
+            onClick={handleJoinParty}
+            disabled={loading}
+            className="btn-primary px-5 py-3 text-base whitespace-nowrap"
+          >
+            {loading ? '...' : 'Join'}
+          </button>
+        </div>
+        {error && <p className="text-red-400 text-center text-sm mt-2">{error}</p>}
+      </div>
 
       {/* Mode cards */}
       <div className="w-full max-w-lg lg:max-w-4xl grid gap-4 md:grid-cols-3 lg:gap-6 mb-10">
@@ -90,36 +121,6 @@ export default function Home() {
         <GameBrowser compact />
       </div>
 
-      {/* Join existing party game */}
-      <div className="w-full max-w-sm">
-        <p className="text-gray-500 text-sm text-center mb-3">Join a party game by code</p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Your name"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            maxLength={30}
-            className="input-base text-base flex-1"
-          />
-          <input
-            type="text"
-            placeholder="Code"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            className="input-base text-lg tracking-[0.2em] text-center font-mono w-28"
-          />
-          <button
-            onClick={handleJoinParty}
-            disabled={loading}
-            className="btn-primary px-5 py-3 text-base whitespace-nowrap"
-          >
-            {loading ? '...' : 'Join'}
-          </button>
-        </div>
-        {error && <p className="text-red-400 text-center text-sm mt-2">{error}</p>}
-      </div>
     </main>
   )
 }

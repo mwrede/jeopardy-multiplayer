@@ -228,8 +228,31 @@ export async function setReady(playerId: string, isReady: boolean) {
  * Also picks a Final Jeopardy clue and stores it on the game row.
  * Respects gameLength setting (full/half/rapid).
  */
+/**
+ * Atomically flip a game out of the 'lobby' status so only one caller
+ * proceeds to seed categories/clues. Prevents duplicate-row races when
+ * multiple clients hit Start simultaneously.
+ */
+async function claimGameSeed(gameId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('games')
+    .update({ status: 'starting', updated_at: new Date().toISOString() })
+    .eq('id', gameId)
+    .eq('status', 'lobby')
+    .select('id')
+  if (error) {
+    console.warn('[claimGameSeed] error:', error.message)
+    return false
+  }
+  return (data?.length ?? 0) > 0
+}
+
 export async function startGame(gameId: string) {
   console.log('[startGame] Starting RANDOM game (no sourceGameId)')
+  if (!(await claimGameSeed(gameId))) {
+    console.log('[startGame] another caller already seeded; skipping')
+    return
+  }
   // Get game settings to determine game length and game type
   const { data: gameRow } = await supabase
     .from('games')
@@ -1209,6 +1232,10 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
  */
 export async function startGameFromSource(gameId: string, sourceGameId: number) {
   console.log('[startGameFromSource] Starting with sourceGameId:', sourceGameId)
+  if (!(await claimGameSeed(gameId))) {
+    console.log('[startGameFromSource] another caller already seeded; skipping')
+    return
+  }
   // Get game settings for game length
   const { data: gameRow } = await supabase
     .from('games')
@@ -1384,6 +1411,10 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
  * Start a game with a custom board (user-created categories/clues).
  */
 export async function startCustomGame(gameId: string, board: CustomBoard) {
+  if (!(await claimGameSeed(gameId))) {
+    console.log('[startCustomGame] another caller already seeded; skipping')
+    return
+  }
   for (let roundIdx = 0; roundIdx < board.rounds.length; roundIdx++) {
     const round = board.rounds[roundIdx]
     const roundNumber = roundIdx + 1
