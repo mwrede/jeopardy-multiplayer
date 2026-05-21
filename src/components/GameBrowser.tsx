@@ -1,0 +1,505 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard } from '@/lib/game-api'
+import { supabase } from '@/lib/supabase'
+import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
+import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
+
+type Mashup = { id: string; label: string; description: string; theme?: string }
+type CustomBoardRow = { id: string; title: string; created_at: string }
+
+const MASHUPS: Mashup[] = [
+  { id: 'random', label: 'Random Mashup', description: '6 random categories from the full clue pool' },
+  { id: 'geography', label: 'Geography Mashup', description: 'Geography-themed categories', theme: 'geography' },
+  { id: 'history', label: 'History Mashup', description: 'History-themed categories', theme: 'history' },
+  { id: 'science', label: 'Science Mashup', description: 'Science-themed categories', theme: 'science' },
+  { id: 'sports', label: 'Sports Mashup', description: 'Sports-themed categories', theme: 'sports' },
+  { id: 'pop_culture', label: 'Pop Culture Mashup', description: 'Pop Culture-themed categories', theme: 'pop_culture' },
+  { id: 'food', label: 'Food & Drink Mashup', description: 'Food & Drink-themed categories', theme: 'food' },
+  { id: 'literature', label: 'Literature Mashup', description: 'Literature-themed categories', theme: 'literature' },
+  { id: 'music', label: 'Music Mashup', description: 'Music-themed categories', theme: 'music' },
+  { id: 'corporate', label: 'Corporate Mashup', description: 'Corporate-themed categories', theme: 'corporate' },
+]
+
+const TOURNAMENTS: Array<{ label: string; season?: string; notesFilter?: string }> = [
+  { label: 'Kids Week', notesFilter: 'Kids Week' },
+  { label: 'Teen Tournament', notesFilter: 'Teen Tournament' },
+  { label: 'College Championship', notesFilter: 'College' },
+  { label: 'Tournament of Champions', notesFilter: 'Tournament of Champions' },
+  { label: 'Jeopardy Masters', season: 'jm' },
+  { label: 'Pop Culture Jeopardy', season: 'pcj' },
+]
+
+const SPECIAL_SEASON_LABELS: Record<string, string> = {
+  bbab: 'Battle of the Bay Area Brains',
+  cwcpi: 'Celebrity Wheel of Fortune Crossover',
+  goattournament: 'Greatest of All Time',
+  jm: 'Jeopardy! Masters',
+  ncc: 'National College Championship',
+  pcj: 'Pop Culture Jeopardy!',
+  superjeopardy: 'Super Jeopardy!',
+  trebekpilots: 'Trebek Pilots',
+}
+
+type Props = {
+  compact?: boolean
+}
+
+/**
+ * Unified game picker: search bar + Tournament/Year/Season filters across
+ * real J-Archive games, themed mashups, and user-created custom boards.
+ * Color-coded so you can tell the three types apart. Clicking Play creates
+ * a game and routes the user to the host display.
+ */
+export function GameBrowser({ compact = false }: Props) {
+  const router = useRouter()
+  const [gameLength, setGameLength] = useState<GameLength>('full')
+  const [creating, setCreating] = useState(false)
+
+  const [query, setQuery] = useState('')
+  const [tournamentFilter, setTournamentFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('')
+  const [seasonFilter, setSeasonFilter] = useState('')
+
+  const [gameResults, setGameResults] = useState<GameSearchResult[]>([])
+  const [customResults, setCustomResults] = useState<CustomBoardRow[]>([])
+  const [searching, setSearching] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [page, setPage] = useState(0)
+
+  const [seasons, setSeasons] = useState<string[]>([])
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    getSeasons().then(setSeasons).catch(console.error)
+    listCustomBoards().then(setCustomResults).catch(() => setCustomResults([]))
+  }, [])
+
+  const seasonToYear = (s: string) => {
+    const n = parseInt(s)
+    if (isNaN(n)) return null
+    return 1983 + n
+  }
+
+  const yearToSeason = (year: number) => {
+    const s = year - 1983
+    return s >= 1 ? String(s) : null
+  }
+
+  const numericSeasons = seasons.filter((s) => /^\d+$/.test(s))
+  const specialSeasons = seasons.filter((s) => !/^\d+$/.test(s))
+
+  const years: number[] = []
+  for (let y = 2025; y >= 1984; y--) years.push(y)
+
+  const buildFilters = useCallback((p: number = 0): GameSearchFilters => {
+    const tour = TOURNAMENTS.find((t) => t.label === tournamentFilter)
+    return {
+      query: query.trim() || undefined,
+      season: seasonFilter || tour?.season || undefined,
+      notesFilter: tour?.notesFilter || undefined,
+      page: p,
+    }
+  }, [query, seasonFilter, tournamentFilter])
+
+  const runSearch = useCallback(async (append: boolean = false, p: number = 0) => {
+    setSearching(true)
+    if (!append) setSelectedKey(null)
+    try {
+      const filters = buildFilters(p)
+      const noQuery = !filters.query
+      const noFilters = !filters.season && !filters.notesFilter
+
+      if (noQuery && noFilters) {
+        setGameResults([])
+        setHasMore(false)
+        setPage(0)
+      } else {
+        const games = await searchGames(filters)
+        setGameResults((prev) => (append ? [...prev, ...games] : games))
+        setHasMore(games.length === 50)
+        setPage(p)
+      }
+
+      const boards = await listCustomBoards(query.trim() || undefined)
+      setCustomResults(boards)
+    } catch (e) {
+      console.error('Search failed:', e)
+    } finally {
+      setSearching(false)
+    }
+  }, [buildFilters, query])
+
+  useEffect(() => {
+    runSearch(false, 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seasonFilter, tournamentFilter])
+
+  function handleYearChange(year: string) {
+    setYearFilter(year)
+    if (year) {
+      const s = yearToSeason(parseInt(year))
+      if (s && seasons.includes(s)) setSeasonFilter(s)
+    } else {
+      setSeasonFilter('')
+    }
+  }
+
+  function handleSeasonChange(season: string) {
+    setSeasonFilter(season)
+    const y = seasonToYear(season)
+    setYearFilter(y ? String(y) : '')
+  }
+
+  function handleClearFilters() {
+    setQuery('')
+    setTournamentFilter('')
+    setYearFilter('')
+    setSeasonFilter('')
+    setGameResults([])
+    setHasMore(false)
+    listCustomBoards().then(setCustomResults).catch(() => setCustomResults([]))
+  }
+
+  const filtersActive = !!(tournamentFilter || seasonFilter || yearFilter)
+  const queryActive = !!query.trim()
+
+  const mashupResults = MASHUPS.filter((m) => {
+    if (filtersActive) return false
+    if (!queryActive) return true
+    return m.label.toLowerCase().includes(query.trim().toLowerCase())
+  })
+
+  const customVisible = filtersActive ? [] : customResults
+
+  async function handlePlayGame(sourceGameId: number) {
+    setCreating(true)
+    try {
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, sourceGameId }
+      const { game } = await createGame(settings)
+      router.push(`/game/${game.room_code}/display`)
+    } catch (e) {
+      console.error('Failed to create game:', e)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handlePlayMashup(mashup: Mashup) {
+    setCreating(true)
+    try {
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength }
+      if (mashup.theme) settings.categoryTheme = mashup.theme
+      const { game } = await createGame(settings)
+      router.push(`/game/${game.room_code}/display`)
+    } catch (e) {
+      console.error('Failed to create mashup:', e)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function handlePlayCustom(boardId: string) {
+    setCreating(true)
+    try {
+      const board = await loadCustomBoard(boardId)
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, customBoardId: boardId }
+      const { game } = await createGame(settings)
+      await supabase.from('games').update({
+        settings: { ...settings, customBoard: board.board_data },
+      }).eq('id', game.id)
+      router.push(`/game/${game.room_code}/display`)
+    } catch (e) {
+      console.error('Failed to create custom game:', e)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const noResults =
+    !searching && mashupResults.length === 0 && gameResults.length === 0 && customVisible.length === 0
+
+  const lengthBtnPad = compact ? 'px-4 py-2' : 'px-6 py-3'
+  const lengthBtnLabel = compact ? 'text-base' : 'text-lg'
+  const searchInputPad = compact ? 'px-5 py-3 text-base' : 'px-6 py-4 text-lg'
+  const searchBtnPad = compact ? 'px-6 py-3 text-base' : 'px-8 py-4 text-lg'
+  const cardPad = compact ? 'p-4' : 'p-5'
+  const sectionMb = compact ? 'mb-4' : 'mb-6'
+
+  return (
+    <div className="w-full">
+      <div className={`flex flex-wrap gap-3 ${sectionMb} justify-center`}>
+        {([
+          { id: 'full' as GameLength, label: 'Full', desc: '6×5 board' },
+          { id: 'half' as GameLength, label: 'Half', desc: '6×3 board' },
+          { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3 board' },
+        ]).map((gl) => (
+          <button
+            key={gl.id}
+            onClick={() => setGameLength(gl.id)}
+            className={`${lengthBtnPad} rounded-2xl text-center transition-all ${
+              gameLength === gl.id
+                ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
+                : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
+            }`}
+          >
+            <span className={`font-bold block ${lengthBtnLabel}`}>{gl.label}</span>
+            <span className="text-xs opacity-60">{gl.desc}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className={`flex gap-3 mb-4`}>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') runSearch(false, 0) }}
+          placeholder="Search games, mashups, custom boards..."
+          className={`flex-1 bg-white/5 border border-white/20 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-jeopardy-gold/50 transition-colors ${searchInputPad}`}
+        />
+        <button
+          onClick={() => runSearch(false, 0)}
+          disabled={searching}
+          className={`bg-jeopardy-blue hover:bg-jeopardy-blue/80 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 ${searchBtnPad}`}
+        >
+          {searching ? '...' : 'Search'}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-4 items-end">
+        <div>
+          <label className="text-gray-500 text-xs block mb-1">Tournament</label>
+          <select
+            value={tournamentFilter}
+            onChange={(e) => setTournamentFilter(e.target.value)}
+            className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+          >
+            <option value="" className="bg-gray-900">Any tournament</option>
+            {TOURNAMENTS.map((t) => (
+              <option key={t.label} value={t.label} className="bg-gray-900">{t.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-gray-500 text-xs block mb-1">Year</label>
+          <select
+            value={yearFilter}
+            onChange={(e) => handleYearChange(e.target.value)}
+            className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+          >
+            <option value="" className="bg-gray-900">Any year</option>
+            {years.map((y) => (
+              <option key={y} value={String(y)} className="bg-gray-900">{y}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-gray-500 text-xs block mb-1">Season</label>
+          <select
+            value={seasonFilter}
+            onChange={(e) => handleSeasonChange(e.target.value)}
+            className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+          >
+            <option value="" className="bg-gray-900">Any season</option>
+            <optgroup label="Regular" className="bg-gray-900">
+              {numericSeasons.map((s) => (
+                <option key={s} value={s} className="bg-gray-900">
+                  Season {s} ({seasonToYear(s) || '?'})
+                </option>
+              ))}
+            </optgroup>
+            {specialSeasons.length > 0 && (
+              <optgroup label="Special" className="bg-gray-900">
+                {specialSeasons.map((s) => (
+                  <option key={s} value={s} className="bg-gray-900">
+                    {SPECIAL_SEASON_LABELS[s] || s}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+        {(queryActive || filtersActive) && (
+          <button
+            onClick={handleClearFilters}
+            className="text-gray-500 hover:text-white text-sm px-3 py-2.5 transition-colors"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-3 mb-4 text-xs">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-jeopardy-blue/20 text-white border border-jeopardy-blue/60">
+          <span className="w-2 h-2 rounded-full bg-jeopardy-blue" /> Real Games
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-jeopardy-gold/20 text-jeopardy-gold border border-jeopardy-gold/50">
+          <span className="w-2 h-2 rounded-full bg-jeopardy-gold" /> Mashups
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/40">
+          <span className="w-2 h-2 rounded-full bg-green-400" /> Custom Boards
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {mashupResults.map((m) => {
+          const key = `mashup:${m.id}`
+          const isSelected = selectedKey === key
+          return (
+            <button
+              key={key}
+              onClick={() => setSelectedKey(isSelected ? null : key)}
+              className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 ${
+                isSelected
+                  ? 'bg-jeopardy-gold/25 border-jeopardy-gold'
+                  : 'bg-jeopardy-gold/10 border-jeopardy-gold/40 hover:bg-jeopardy-gold/15'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs uppercase tracking-wider font-bold text-jeopardy-gold">
+                    🎲 Mashup
+                  </span>
+                  <h3 className="text-white font-bold text-lg">{m.label}</h3>
+                  <p className="text-gray-400 text-sm mt-1">{m.description}</p>
+                </div>
+                {isSelected && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handlePlayMashup(m) }}
+                    disabled={creating}
+                    className="bg-jeopardy-gold hover:bg-jeopardy-gold/80 text-black font-bold px-6 py-3 rounded-xl text-base transition-all whitespace-nowrap disabled:opacity-50"
+                  >
+                    {creating ? 'Creating...' : 'Play'}
+                  </button>
+                )}
+              </div>
+            </button>
+          )
+        })}
+
+        {gameResults.map((g) => {
+          const key = `game:${g.game_id_source}`
+          const isSelected = selectedKey === key
+          return (
+            <button
+              key={key}
+              onClick={() => setSelectedKey(isSelected ? null : key)}
+              className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 ${
+                isSelected
+                  ? 'bg-jeopardy-blue/40 border-jeopardy-blue'
+                  : 'bg-jeopardy-blue/15 border-jeopardy-blue/50 hover:bg-jeopardy-blue/25'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs uppercase tracking-wider font-bold text-white/90">
+                    📺 Real Game
+                  </span>
+                  <h3 className="text-white font-bold text-lg truncate">
+                    {g.game_title || `Game #${g.game_id_source}`}
+                  </h3>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                    {g.air_date && (
+                      <span className="text-gray-300 text-sm">
+                        {new Date(g.air_date + 'T00:00:00').toLocaleDateString('en-US', {
+                          weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                        })}
+                      </span>
+                    )}
+                    {g.season && <span className="text-gray-400 text-sm">Season {g.season}</span>}
+                    <span className="text-gray-400 text-sm">{g.clue_count} clues</span>
+                  </div>
+                  {(g.player1 || g.player2 || g.player3) && (
+                    <p className="text-gray-400 text-sm mt-1">
+                      {[g.player1, g.player2, g.player3].filter(Boolean).join(' • ')}
+                    </p>
+                  )}
+                </div>
+                {isSelected && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handlePlayGame(g.game_id_source) }}
+                    disabled={creating}
+                    className="bg-white hover:bg-gray-100 text-jeopardy-blue font-bold px-6 py-3 rounded-xl text-base transition-all whitespace-nowrap disabled:opacity-50"
+                  >
+                    {creating ? 'Creating...' : 'Play'}
+                  </button>
+                )}
+              </div>
+            </button>
+          )
+        })}
+
+        {customVisible.map((cb) => {
+          const key = `custom:${cb.id}`
+          const isSelected = selectedKey === key
+          return (
+            <button
+              key={key}
+              onClick={() => setSelectedKey(isSelected ? null : key)}
+              className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 ${
+                isSelected
+                  ? 'bg-green-500/25 border-green-400'
+                  : 'bg-green-500/10 border-green-500/40 hover:bg-green-500/15'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs uppercase tracking-wider font-bold text-green-400">
+                    ✏️ Custom Board
+                  </span>
+                  <h3 className="text-white font-bold text-lg">{cb.title}</h3>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Created {new Date(cb.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                {isSelected && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); router.push(`/create?boardId=${cb.id}`) }}
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-3 rounded-xl text-base transition-all whitespace-nowrap"
+                      title="Edit this board"
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayCustom(cb.id) }}
+                      disabled={creating}
+                      className="bg-green-500 hover:bg-green-400 text-black font-bold px-6 py-3 rounded-xl text-base transition-all whitespace-nowrap disabled:opacity-50"
+                    >
+                      {creating ? 'Creating...' : 'Play'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </button>
+          )
+        })}
+
+        {hasMore && (
+          <button
+            onClick={() => runSearch(true, page + 1)}
+            disabled={searching}
+            className="w-full py-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-2xl text-center transition-colors disabled:opacity-50"
+          >
+            {searching ? 'Loading...' : 'Load More Games'}
+          </button>
+        )}
+
+        {noResults && (
+          <p className="text-gray-500 text-center py-12 text-lg">
+            No results. Try a different search or clear filters.
+          </p>
+        )}
+
+        {!queryActive && !filtersActive && gameResults.length === 0 && (
+          <p className="text-gray-500 text-center py-6 text-sm">
+            Type a name or pick a filter above to find real J-Archive games.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}

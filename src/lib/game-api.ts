@@ -1141,11 +1141,19 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
       if (result.error) throw result.error
       allData = result.data || []
     } else {
-      // Text search — only search player names (shorter fields, faster)
-      // Note: ilike on notes/game_title times out on 558K rows on free Supabase
+      // Text search across title, notes, and player names.
+      // Requires pg_trgm GIN indexes (see supabase-migration-search-trigram.sql)
+      // otherwise ilike on game_title/notes times out on 558K rows.
+      const escaped = trimmed.replace(/[,()"]/g, ' ')
       const result = await addDateFilters(
         supabase.from('clue_pool').select(cols)
-          .or(`player1.ilike.%${trimmed}%,player2.ilike.%${trimmed}%,player3.ilike.%${trimmed}%`)
+          .or(
+            `game_title.ilike.%${escaped}%,` +
+            `notes.ilike.%${escaped}%,` +
+            `player1.ilike.%${escaped}%,` +
+            `player2.ilike.%${escaped}%,` +
+            `player3.ilike.%${escaped}%`
+          )
       ).order('air_date', { ascending: false }).limit(fetchLimit)
 
       if (result.error) throw result.error
