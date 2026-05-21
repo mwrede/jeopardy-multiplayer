@@ -145,7 +145,7 @@ export async function createGame(settings: GameSettings, isPublic: boolean = fal
   return { game: game as Game }
 }
 
-export async function joinGame(roomCode: string, playerName: string) {
+export async function joinGame(roomCode: string, playerName: string, userId?: string) {
   // Find game by room code — allow joining in any non-finished status
   const { data: game, error: gameError } = await supabase
     .from('games')
@@ -167,10 +167,12 @@ export async function joinGame(roomCode: string, playerName: string) {
     .single()
 
   if (existing) {
-    // Reconnect: update connection status and return existing player
+    // Reconnect: update connection status and claim ownership if signed in now.
+    const patch: any = { is_connected: true }
+    if (userId && !existing.user_id) patch.user_id = userId
     await supabase
       .from('players')
-      .update({ is_connected: true })
+      .update(patch)
       .eq('id', existing.id)
 
     return { game: game as Game, player: existing as Player }
@@ -198,6 +200,7 @@ export async function joinGame(roomCode: string, playerName: string) {
       join_order: (count ?? 0) + 1,
       is_ready: isActive, // auto-ready if game already started
       is_creator: isFirstPlayer, // first player to join is the creator
+      user_id: userId || null,
     })
     .select()
     .single()
@@ -1464,10 +1467,20 @@ export async function startCustomGame(gameId: string, board: CustomBoard) {
 /**
  * Save a custom board to the custom_boards table.
  */
-export async function saveCustomBoard(title: string, boardData: CustomBoard, isPublic: boolean = true) {
+export async function saveCustomBoard(
+  title: string,
+  boardData: CustomBoard,
+  isPublic: boolean = true,
+  creatorUserId?: string,
+) {
   const { data, error } = await supabase
     .from('custom_boards')
-    .insert({ title, board_data: boardData, is_public: isPublic })
+    .insert({
+      title,
+      board_data: boardData,
+      is_public: isPublic,
+      creator_user_id: creatorUserId || null,
+    })
     .select('id, title')
     .single()
   if (error) throw error
@@ -1480,7 +1493,7 @@ export async function saveCustomBoard(title: string, boardData: CustomBoard, isP
 export async function listCustomBoards(search?: string) {
   let query = supabase
     .from('custom_boards')
-    .select('id, title, is_public, created_at')
+    .select('id, title, is_public, created_at, creator_user_id')
     .eq('is_public', true)
     .order('created_at', { ascending: false })
     .limit(50)

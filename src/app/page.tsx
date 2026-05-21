@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { joinGame } from '@/lib/game-api'
 import { GameBrowser } from '@/components/GameBrowser'
+import { useUser } from '@/lib/auth'
 
 /**
  * LANDING PAGE
@@ -17,10 +18,16 @@ import { GameBrowser } from '@/components/GameBrowser'
  */
 export default function Home() {
   const router = useRouter()
+  const { user, profile } = useUser()
   const [playerName, setPlayerName] = useState('')
   const [roomCode, setRoomCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Pre-fill the join input with the signed-in user's display name.
+  useEffect(() => {
+    if (profile?.display_name && !playerName) setPlayerName(profile.display_name)
+  }, [profile, playerName])
 
   async function handleJoinParty() {
     if (!playerName.trim()) {
@@ -34,7 +41,7 @@ export default function Home() {
     setLoading(true)
     setError('')
     try {
-      const { game, player } = await joinGame(roomCode.trim(), playerName.trim())
+      const { game, player } = await joinGame(roomCode.trim(), playerName.trim(), user?.id)
       localStorage.setItem('playerId', player.id)
       localStorage.setItem('playerName', player.name)
       const isMultiplayer = (game.settings as any)?.gameMode === 'multiplayer'

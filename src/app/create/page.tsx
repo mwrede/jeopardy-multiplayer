@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, Fragment, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { saveCustomBoard, updateCustomBoard, loadCustomBoard, createPresentationGame } from '@/lib/game-api'
+import { useUser } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { ClueText } from '@/components/ClueText'
 import type { CustomBoard } from '@/types/game'
@@ -69,6 +70,7 @@ function CreateBoardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const editBoardId = searchParams.get('boardId')
+  const { user, loading: userLoading } = useUser()
   const [board, setBoard] = useState<BoardState>(initialState)
   const [editingCell, setEditingCell] = useState<{ round: 1 | 2; row: number; col: number } | null>(null)
   const [cellQuestion, setCellQuestion] = useState('')
@@ -371,13 +373,17 @@ function CreateBoardContent() {
       setError('Please enter a title for your board')
       return
     }
+    if (!user && !userLoading) {
+      setError('Sign in to save boards so you can edit them later.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
       if (editBoardId) {
         await updateCustomBoard(editBoardId, board.title.trim(), buildCustomBoard(), board.isPublic)
       } else {
-        await saveCustomBoard(board.title.trim(), buildCustomBoard(), board.isPublic)
+        await saveCustomBoard(board.title.trim(), buildCustomBoard(), board.isPublic, user?.id)
       }
       router.push('/?saved=1')
     } catch (e: any) {
