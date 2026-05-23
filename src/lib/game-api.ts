@@ -167,13 +167,14 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
     .single()
 
   if (existing) {
-    // Reconnect: update connection status and claim ownership if signed in now.
-    const patch: any = { is_connected: true }
-    if (userId && !existing.user_id) patch.user_id = userId
+    // Reconnect: update connection status, then best-effort claim ownership.
     await supabase
       .from('players')
-      .update(patch)
+      .update({ is_connected: true })
       .eq('id', existing.id)
+    if (userId && !existing.user_id) {
+      await tryClaimPlayerOwnership(existing.id, userId)
+    }
 
     return { game: game as Game, player: existing as Player }
   }
@@ -200,14 +201,31 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
       join_order: (count ?? 0) + 1,
       is_ready: isActive, // auto-ready if game already started
       is_creator: isFirstPlayer, // first player to join is the creator
-      user_id: userId || null,
     })
     .select()
     .single()
 
   if (playerError) throw playerError
 
+  // Best-effort: tag ownership if signed in. Done as a separate update so the
+  // join still succeeds when the user-identity migration hasn't been applied.
+  if (userId && player?.id) {
+    await tryClaimPlayerOwnership(player.id, userId)
+  }
+
   return { game: game as Game, player: player as Player }
+}
+
+/**
+ * Stamp a player row with user_id. Silently skips if the column doesn't exist
+ * yet (user-identity migration not applied) so guests/anonymous still works.
+ */
+async function tryClaimPlayerOwnership(playerId: string, userId: string) {
+  const { error } = await supabase
+    .from('players')
+    .update({ user_id: userId })
+    .eq('id', playerId)
+  if (error) console.warn('[joinGame] skipped user_id claim:', error.message)
 }
 
 /**
@@ -1481,16 +1499,29 @@ export async function saveCustomBoard(
   isPublic: boolean = true,
   creatorUserId?: string,
 ) {
-  const { data, error } = await supabase
+  // First try with creator_user_id (post user-identity migration). If the
+  // column doesn't exist yet, retry without it so saving still works.
+  const fullPayload: any = {
+    title,
+    board_data: boardData,
+    is_public: isPublic,
+    creator_user_id: creatorUserId || null,
+  }
+  let { data, error } = await supabase
     .from('custom_boards')
-    .insert({
-      title,
-      board_data: boardData,
-      is_public: isPublic,
-      creator_user_id: creatorUserId || null,
-    })
+    .insert(fullPayload)
     .select('id, title')
     .single()
+  if (error && /creator_user_id/.test(error.message || '')) {
+    console.warn('[saveCustomBoard] creator_user_id column missing; saving without ownership')
+    const fallback = await supabase
+      .from('custom_boards')
+      .insert({ title, board_data: boardData, is_public: isPublic })
+      .select('id, title')
+      .single()
+    data = fallback.data
+    error = fallback.error
+  }
   if (error) throw error
   return data
 }
@@ -1498,21 +1529,35 @@ export async function saveCustomBoard(
 /**
  * List public custom boards for browsing.
  */
-export async function listCustomBoards(search?: string) {
-  let query = supabase
-    .from('custom_boards')
-    .select('id, title, is_public, created_at, creator_user_id')
-    .eq('is_public', true)
-    .order('created_at', { ascending: false })
-    .limit(50)
+export type CustomBoardRow = {
+  id: string
+  title: string
+  is_public: boolean
+  created_at: string
+  creator_user_id?: string | null
+}
 
-  if (search) {
-    query = query.ilike('title', `%${search}%`)
+export async function listCustomBoards(search?: string): Promise<CustomBoardRow[]> {
+  async function run(cols: string) {
+    let query = supabase
+      .from('custom_boards')
+      .select(cols)
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (search) query = query.ilike('title', `%${search}%`)
+    return query
   }
-
-  const { data, error } = await query
+  // Try the full select with creator_user_id first; if the column doesn't exist
+  // (pre user-identity migration) fall back to the legacy projection.
+  let { data, error } = await run('id, title, is_public, created_at, creator_user_id')
+  if (error && /creator_user_id/.test(error.message || '')) {
+    const fallback = await run('id, title, is_public, created_at')
+    data = fallback.data as any
+    error = fallback.error
+  }
   if (error) throw error
-  return data || []
+  return (data as unknown as CustomBoardRow[]) || []
 }
 
 /**

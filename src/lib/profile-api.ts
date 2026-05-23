@@ -26,14 +26,17 @@ export type BoardSummary = {
  * Counts only games that reached game_over so in-progress games don't skew the rate.
  */
 export async function getProfileStats(userId: string): Promise<ProfileStats> {
+  const empty: ProfileStats = { gamesPlayed: 0, wins: 0, winRate: 0, totalPoints: 0 }
   const { data: myPlayers, error } = await supabase
     .from('players')
     .select('id, game_id, score, games!inner(id, phase)')
     .eq('user_id', userId)
     .eq('games.phase', 'game_over')
-  if (error || !myPlayers || myPlayers.length === 0) {
-    return { gamesPlayed: 0, wins: 0, winRate: 0, totalPoints: 0 }
+  if (error) {
+    console.warn('[profile] stats query failed (migration not applied?):', error.message)
+    return empty
   }
+  if (!myPlayers || myPlayers.length === 0) return empty
 
   const gameIds = myPlayers.map((p: any) => p.game_id)
   const { data: allPlayers } = await supabase
@@ -68,10 +71,14 @@ export async function getProfileStats(userId: string): Promise<ProfileStats> {
  * how many games they shared.
  */
 export async function getOpponentsPlayed(userId: string, limit: number = 50): Promise<OpponentSummary[]> {
-  const { data: myRows } = await supabase
+  const { data: myRows, error: myErr } = await supabase
     .from('players')
     .select('game_id')
     .eq('user_id', userId)
+  if (myErr) {
+    console.warn('[profile] opponents query failed (migration not applied?):', myErr.message)
+    return []
+  }
   if (!myRows || myRows.length === 0) return []
 
   const gameIds = Array.from(new Set(myRows.map((r: any) => r.game_id as string)))
@@ -108,10 +115,14 @@ export async function getOpponentsPlayed(userId: string, limit: number = 50): Pr
  * Boards this user authored (public + private), newest first.
  */
 export async function getMyBoards(userId: string): Promise<BoardSummary[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('custom_boards')
     .select('id, title, is_public, created_at')
     .eq('creator_user_id', userId)
     .order('created_at', { ascending: false })
+  if (error) {
+    console.warn('[profile] my boards query failed (migration not applied?):', error.message)
+    return []
+  }
   return (data as BoardSummary[]) || []
 }
