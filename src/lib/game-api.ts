@@ -1168,19 +1168,27 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
       allData = result.data || []
     } else {
       // Text search across title, notes, and player names.
-      // Requires pg_trgm GIN indexes (see supabase-migration-search-trigram.sql)
-      // otherwise ilike on game_title/notes times out on 558K rows.
-      const escaped = trimmed.replace(/[,()"]/g, ' ')
-      const result = await addDateFilters(
-        supabase.from('clue_pool').select(cols)
-          .or(
-            `game_title.ilike.%${escaped}%,` +
-            `notes.ilike.%${escaped}%,` +
-            `player1.ilike.%${escaped}%,` +
-            `player2.ilike.%${escaped}%,` +
-            `player3.ilike.%${escaped}%`
-          )
+      // Title/notes need pg_trgm GIN indexes (supabase-migration-search-trigram.sql)
+      // to be fast; if that migration isn't applied we fall back to player-only
+      // search so something still shows up.
+      // Values are wrapped in double quotes so commas/parens in the query don't
+      // break PostgREST's OR parser.
+      const safe = trimmed.replace(/"/g, '')
+      const buildOr = (cols: string[]) =>
+        cols.map((c) => `${c}.ilike."%${safe}%"`).join(',')
+
+      const broad = buildOr(['game_title', 'notes', 'player1', 'player2', 'player3'])
+      let result = await addDateFilters(
+        supabase.from('clue_pool').select(cols).or(broad)
       ).order('air_date', { ascending: false }).limit(fetchLimit)
+
+      if (result.error) {
+        console.warn('[searchGames] broad text search failed, falling back to players:', result.error.message)
+        const playerOnly = buildOr(['player1', 'player2', 'player3'])
+        result = await addDateFilters(
+          supabase.from('clue_pool').select(cols).or(playerOnly)
+        ).order('air_date', { ascending: false }).limit(fetchLimit)
+      }
 
       if (result.error) throw result.error
       allData = result.data || []

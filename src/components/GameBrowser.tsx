@@ -76,6 +76,7 @@ export function GameBrowser({ compact = false }: Props) {
   const [mashupCounts, setMashupCounts] = useState<Map<string, number>>(new Map())
   const [gameCounts, setGameCounts] = useState<Map<string, number>>(new Map())
   const [customCounts, setCustomCounts] = useState<Map<string, number>>(new Map())
+  const [searchError, setSearchError] = useState('')
 
   useEffect(() => {
     getSeasons().then(setSeasons).catch(console.error)
@@ -120,17 +121,21 @@ export function GameBrowser({ compact = false }: Props) {
 
   const runSearch = useCallback(async (append: boolean = false, p: number = 0) => {
     setSearching(true)
-    if (!append) setSelectedKey(null)
-    try {
-      const filters = buildFilters(p)
-      const noQuery = !filters.query
-      const noFilters = !filters.season && !filters.notesFilter
+    if (!append) {
+      setSelectedKey(null)
+      setSearchError('')
+    }
+    const filters = buildFilters(p)
+    const noQuery = !filters.query
+    const noFilters = !filters.season && !filters.notesFilter
 
-      if (noQuery && noFilters) {
-        setGameResults([])
-        setHasMore(false)
-        setPage(0)
-      } else {
+    // Real-games search (isolated so a failure here doesn't wipe custom boards/mashups)
+    if (noQuery && noFilters) {
+      setGameResults([])
+      setHasMore(false)
+      setPage(0)
+    } else {
+      try {
         const games = await searchGames(filters)
         setGameResults((prev) => (append ? [...prev, ...games] : games))
         setHasMore(games.length === 50)
@@ -139,19 +144,25 @@ export function GameBrowser({ compact = false }: Props) {
           const counts = await getPlayCounts('game', games.map((g) => String(g.game_id_source)))
           setGameCounts((prev) => (append ? new Map([...prev, ...counts]) : counts))
         }
+      } catch (e: any) {
+        console.error('Game search failed:', e)
+        setSearchError(e?.message || 'Search failed — try a different query, or check the Supabase console.')
       }
+    }
 
+    // Custom boards (isolated)
+    try {
       const boards = await listCustomBoards(query.trim() || undefined)
       setCustomResults(boards)
       if (boards.length > 0) {
         const counts = await getPlayCounts('custom', boards.map((b) => b.id))
         setCustomCounts(counts)
       }
-    } catch (e) {
-      console.error('Search failed:', e)
-    } finally {
-      setSearching(false)
+    } catch (e: any) {
+      console.error('Custom board list failed:', e)
     }
+
+    setSearching(false)
   }, [buildFilters, query])
 
   useEffect(() => {
@@ -373,6 +384,12 @@ export function GameBrowser({ compact = false }: Props) {
           {searching ? '...' : 'Search'}
         </button>
       </div>
+
+      {searchError && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-red-900/30 border border-red-500/40 text-red-300 text-sm">
+          {searchError}
+        </div>
+      )}
 
       {showGameFilters && (
         <div className="flex flex-wrap gap-3 mb-4 items-end">
