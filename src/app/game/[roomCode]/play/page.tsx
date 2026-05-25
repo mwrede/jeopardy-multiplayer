@@ -786,13 +786,13 @@ export default function PlayPage() {
             ) : game.phase === 'daily_double_answering' && isMyTurn ? (
               <div className="w-full max-w-sm mx-auto">
                 <GameKeyboard value={answer} onChange={setAnswer} onSubmit={handleSubmitAnswer}
-                  mode="letters" placeholder="Type your answer..." submitLabel="Submit Answer"
+                  mode="letters" placeholder="Type or 🎤 speak your answer..." submitLabel="Submit Answer"
                   submitDisabled={!answer.trim()} maxLength={200} />
               </div>
             ) : game.phase === 'player_answering' && game.current_player_id === myPlayerId ? (
               <div className="w-full max-w-sm mx-auto">
                 <GameKeyboard value={answer} onChange={setAnswer} onSubmit={handleSubmitAnswer}
-                  mode="letters" placeholder="Type your answer..." submitLabel="Submit"
+                  mode="letters" placeholder="Type or 🎤 speak your answer..." submitLabel="Submit"
                   submitDisabled={!answer.trim()} maxLength={200}
                   secondaryAction={{ label: 'Pass', onClick: handlePassAfterBuzz, disabled: busy }} />
               </div>

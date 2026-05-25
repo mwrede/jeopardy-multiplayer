@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { BuzzerButton } from '@/components/BuzzerButton'
 import { BuzzOrder } from '@/components/BuzzOrder'
+import { GameKeyboard } from '@/components/GameKeyboard'
 import {
   setReady,
   removePlayer,
@@ -791,37 +792,20 @@ export default function PlayerPage() {
             )}
           </div>
 
-          {/* Sticky bottom input — stays above mobile keyboard */}
+          {/* Sticky bottom input — stays above mobile keyboard, with voice option */}
           <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
-            <div className="w-full max-w-sm mx-auto space-y-3">
-              <input
-                ref={inputRef}
-                type="text"
+            <div className="w-full max-w-sm mx-auto">
+              <GameKeyboard
                 value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSubmitAnswer()
-                }}
-                placeholder="Type your answer..."
+                onChange={setAnswer}
+                onSubmit={handleSubmitAnswer}
+                mode="letters"
+                placeholder="Type or 🎤 speak your answer..."
+                submitLabel="Submit Answer"
+                submitDisabled={!answer.trim()}
                 maxLength={200}
-                className="input-base text-xl"
-                autoFocus
-                autoComplete="off"
+                secondaryAction={{ label: "I Don't Know", onClick: handlePassAfterBuzz, disabled: busy }}
               />
-              <button
-                onClick={handleSubmitAnswer}
-                disabled={!answer.trim()}
-                className="btn-primary w-full py-4 text-xl"
-              >
-                Submit Answer
-              </button>
-              <button
-                onClick={handlePassAfterBuzz}
-                disabled={busy}
-                className="btn-secondary w-full py-3 text-lg active:scale-95"
-              >
-                I Don&apos;t Know
-              </button>
             </div>
           </div>
         </div>
@@ -849,20 +833,17 @@ export default function PlayerPage() {
           <p className="text-gray-400">Type your answer below</p>
         </div>
         <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
-          <div className="w-full max-w-sm mx-auto space-y-3">
-            <input
-              type="text"
+          <div className="w-full max-w-sm mx-auto">
+            <GameKeyboard
               value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitAnswer() }}
-              placeholder="Type your answer..."
+              onChange={setAnswer}
+              onSubmit={handleSubmitAnswer}
+              mode="letters"
+              placeholder="Type or 🎤 speak your answer..."
+              submitLabel="Submit Answer"
+              submitDisabled={!answer.trim()}
               maxLength={200}
-              className="input-base text-xl"
-              autoFocus
-              autoComplete="off"
             />
-            <button onClick={handleSubmitAnswer} disabled={!answer.trim()}
-              className="btn-primary w-full py-4 text-xl">Submit Answer</button>
           </div>
         </div>
       </div>
