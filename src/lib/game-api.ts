@@ -352,12 +352,117 @@ export async function startGame(gameId: string) {
       return eligible.slice(0, count)
     }
 
-    // Use indexed category_type column for theme filtering. Supports both a
-    // single theme and a mix (array) of themes.
+    // Mix mode: pick a balanced, interleaved set of categories across themes.
+    // For 6 categories with Politics + Geography, the result is 3 + 3
+    // alternating (politics, geography, politics, geography, ...). Extras when
+    // the count doesn't divide evenly go to the first themes in user order.
+    if (categoryThemes && categoryThemes.length > 1) {
+      const { data: mixRows } = await supabase
+        .from('clue_pool')
+        .select('category, category_type')
+        .eq('round', roundName)
+        .in('category_type', categoryThemes)
+        .limit(20000)
+      if (!mixRows || mixRows.length === 0) {
+        throw new Error(`No clues found for round: ${roundName}`)
+      }
+
+      // Count clues per (theme, category)
+      const countsByTheme = new Map<string, Map<string, number>>()
+      for (const row of mixRows) {
+        const t = (row as any).category_type as string | null
+        const c = (row as any).category as string | null
+        if (!t || !c) continue
+        if (!countsByTheme.has(t)) countsByTheme.set(t, new Map())
+        const m = countsByTheme.get(t)!
+        m.set(c, (m.get(c) || 0) + 1)
+      }
+
+      // Shuffle eligible categories per theme
+      const eligibleByTheme = new Map<string, string[]>()
+      for (const t of categoryThemes) {
+        const inner = countsByTheme.get(t) || new Map<string, number>()
+        const list: string[] = []
+        for (const [cat, n] of inner) {
+          if (n >= CLUES_PER_CAT) list.push(cat)
+        }
+        for (let i = list.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[list[i], list[j]] = [list[j], list[i]]
+        }
+        eligibleByTheme.set(t, list)
+      }
+
+      // Even allocation per theme, with leftovers distributed to first themes
+      const allocation = new Map<string, number>()
+      const base = Math.floor(count / categoryThemes.length)
+      for (const t of categoryThemes) allocation.set(t, base)
+      const leftover = count - base * categoryThemes.length
+      for (let i = 0; i < leftover; i++) {
+        const t = categoryThemes[i]
+        allocation.set(t, (allocation.get(t) || 0) + 1)
+      }
+
+      // If a theme is short on eligible categories, fill from others that have spare
+      let shortfall = 0
+      for (const t of categoryThemes) {
+        const eligible = (eligibleByTheme.get(t) || []).length
+        const want = allocation.get(t) || 0
+        if (want > eligible) {
+          shortfall += want - eligible
+          allocation.set(t, eligible)
+        }
+      }
+      if (shortfall > 0) {
+        for (const t of categoryThemes) {
+          if (shortfall === 0) break
+          const eligible = (eligibleByTheme.get(t) || []).length
+          const want = allocation.get(t) || 0
+          const spare = eligible - want
+          if (spare > 0) {
+            const take = Math.min(spare, shortfall)
+            allocation.set(t, want + take)
+            shortfall -= take
+          }
+        }
+      }
+
+      const totalPicked = [...allocation.values()].reduce((a, b) => a + b, 0)
+      if (totalPicked < count) {
+        throw new Error(
+          `Not enough mix categories for ${roundName} ` +
+          `(need ${count}, found ${totalPicked} across ${categoryThemes.join(', ')})`,
+        )
+      }
+
+      // Take the allocated slice per theme
+      const pickedByTheme = new Map<string, string[]>()
+      for (const t of categoryThemes) {
+        pickedByTheme.set(t, (eligibleByTheme.get(t) || []).slice(0, allocation.get(t) || 0))
+      }
+
+      // Interleave: theme1[0], theme2[0], theme1[1], theme2[1], ...
+      const out: string[] = []
+      let i = 0
+      while (out.length < count) {
+        let advanced = false
+        for (const t of categoryThemes) {
+          const list = pickedByTheme.get(t)!
+          if (list.length > i) {
+            out.push(list[i])
+            advanced = true
+            if (out.length >= count) break
+          }
+        }
+        if (!advanced) break
+        i++
+      }
+      return out
+    }
+
+    // Single-theme or random path
     if (categoryThemes && categoryThemes.length === 1) {
       query = query.eq('category_type', categoryThemes[0])
-    } else if (categoryThemes && categoryThemes.length > 1) {
-      query = query.in('category_type', categoryThemes)
     }
 
     const { data: allCats } = await query.limit(10000)
