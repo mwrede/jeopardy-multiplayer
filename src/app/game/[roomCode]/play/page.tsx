@@ -554,6 +554,11 @@ export default function PlayPage() {
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
         <Scoreboard />
         <div className="flex-1 flex flex-col items-center justify-center p-6">
+          {/* Buzz order — surfaced first when 2+ people raced for the buzz */}
+          <div className="w-full max-w-sm mb-4">
+            <BuzzOrder gameId={game.id} clueId={currentClue.id} players={players} variant="compact" />
+          </div>
+
           {clueCategory && <p className="text-blue-300 text-sm font-bold uppercase mb-1">{clueCategory.name}</p>}
           <p className="text-jeopardy-gold text-lg font-bold mb-4">${currentClue.value.toLocaleString()}</p>
           <div className={`px-8 py-6 rounded-2xl text-center ${
@@ -573,9 +578,6 @@ export default function PlayPage() {
           <div className="mt-4 text-center">
             <p className="text-gray-500 text-sm mb-1">Answer:</p>
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
-          </div>
-          <div className="mt-5 w-full max-w-sm">
-            <BuzzOrder gameId={game.id} clueId={currentClue.id} players={players} variant="compact" />
           </div>
         </div>
       </div>

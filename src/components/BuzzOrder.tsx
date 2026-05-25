@@ -48,7 +48,9 @@ export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Prop
     }
   }, [gameId, clueId])
 
-  if (buzzes.length === 0) return null
+  // Only render when at least two people raced for the buzz — a solo buzz
+  // doesn't have a "first" worth highlighting.
+  if (buzzes.length < 2) return null
 
   // Only the top 5 are interesting — anyone slower than fifth probably wasn't
   // really racing for the buzz.

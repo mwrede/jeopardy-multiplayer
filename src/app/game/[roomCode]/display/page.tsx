@@ -644,6 +644,13 @@ export default function DisplayPage() {
         </div>
 
         <div className="flex-1 flex flex-col items-center justify-center px-12">
+          {/* Buzz order — surfaced first when 2+ people raced for the buzz */}
+          {resultClue && (
+            <div className="mb-6 w-full max-w-md">
+              <BuzzOrder gameId={game.id} clueId={resultClue.id} players={players} />
+            </div>
+          )}
+
           {/* Category + Value */}
           {clueCategory && (
             <p className="text-blue-300 text-xl font-bold uppercase tracking-wide mb-2">
@@ -695,13 +702,6 @@ export default function DisplayPage() {
               <p className="text-3xl md:text-4xl text-white font-bold">
                 {resultClue.answer}
               </p>
-            </div>
-          )}
-
-          {/* Buzz order — who buzzed first and how close it was */}
-          {resultClue && (
-            <div className="mt-6">
-              <BuzzOrder gameId={game.id} clueId={resultClue.id} players={players} />
             </div>
           )}
         </div>
@@ -864,6 +864,9 @@ export default function DisplayPage() {
             )}
             {game.phase === 'player_answering' && (
               <div className="flex flex-col items-center gap-4">
+                {game.current_clue_id && (
+                  <BuzzOrder gameId={game.id} clueId={game.current_clue_id} players={players} />
+                )}
                 <p className="text-green-400 text-2xl font-bold">
                   {players.find((p) => p.id === game.current_player_id)?.name} is answering...
                 </p>
@@ -871,9 +874,6 @@ export default function DisplayPage() {
                   <p className={`text-6xl font-bold ${answerCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
                     {answerCountdown}
                   </p>
-                )}
-                {game.current_clue_id && (
-                  <BuzzOrder gameId={game.id} clueId={game.current_clue_id} players={players} />
                 )}
               </div>
             )}

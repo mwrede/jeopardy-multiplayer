@@ -577,6 +577,11 @@ export default function PlayerPage() {
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
         <div className="flex-1 flex flex-col items-center justify-center p-6">
+          {/* Buzz order — surfaced first when 2+ people raced for the buzz */}
+          <div className="w-full max-w-sm mb-5">
+            <BuzzOrder gameId={game.id} clueId={currentClue.id} players={players} variant="compact" />
+          </div>
+
           {/* Category + Value */}
           {clueCategory && (
             <p className="text-blue-300 text-sm font-bold uppercase tracking-wide mb-1">
@@ -622,11 +627,6 @@ export default function PlayerPage() {
           <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm mb-1">Correct answer:</p>
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
-          </div>
-
-          {/* Buzz order */}
-          <div className="mt-5 w-full max-w-sm">
-            <BuzzOrder gameId={game.id} clueId={currentClue.id} players={players} variant="compact" />
           </div>
         </div>
       </div>
