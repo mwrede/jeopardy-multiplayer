@@ -50,7 +50,12 @@ export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Prop
 
   if (buzzes.length === 0) return null
 
-  const firstMs = new Date(buzzes[0].server_timestamp).getTime()
+  // Only the top 5 are interesting — anyone slower than fifth probably wasn't
+  // really racing for the buzz.
+  const TOP_N = 5
+  const visible = buzzes.slice(0, TOP_N)
+  const hidden = buzzes.length - visible.length
+  const firstMs = new Date(visible[0].server_timestamp).getTime()
 
   const isCompact = variant === 'compact'
   const containerCls = isCompact
@@ -64,7 +69,7 @@ export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Prop
         Buzz order
       </p>
       <ul className={isCompact ? 'space-y-1' : 'space-y-1.5'}>
-        {buzzes.map((b, idx) => {
+        {visible.map((b, idx) => {
           const player = players.find((p) => p.id === b.player_id)
           if (!player) return null
           const t = new Date(b.server_timestamp).getTime()
@@ -104,6 +109,11 @@ export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Prop
           )
         })}
       </ul>
+      {hidden > 0 && (
+        <p className={`text-gray-500 mt-2 text-center ${isCompact ? 'text-[10px]' : 'text-xs'}`}>
+          +{hidden} more
+        </p>
+      )}
     </div>
   )
 }

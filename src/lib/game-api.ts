@@ -185,8 +185,12 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
     .select('*', { count: 'exact', head: true })
     .eq('game_id', game.id)
 
-  if ((count ?? 0) >= 8) {
-    throw new Error('Game is full (max 8 players)')
+  // Party mode allows up to 15 buzzers; multiplayer (everyone on their own
+  // device) still caps at 8 so the UI scoreboards stay readable.
+  const isMultiplayerMode = (game.settings as any)?.gameMode === 'multiplayer'
+  const maxPlayers = isMultiplayerMode ? 8 : 15
+  if ((count ?? 0) >= maxPlayers) {
+    throw new Error(`Game is full (max ${maxPlayers} players)`)
   }
 
   // For mid-game joins, auto-set ready and start with 0 score

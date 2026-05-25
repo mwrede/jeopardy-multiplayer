@@ -409,7 +409,7 @@ export default function DisplayPage() {
         </div>
 
         <p className="mt-8 text-gray-500">
-          {players.length}/8 players
+          {players.length}/15 players
           {players.length >= 1 && players.every((p) => p.is_ready) && (
             <span className="text-jeopardy-gold ml-4">Ready to start!</span>
           )}
