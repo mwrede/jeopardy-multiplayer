@@ -194,7 +194,8 @@ export default function PlayerPage() {
     prevAnswerRef2.current = answerCountdown
   }, [answerCountdown])
 
-  // Wrap actions: write to DB, refresh, show errors
+  // Wrap actions: write to DB, refresh, show errors. Re-throws so callers
+  // (e.g. BuzzerButton) can render their own inline error if they want.
   async function doAction(fn: () => Promise<void>) {
     if (busy) return
     setBusy(true)
@@ -203,8 +204,10 @@ export default function PlayerPage() {
       await fn()
       await refreshState()
     } catch (e: any) {
-      setError(e.message || 'Something went wrong')
+      const msg = e?.message || 'Something went wrong'
+      setError(msg)
       console.error(e)
+      throw new Error(msg)
     } finally {
       setBusy(false)
     }

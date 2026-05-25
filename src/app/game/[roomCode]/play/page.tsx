@@ -338,7 +338,14 @@ export default function PlayPage() {
     if (busy) return
     setBusy(true); setError('')
     try { await fn(); await refreshState() }
-    catch (e: any) { setError(e.message || 'Something went wrong'); console.error(e) }
+    catch (e: any) {
+      const msg = e?.message || 'Something went wrong'
+      setError(msg)
+      console.error(e)
+      // Re-throw so callers (e.g. BuzzerButton) can render their own
+      // inline error instead of the click silently disappearing.
+      throw new Error(msg)
+    }
     finally { setBusy(false) }
   }
 
@@ -816,6 +823,14 @@ export default function PlayPage() {
       <div className="fixed top-2 right-2">
         <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
       </div>
+
+      {/* Floating error banner — visible during all gameplay phases */}
+      {error && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md mx-auto bg-red-900/90 border border-red-500 text-red-100 text-sm px-4 py-2 rounded-xl shadow-lg">
+          {error}
+          <button onClick={() => setError('')} className="ml-3 text-red-300 hover:text-white">✕</button>
+        </div>
+      )}
     </div>
   )
 }
