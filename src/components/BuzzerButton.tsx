@@ -26,6 +26,7 @@ export function BuzzerButton({
   const [state, setState] = useState<BuzzerState>('disabled')
   const [buzzing, setBuzzing] = useState(false)
   const [pressed, setPressed] = useState(false)
+  const [buzzError, setBuzzError] = useState('')
 
   useEffect(() => {
     if (isBuzzWinner) {
@@ -40,16 +41,27 @@ export function BuzzerButton({
   }, [buzzWindowOpen, isBuzzWinner, isLockedOut])
 
   const handleBuzz = useCallback(async () => {
+    console.log('[Buzzer] click — state:', state, 'buzzing:', buzzing)
     if (state !== 'ready' || buzzing) return
 
     setPressed(true)
     setTimeout(() => setPressed(false), 150)
 
     setBuzzing(true)
+    setBuzzError('')
     try {
       await onBuzz()
-    } catch (e) {
+      console.log('[Buzzer] submitBuzz resolved')
+    } catch (e: any) {
       console.error('Buzz failed:', e)
+      const msg = e?.message || String(e)
+      // resolve_buzz RPC is the most common cause when the migration's
+      // missing on a fresh Supabase project — surface it directly.
+      setBuzzError(
+        /resolve_buzz|function .* does not exist/i.test(msg)
+          ? 'Buzzer backend not deployed — run supabase-migration-resolve-buzz.sql'
+          : msg
+      )
     } finally {
       setBuzzing(false)
     }
@@ -213,9 +225,14 @@ export function BuzzerButton({
             Wait...
           </p>
         )}
-        {state === 'ready' && (
+        {state === 'ready' && !buzzError && (
           <p className="text-gray-600 text-xs mt-1">
             Tap buzzer or press spacebar
+          </p>
+        )}
+        {buzzError && (
+          <p className="text-red-400 text-xs mt-2 max-w-xs mx-auto">
+            {buzzError}
           </p>
         )}
       </div>

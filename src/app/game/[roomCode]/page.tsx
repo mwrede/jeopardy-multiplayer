@@ -24,6 +24,7 @@ import {
   skipClue,
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
@@ -90,6 +91,31 @@ export default function PlayerPage() {
     window.addEventListener('beforeunload', handleUnload)
     return () => window.removeEventListener('beforeunload', handleUnload)
   }, [game?.phase, myPlayerId])
+
+  // Fallback transition: clue_reading → buzz_window.
+  // The host's /display page is the primary trigger, but if no TV display is
+  // open (solo testing, host tab closed, etc.) the buzz window would never
+  // open and the buzzer would stay disabled. Any player firing this is fine
+  // because the UPDATE is idempotent (last write wins).
+  const phaseTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'clue_reading') {
+      if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
+      return
+    }
+    const delay = game.settings?.reading_period_ms ?? 0
+    phaseTransitionRef.current = setTimeout(async () => {
+      await supabase.from('games').update({
+        phase: 'buzz_window',
+        buzz_window_open: true,
+        buzz_window_start: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', game.id).eq('phase', 'clue_reading')  // only flip if still clue_reading
+    }, delay)
+    return () => {
+      if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
+    }
+  }, [game?.phase, game?.id, game?.settings?.reading_period_ms])
 
   // Buzz window countdown timer on player view
   useEffect(() => {
@@ -207,7 +233,13 @@ export default function PlayerPage() {
   })
 
   const handleBuzz = () => doAction(async () => {
-    if (!game || !myPlayer || !game.current_clue_id) return
+    if (!game) { console.warn('[handleBuzz] no game state'); return }
+    if (!myPlayer) {
+      console.warn('[handleBuzz] no myPlayer — stale localStorage playerId?')
+      throw new Error('You\'re not joined to this game. Refresh and rejoin.')
+    }
+    if (!game.current_clue_id) { console.warn('[handleBuzz] no current clue'); return }
+    console.log('[handleBuzz] submitting buzz')
     playBuzzSound()
     await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
   })
