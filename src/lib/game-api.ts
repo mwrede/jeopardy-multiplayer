@@ -8,9 +8,25 @@ import { GAME_LENGTH_CONFIG, DEFAULT_CASUAL_SETTINGS } from '@/types/game'
  * punctuation, common abbreviations, partial matches, and fuzzy matching.
  */
 function checkAnswer(playerAnswer: string, correctAnswer: string): boolean {
-  // Strip "What is", "Who is", "Where is", etc. prefixes
+  // Strip the Jeopardy question prefix: "What is X", "Who's X", "Where are X", etc.
+  // Handles plain ("what is"), contracted ("what's"), and speech transcripts
+  // that may drop the apostrophe ("whats Paris"). Repeats until no prefix
+  // remains so cases like "what is, who is, Napoleon" still match.
   function stripPrefix(s: string): string {
-    return s.replace(/^(what|who|where|when|how)\s+(is|are|was|were)\s+/i, '').trim()
+    let prev: string
+    let out = s.trim()
+    do {
+      prev = out
+      out = out
+        // contraction form: "what's", "who's", "wheres" (no apostrophe), etc.
+        .replace(/^(what|who|where|when|how)['']?s\s+/i, '')
+        // full form: "what is", "who are", "where was", etc.
+        .replace(/^(what|who|where|when|how)\s+(is|are|was|were)\s+/i, '')
+        // leading filler: comma/and/or after a stripped prefix
+        .replace(/^[,;]\s*/, '')
+        .trim()
+    } while (out !== prev)
+    return out
   }
 
   // Normalize: lowercase, strip articles, punctuation, extra spaces
