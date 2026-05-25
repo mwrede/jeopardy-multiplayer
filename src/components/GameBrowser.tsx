@@ -7,25 +7,11 @@ import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
 import { useUser } from '@/lib/auth'
+import { MASHUPS, MIXABLE_THEMES, THEME_STYLES, type Mashup } from './mashup-themes'
 
 type PlayMode = 'party' | 'multiplayer'
 
-type Mashup = { id: string; label: string; description: string; theme?: string }
 type CustomBoardRow = CustomBoardApiRow
-
-const MASHUPS: Mashup[] = [
-  { id: 'random', label: 'Random Mashup', description: '6 random categories from the full clue pool' },
-  { id: 'geography', label: 'Geography Mashup', description: 'Geography-themed categories', theme: 'geography' },
-  { id: 'history', label: 'History Mashup', description: 'History-themed categories', theme: 'history' },
-  { id: 'science', label: 'Science Mashup', description: 'Science-themed categories', theme: 'science' },
-  { id: 'sports', label: 'Sports Mashup', description: 'Sports-themed categories', theme: 'sports' },
-  { id: 'pop_culture', label: 'Pop Culture Mashup', description: 'Pop Culture-themed categories', theme: 'pop_culture' },
-  { id: 'food', label: 'Food & Drink Mashup', description: 'Food & Drink-themed categories', theme: 'food' },
-  { id: 'literature', label: 'Literature Mashup', description: 'Literature-themed categories', theme: 'literature' },
-  { id: 'music', label: 'Music Mashup', description: 'Music-themed categories', theme: 'music' },
-  { id: 'corporate', label: 'Corporate Mashup', description: 'Corporate-themed categories', theme: 'corporate' },
-  { id: 'politics', label: 'Politics Mashup', description: 'Presidents, elections, world leaders, and government', theme: 'politics' },
-]
 
 const TOURNAMENTS: Array<{ label: string; season?: string; notesFilter?: string }> = [
   { label: 'Kids Week', notesFilter: 'Kids Week' },
@@ -77,6 +63,9 @@ export function GameBrowser({ compact = false }: Props) {
 
   const [seasons, setSeasons] = useState<string[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // Mix Mashup builder — which themes the user has picked when the mix
+  // card is expanded.
+  const [mixThemes, setMixThemes] = useState<Set<string>>(new Set())
 
   const [mashupCounts, setMashupCounts] = useState<Map<string, number>>(new Map())
   const [gameCounts, setGameCounts] = useState<Map<string, number>>(new Map())
@@ -303,6 +292,24 @@ export function GameBrowser({ compact = false }: Props) {
     }
   }
 
+  /** Mix Mashup: starts a game pulling from any of the selected themes. */
+  async function handlePlayMix(themes: string[], mode: PlayMode) {
+    if (themes.length === 0) return
+    setCreating(true)
+    try {
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, categoryThemes: themes }
+      if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
+      const { game } = await createGame(settings)
+      // Record the mix under a stable key so popular combos rise in the count.
+      void incrementPlayCount('mashup', 'mix:' + [...themes].sort().join('+'))
+      await routeToGame(game.room_code, mode)
+    } catch (e) {
+      console.error('Failed to create mix:', e)
+    } finally {
+      setCreating(false)
+    }
+  }
+
   async function handlePlayCustom(boardId: string, mode: PlayMode) {
     setCreating(true)
     try {
@@ -486,40 +493,128 @@ export function GameBrowser({ compact = false }: Props) {
       )}
 
       <div className="space-y-3">
-        {mashupResults.map((m) => {
-          const key = `mashup:${m.id}`
+        {/* Mix Mashup — multi-select builder. Only when type filter includes mashups. */}
+        {showMashups && !filtersActive && (() => {
+          const key = 'mashup:mix'
           const isSelected = selectedKey === key
+          const style = THEME_STYLES.mix
+          const themesArr = Array.from(mixThemes)
           return (
             <button
               key={key}
               onClick={() => setSelectedKey(isSelected ? null : key)}
-              className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 ${
-                isSelected
-                  ? 'bg-jeopardy-gold/25 border-jeopardy-gold'
-                  : 'bg-jeopardy-gold/10 border-jeopardy-gold/40 hover:bg-jeopardy-gold/15'
-              }`}
+              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden`}
+              style={isSelected ? style.cardSelectedStyle : style.cardStyle}
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
+                {style.icons.join(' ')}
+              </div>
+              <div className="relative">
+                <span className={`text-xs uppercase tracking-wider font-bold ${style.accentClass}`}>
+                  🎨 Mix Mashup
+                </span>
+                <h3 className="text-white font-bold text-lg">Mix Your Own</h3>
+                <p className="text-gray-300 text-sm mt-1">
+                  Pick two or more themes to blend them into a single board.
+                </p>
+
+                {isSelected && (
+                  <div className="mt-3 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {MIXABLE_THEMES.map((t) => {
+                      const active = mixThemes.has(t.theme!)
+                      const ts = THEME_STYLES[t.theme!]
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMixThemes((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(t.theme!)) next.delete(t.theme!)
+                              else next.add(t.theme!)
+                              return next
+                            })
+                          }}
+                          className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                            active
+                              ? 'text-white font-semibold border-white/80'
+                              : 'text-gray-300 border-white/20 hover:border-white/40'
+                          }`}
+                          style={active ? ts.cardSelectedStyle : { background: 'rgba(255,255,255,0.04)' }}
+                        >
+                          {ts.icons[0]} {t.label.replace(' Mashup', '')}
+                        </button>
+                      )
+                    })}
+                    {themesArr.length > 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMixThemes(new Set()) }}
+                        className="text-xs text-gray-400 hover:text-white px-3 py-1.5"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {isSelected && themesArr.length > 0 && (
+                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayMix(themesArr, 'party') }}
+                      disabled={creating}
+                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
+                    >
+                      📺 Party ({themesArr.length})
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayMix(themesArr, 'multiplayer') }}
+                      disabled={creating}
+                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
+                    >
+                      🌐 Multiplayer ({themesArr.length})
+                    </button>
+                  </div>
+                )}
+              </div>
+            </button>
+          )
+        })()}
+
+        {mashupResults.map((m) => {
+          const key = `mashup:${m.id}`
+          const isSelected = selectedKey === key
+          const style = THEME_STYLES[m.theme || 'random'] || THEME_STYLES.random
+          return (
+            <button
+              key={key}
+              onClick={() => setSelectedKey(isSelected ? null : key)}
+              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden`}
+              style={isSelected ? style.cardSelectedStyle : style.cardStyle}
+            >
+              <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
+                {style.icons.join(' ')}
+              </div>
+              <div className="relative flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs uppercase tracking-wider font-bold text-jeopardy-gold">
-                    🎲 Mashup
+                  <span className={`text-xs uppercase tracking-wider font-bold ${style.accentClass}`}>
+                    {style.icons[0]} Mashup
                   </span>
                   <h3 className="text-white font-bold text-lg">{m.label}</h3>
-                  <p className="text-gray-400 text-sm mt-1">{m.description}</p>
+                  <p className="text-gray-300 text-sm mt-1">{m.description}</p>
                 </div>
                 {isSelected && (
-                  <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                     <button
                       onClick={(e) => { e.stopPropagation(); handlePlayMashup(m, 'party') }}
                       disabled={creating}
-                      className="bg-jeopardy-gold hover:bg-jeopardy-gold/80 text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
+                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
                     >
                       📺 Party
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handlePlayMashup(m, 'multiplayer') }}
                       disabled={creating}
-                      className="bg-white hover:bg-gray-100 text-jeopardy-gold-light font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-jeopardy-gold/40"
+                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
                     >
                       🌐 Multiplayer
                     </button>

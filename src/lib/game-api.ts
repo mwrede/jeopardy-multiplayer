@@ -318,8 +318,17 @@ export async function startGame(gameId: string) {
   const tournamentKey = gameType ? GAME_TYPE_TO_IDS[gameType] : undefined
   const allowedGameIds = tournamentKey ? TOURNAMENT_GAME_IDS[tournamentKey] : undefined
 
-  // Category theme uses the pre-computed category_type column (indexed)
-  const categoryTheme = (settings as any)?.categoryTheme as string | undefined
+  // Category theme uses the pre-computed category_type column (indexed).
+  // Settings accept either a single `categoryTheme` (string) or `categoryThemes`
+  // (array, for Mix Mashups) — normalize to one list.
+  const categoryThemesSetting = (settings as any)?.categoryThemes as string[] | undefined
+  const singleTheme = (settings as any)?.categoryTheme as string | undefined
+  const categoryThemes =
+    categoryThemesSetting && categoryThemesSetting.length > 0
+      ? categoryThemesSetting
+      : singleTheme
+        ? [singleTheme]
+        : null
 
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
@@ -343,9 +352,12 @@ export async function startGame(gameId: string) {
       return eligible.slice(0, count)
     }
 
-    // Use indexed category_type column for theme filtering
-    if (categoryTheme) {
-      query = query.eq('category_type', categoryTheme)
+    // Use indexed category_type column for theme filtering. Supports both a
+    // single theme and a mix (array) of themes.
+    if (categoryThemes && categoryThemes.length === 1) {
+      query = query.eq('category_type', categoryThemes[0])
+    } else if (categoryThemes && categoryThemes.length > 1) {
+      query = query.in('category_type', categoryThemes)
     }
 
     const { data: allCats } = await query.limit(10000)
@@ -472,8 +484,10 @@ export async function startGame(gameId: string) {
     .select('category, question, answer')
     .eq('round', 'Final Jeopardy')
 
-  if (categoryTheme) {
-    fjQuery = fjQuery.eq('category_type', categoryTheme)
+  if (categoryThemes && categoryThemes.length === 1) {
+    fjQuery = fjQuery.eq('category_type', categoryThemes[0])
+  } else if (categoryThemes && categoryThemes.length > 1) {
+    fjQuery = fjQuery.in('category_type', categoryThemes)
   }
   if (allowedGameIds) {
     fjQuery = fjQuery.in('game_id_source', allowedGameIds.slice(0, 100))
