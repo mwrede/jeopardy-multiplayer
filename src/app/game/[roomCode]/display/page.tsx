@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { ClueText } from '@/components/ClueText'
+import { BuzzOrder } from '@/components/BuzzOrder'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
@@ -696,6 +697,13 @@ export default function DisplayPage() {
               </p>
             </div>
           )}
+
+          {/* Buzz order — who buzzed first and how close it was */}
+          {resultClue && (
+            <div className="mt-6">
+              <BuzzOrder gameId={game.id} clueId={resultClue.id} players={players} />
+            </div>
+          )}
         </div>
       </div>
     )
@@ -863,6 +871,9 @@ export default function DisplayPage() {
                   <p className={`text-6xl font-bold ${answerCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
                     {answerCountdown}
                   </p>
+                )}
+                {game.current_clue_id && (
+                  <BuzzOrder gameId={game.id} clueId={game.current_clue_id} players={players} />
                 )}
               </div>
             )}

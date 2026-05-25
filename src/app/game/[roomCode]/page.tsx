@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { BuzzerButton } from '@/components/BuzzerButton'
+import { BuzzOrder } from '@/components/BuzzOrder'
 import {
   setReady,
   removePlayer,
@@ -586,6 +587,11 @@ export default function PlayerPage() {
           <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm mb-1">Correct answer:</p>
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
+          </div>
+
+          {/* Buzz order */}
+          <div className="mt-5 w-full max-w-sm">
+            <BuzzOrder gameId={game.id} clueId={currentClue.id} players={players} variant="compact" />
           </div>
         </div>
       </div>

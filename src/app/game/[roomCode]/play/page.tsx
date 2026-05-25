@@ -5,6 +5,7 @@ import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { ClueText } from '@/components/ClueText'
 import { BuzzerButton } from '@/components/BuzzerButton'
+import { BuzzOrder } from '@/components/BuzzOrder'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -565,6 +566,9 @@ export default function PlayPage() {
           <div className="mt-4 text-center">
             <p className="text-gray-500 text-sm mb-1">Answer:</p>
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
+          </div>
+          <div className="mt-5 w-full max-w-sm">
+            <BuzzOrder gameId={game.id} clueId={currentClue.id} players={players} variant="compact" />
           </div>
         </div>
       </div>

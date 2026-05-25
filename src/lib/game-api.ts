@@ -815,6 +815,36 @@ export async function selectClue(gameId: string, clueId: string, playerId: strin
  * Sends a high-resolution client timestamp so the server can break ties
  * when two players buzz at nearly the same instant.
  */
+export type BuzzOrderRow = {
+  player_id: string
+  is_winner: boolean
+  server_timestamp: string
+  client_timestamp: number | null
+  answer: string | null
+  is_correct: boolean | null
+}
+
+/**
+ * Fetch every non-passing buzz for a clue in the order they arrived
+ * (server_timestamp, then client_timestamp as tiebreaker — same rule
+ * resolve_buzz uses to pick the winner). Used to render "who buzzed first".
+ */
+export async function getBuzzOrder(gameId: string, clueId: string): Promise<BuzzOrderRow[]> {
+  const { data, error } = await supabase
+    .from('buzzes')
+    .select('player_id, is_winner, server_timestamp, client_timestamp, answer, is_correct')
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('is_pass', false)
+    .order('server_timestamp', { ascending: true })
+    .order('client_timestamp', { ascending: true, nullsFirst: false })
+  if (error) {
+    console.warn('[getBuzzOrder] failed:', error.message)
+    return []
+  }
+  return (data || []) as BuzzOrderRow[]
+}
+
 export async function submitBuzz(gameId: string, clueId: string, playerId: string) {
   // Capture client time as early as possible (milliseconds since page load — monotonic, high-res)
   const clientTimestamp = performance.now()
