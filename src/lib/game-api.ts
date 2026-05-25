@@ -329,6 +329,10 @@ export async function startGame(gameId: string) {
       : singleTheme
         ? [singleTheme]
         : null
+  // Free-text topic search — finds categories whose name matches a user-typed
+  // term. Sidesteps the predefined category_type taxonomy entirely so users
+  // can ask for arbitrary topics ("football", "the Beatles", "Africa", etc.)
+  const customCategorySearch = ((settings as any)?.customCategorySearch as string | undefined)?.trim() || undefined
 
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {
@@ -349,6 +353,35 @@ export async function startGame(gameId: string) {
       const eligible = Object.keys(counts).filter(c => counts[c] >= CLUES_PER_CAT)
       if (eligible.length < count) throw new Error(`Not enough categories for ${roundName} (need ${count}, found ${eligible.length})`)
       for (let i = eligible.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [eligible[i], eligible[j]] = [eligible[j], eligible[i]] }
+      return eligible.slice(0, count)
+    }
+
+    // Topic search: pick from categories whose name matches the user's term.
+    // This bypasses the predefined category_type taxonomy entirely.
+    if (customCategorySearch) {
+      const safe = customCategorySearch.replace(/[%_]/g, ' ')
+      const { data: topicRows } = await supabase
+        .from('clue_pool')
+        .select('category')
+        .eq('round', roundName)
+        .ilike('category', `%${safe}%`)
+        .limit(20000)
+      if (!topicRows || topicRows.length === 0) {
+        throw new Error(`No categories match "${customCategorySearch}" in ${roundName}.`)
+      }
+      const counts: Record<string, number> = {}
+      for (const row of topicRows) counts[(row as any).category] = (counts[(row as any).category] || 0) + 1
+      const eligible = Object.keys(counts).filter((c) => counts[c] >= CLUES_PER_CAT)
+      if (eligible.length < count) {
+        throw new Error(
+          `Not enough categories match "${customCategorySearch}" with ${CLUES_PER_CAT}+ clues ` +
+          `(need ${count}, found ${eligible.length}). Try a broader term or pick a smaller board size.`,
+        )
+      }
+      for (let i = eligible.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[eligible[i], eligible[j]] = [eligible[j], eligible[i]]
+      }
       return eligible.slice(0, count)
     }
 
@@ -589,7 +622,10 @@ export async function startGame(gameId: string) {
     .select('category, question, answer')
     .eq('round', 'Final Jeopardy')
 
-  if (categoryThemes && categoryThemes.length === 1) {
+  if (customCategorySearch) {
+    const safe = customCategorySearch.replace(/[%_]/g, ' ')
+    fjQuery = fjQuery.ilike('category', `%${safe}%`)
+  } else if (categoryThemes && categoryThemes.length === 1) {
     fjQuery = fjQuery.eq('category_type', categoryThemes[0])
   } else if (categoryThemes && categoryThemes.length > 1) {
     fjQuery = fjQuery.in('category_type', categoryThemes)

@@ -71,6 +71,8 @@ export function GameBrowser({ compact = false }: Props) {
     label: string
     runner: (size: GameLength) => void
   } | null>(null)
+  // Topic Mashup: free-text term the user types to build a custom board.
+  const [topicQuery, setTopicQuery] = useState('')
 
   const [mashupCounts, setMashupCounts] = useState<Map<string, number>>(new Map())
   const [gameCounts, setGameCounts] = useState<Map<string, number>>(new Map())
@@ -301,6 +303,25 @@ export function GameBrowser({ compact = false }: Props) {
       await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create mashup:', e)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  /** Topic Mashup: starts a game with categories whose name matches a free-text term. */
+  async function handlePlayTopic(topic: string, mode: PlayMode, size: GameLength) {
+    const term = topic.trim()
+    if (!term) return
+    setCreating(true)
+    try {
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength: size, customCategorySearch: term }
+      if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
+      const { game } = await createGame(settings)
+      void incrementPlayCount('mashup', 'topic:' + term.toLowerCase())
+      await routeToGame(game.room_code, mode)
+    } catch (e: any) {
+      console.error('Failed to create topic mashup:', e)
+      setSearchError(e?.message || 'Could not build a board for that topic.')
     } finally {
       setCreating(false)
     }
@@ -571,6 +592,79 @@ export function GameBrowser({ compact = false }: Props) {
                     >
                       🌐 Multiplayer ({themesArr.length})
                     </button>
+                  </div>
+                )}
+              </div>
+            </button>
+          )
+        })()}
+
+        {/* Topic Mashup — type any topic and we build a board from matching category names. */}
+        {showMashups && !filtersActive && (() => {
+          const key = 'mashup:topic'
+          const isSelected = selectedKey === key
+          const style = THEME_STYLES.topic
+          const term = topicQuery.trim()
+          return (
+            <button
+              key={key}
+              onClick={() => setSelectedKey(isSelected ? null : key)}
+              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden`}
+              style={isSelected ? style.cardSelectedStyle : style.cardStyle}
+            >
+              <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
+                {style.icons.join(' ')}
+              </div>
+              <div className="relative">
+                <span className={`text-xs uppercase tracking-wider font-bold ${style.accentClass}`}>
+                  🔍 Topic Mashup
+                </span>
+                <h3 className="text-white font-bold text-lg">Type a topic</h3>
+                <p className="text-gray-300 text-sm mt-1">
+                  Anything: football, the Beatles, Africa, dinosaurs — we'll find categories matching the name.
+                </p>
+
+                {isSelected && (
+                  <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      value={topicQuery}
+                      onChange={(e) => setTopicQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && term) {
+                          promptForSize(`Topic: ${term} (Party)`, (size) => handlePlayTopic(term, 'party', size))
+                        }
+                      }}
+                      placeholder="e.g. football"
+                      maxLength={60}
+                      className="w-full bg-white/15 border border-white/30 rounded-xl px-4 py-3 text-white text-base placeholder:text-white/50 focus:outline-none focus:ring-1 focus:ring-yellow-300/50 focus:border-yellow-300/60"
+                      autoFocus
+                    />
+
+                    {term && (
+                      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            promptForSize(`Topic: ${term} (Party)`, (size) => handlePlayTopic(term, 'party', size))
+                          }}
+                          disabled={creating}
+                          className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
+                        >
+                          📺 Party
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            promptForSize(`Topic: ${term} (Multiplayer)`, (size) => handlePlayTopic(term, 'multiplayer', size))
+                          }}
+                          disabled={creating}
+                          className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
+                        >
+                          🌐 Multiplayer
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

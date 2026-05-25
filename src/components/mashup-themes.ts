@@ -187,6 +187,21 @@ export const THEME_STYLES: Record<string, ThemeStyle> = {
     playBtnClass: 'bg-red-600 hover:bg-red-500 text-white',
     multiplayerBtnClass: 'bg-blue-600 hover:bg-blue-500 text-white',
   },
+  // Free-text topic search — orange/yellow so it reads as "search/find".
+  topic: {
+    icons: ['🔍', '✨', '💡'],
+    cardStyle: {
+      background: gradient('rgba(234,179,8,0.18)', 'rgba(234,88,12,0.18)'),
+      borderColor: 'rgba(250,204,21,0.5)',
+    },
+    cardSelectedStyle: {
+      background: gradient('rgba(234,179,8,0.35)', 'rgba(234,88,12,0.35)'),
+      borderColor: 'rgba(253,224,71,0.9)',
+    },
+    accentClass: 'text-yellow-300',
+    playBtnClass: 'bg-yellow-400 hover:bg-yellow-300 text-black',
+    multiplayerBtnClass: 'bg-orange-600 hover:bg-orange-500 text-white',
+  },
   // Custom multi-theme mix — rainbow gradient so it stands out.
   mix: {
     icons: ['🎨', '✨', '🔀'],
