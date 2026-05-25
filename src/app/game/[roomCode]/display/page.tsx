@@ -614,6 +614,9 @@ export default function DisplayPage() {
     const clueCategory = resultClue
       ? categories.find((c) => c.id === resultClue.category_id)
       : null
+    const isDailyDouble = resultClue?.is_daily_double === true
+    // For DDs the score change uses the wager, not the clue's face value.
+    const swing = isDailyDouble ? (answerer?.final_wager ?? 0) : (resultClue?.value ?? 0)
 
     return (
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
@@ -658,9 +661,17 @@ export default function DisplayPage() {
             </p>
           )}
           {resultClue && (
-            <p className="text-jeopardy-gold text-2xl font-bold mb-6">
+            <p className="text-jeopardy-gold text-2xl font-bold mb-1">
               ${resultClue.value.toLocaleString()}
             </p>
+          )}
+          {isDailyDouble && answerer && (
+            <p className="text-jeopardy-gold-light text-lg font-bold uppercase tracking-widest mb-6">
+              ⭐ Daily Double — wagered ${swing.toLocaleString()}
+            </p>
+          )}
+          {!isDailyDouble && resultClue && (
+            <div className="mb-4" />
           )}
 
           {/* Result indicator */}
@@ -690,7 +701,7 @@ export default function DisplayPage() {
               <p className={`text-4xl font-bold text-center mt-4 ${
                 wasCorrect ? 'text-green-300' : 'text-red-300'
               }`}>
-                {wasCorrect ? '+' : '-'}${resultClue.value.toLocaleString()}
+                {wasCorrect ? '+' : '-'}${swing.toLocaleString()}
               </p>
             )}
           </div>

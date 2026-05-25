@@ -572,6 +572,8 @@ export default function PlayerPage() {
       : null
     const iWasAnswerer = currentClue.answered_by === myPlayerId
     const clueCategory = categories.find((c) => c.id === currentClue.category_id)
+    const isDailyDouble = currentClue.is_daily_double === true
+    const swing = isDailyDouble ? (answerer?.final_wager ?? 0) : currentClue.value
 
     return (
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
@@ -589,9 +591,15 @@ export default function PlayerPage() {
               {clueCategory.name}
             </p>
           )}
-          <p className="text-jeopardy-gold text-lg font-bold mb-6">
+          <p className="text-jeopardy-gold text-lg font-bold mb-1">
             ${currentClue.value.toLocaleString()}
           </p>
+          {isDailyDouble && answerer && (
+            <p className="text-jeopardy-gold-light text-xs font-bold uppercase tracking-wider mb-6">
+              ⭐ Daily Double — wagered ${swing.toLocaleString()}
+            </p>
+          )}
+          {!isDailyDouble && <div className="mb-5" />}
 
           {/* Result card */}
           <div className={`w-full max-w-sm px-8 py-8 rounded-2xl text-center ${
@@ -619,7 +627,7 @@ export default function PlayerPage() {
               <p className={`text-2xl font-bold mt-2 ${
                 wasCorrect ? 'text-green-300' : 'text-red-300'
               }`}>
-                {wasCorrect ? '+' : '-'}${currentClue.value.toLocaleString()}
+                {wasCorrect ? '+' : '-'}${swing.toLocaleString()}
               </p>
             )}
           </div>

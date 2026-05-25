@@ -549,6 +549,8 @@ export default function PlayPage() {
     const noOneAnswered = !currentClue.answered_by
     const answerer = currentClue.answered_by ? players.find((p) => p.id === currentClue.answered_by) : null
     const clueCategory = categories.find((c) => c.id === currentClue.category_id)
+    const isDailyDouble = currentClue.is_daily_double === true
+    const swing = isDailyDouble ? (answerer?.final_wager ?? 0) : currentClue.value
 
     return (
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
@@ -560,7 +562,13 @@ export default function PlayPage() {
           </div>
 
           {clueCategory && <p className="text-blue-300 text-sm font-bold uppercase mb-1">{clueCategory.name}</p>}
-          <p className="text-jeopardy-gold text-lg font-bold mb-4">${currentClue.value.toLocaleString()}</p>
+          <p className="text-jeopardy-gold text-lg font-bold mb-1">${currentClue.value.toLocaleString()}</p>
+          {isDailyDouble && answerer && (
+            <p className="text-jeopardy-gold-light text-xs font-bold uppercase tracking-wider mb-3">
+              ⭐ Daily Double — wagered ${swing.toLocaleString()}
+            </p>
+          )}
+          {!isDailyDouble && <div className="mb-3" />}
           <div className={`px-8 py-6 rounded-2xl text-center ${
             noOneAnswered ? 'bg-gray-600/15 border-2 border-gray-500'
               : wasCorrect ? 'bg-green-600/15 border-2 border-green-500'
@@ -571,7 +579,7 @@ export default function PlayPage() {
             </p>
             {answerer && (
               <p className="text-white text-lg">
-                {answerer.name} {wasCorrect ? `+$${currentClue.value.toLocaleString()}` : `-$${currentClue.value.toLocaleString()}`}
+                {answerer.name} {wasCorrect ? `+$${swing.toLocaleString()}` : `-$${swing.toLocaleString()}`}
               </p>
             )}
           </div>
