@@ -599,15 +599,26 @@ export function GameBrowser({ compact = false }: Props) {
         )}
 
         {noResults && (
-          <p className="text-gray-500 text-center py-12 text-lg">
-            No results. Try a different search or clear filters.
-          </p>
-        )}
-
-        {!queryActive && !filtersActive && showGames && gameVisible.length === 0 && !searching && !searchError && (
-          <p className="text-gray-500 text-center py-6 text-sm">
-            No J-Archive games loaded yet. Check that the clue_pool table is populated.
-          </p>
+          <div className="text-center py-10 px-4">
+            <p className="text-gray-400 text-lg mb-3">
+              {queryActive || filtersActive ? 'No games match your search.' : 'No J-Archive games found.'}
+            </p>
+            {!queryActive && !filtersActive && showGames && !searchError && (
+              <div className="inline-block text-left bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-sm">
+                <p className="text-gray-300 mb-2 font-semibold">Common causes:</p>
+                <ul className="text-gray-400 space-y-1 list-disc list-inside">
+                  <li>The <code className="text-jeopardy-gold">clue_pool</code> table is empty (J-Archive data not seeded yet)</li>
+                  <li>A pending migration hasn't been applied to Supabase</li>
+                </ul>
+                <p className="text-gray-500 text-xs mt-3">
+                  Run in the Supabase SQL editor to check:
+                </p>
+                <pre className="text-gray-300 text-xs font-mono bg-black/30 rounded px-3 py-2 mt-1 overflow-x-auto">
+SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
+                </pre>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
