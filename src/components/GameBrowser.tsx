@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, incrementPlayCount, getPlayCounts } from '@/lib/game-api'
+import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
+import { useUser } from '@/lib/auth'
+
+type PlayMode = 'party' | 'multiplayer'
 
 type Mashup = { id: string; label: string; description: string; theme?: string }
-type CustomBoardRow = { id: string; title: string; created_at: string }
+type CustomBoardRow = CustomBoardApiRow
 
 const MASHUPS: Mashup[] = [
   { id: 'random', label: 'Random Mashup', description: '6 random categories from the full clue pool' },
@@ -55,6 +58,7 @@ type Props = {
  */
 export function GameBrowser({ compact = false }: Props) {
   const router = useRouter()
+  const { user, profile } = useUser()
   const [gameLength, setGameLength] = useState<GameLength>('full')
   const [creating, setCreating] = useState(false)
 
@@ -244,13 +248,37 @@ export function GameBrowser({ compact = false }: Props) {
       return (b.air_date || '').localeCompare(a.air_date || '')
     })
 
-  async function handlePlayGame(sourceGameId: number) {
+  /**
+   * Route to /play in multiplayer mode (host plays too) or /display in party
+   * mode (TV + phones). In multiplayer mode we also auto-join the creator as
+   * a player so they don't see the JoinForm on landing.
+   */
+  async function routeToGame(roomCode: string, mode: PlayMode) {
+    if (mode === 'multiplayer') {
+      const name = profile?.display_name || localStorage.getItem('playerName') || ''
+      if (name.trim()) {
+        try {
+          const { player } = await joinGame(roomCode, name.trim(), user?.id)
+          localStorage.setItem('playerId', player.id)
+          localStorage.setItem('playerName', player.name)
+        } catch (e) {
+          console.warn('[GameBrowser] auto-join failed; play page will prompt for name', e)
+        }
+      }
+      router.push(`/game/${roomCode}/play`)
+    } else {
+      router.push(`/game/${roomCode}/display`)
+    }
+  }
+
+  async function handlePlayGame(sourceGameId: number, mode: PlayMode) {
     setCreating(true)
     try {
       const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, sourceGameId }
+      if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       void incrementPlayCount('game', String(sourceGameId))
-      router.push(`/game/${game.room_code}/display`)
+      await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create game:', e)
     } finally {
@@ -258,14 +286,15 @@ export function GameBrowser({ compact = false }: Props) {
     }
   }
 
-  async function handlePlayMashup(mashup: Mashup) {
+  async function handlePlayMashup(mashup: Mashup, mode: PlayMode) {
     setCreating(true)
     try {
       const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength }
       if (mashup.theme) settings.categoryTheme = mashup.theme
+      if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       void incrementPlayCount('mashup', mashup.id)
-      router.push(`/game/${game.room_code}/display`)
+      await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create mashup:', e)
     } finally {
@@ -273,17 +302,18 @@ export function GameBrowser({ compact = false }: Props) {
     }
   }
 
-  async function handlePlayCustom(boardId: string) {
+  async function handlePlayCustom(boardId: string, mode: PlayMode) {
     setCreating(true)
     try {
       const board = await loadCustomBoard(boardId)
       const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, customBoardId: boardId }
+      if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       await supabase.from('games').update({
         settings: { ...settings, customBoard: board.board_data },
       }).eq('id', game.id)
       void incrementPlayCount('custom', boardId)
-      router.push(`/game/${game.room_code}/display`)
+      await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create custom game:', e)
     } finally {
@@ -477,13 +507,22 @@ export function GameBrowser({ compact = false }: Props) {
                   <p className="text-gray-400 text-sm mt-1">{m.description}</p>
                 </div>
                 {isSelected && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handlePlayMashup(m) }}
-                    disabled={creating}
-                    className="bg-jeopardy-gold hover:bg-jeopardy-gold/80 text-black font-bold px-6 py-3 rounded-xl text-base transition-all whitespace-nowrap disabled:opacity-50"
-                  >
-                    {creating ? 'Creating...' : 'Play'}
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayMashup(m, 'party') }}
+                      disabled={creating}
+                      className="bg-jeopardy-gold hover:bg-jeopardy-gold/80 text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
+                    >
+                      📺 Party
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayMashup(m, 'multiplayer') }}
+                      disabled={creating}
+                      className="bg-white hover:bg-gray-100 text-jeopardy-gold-light font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-jeopardy-gold/40"
+                    >
+                      🌐 Multiplayer
+                    </button>
+                  </div>
                 )}
               </div>
             </button>
@@ -529,13 +568,22 @@ export function GameBrowser({ compact = false }: Props) {
                   )}
                 </div>
                 {isSelected && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handlePlayGame(g.game_id_source) }}
-                    disabled={creating}
-                    className="bg-white hover:bg-gray-100 text-jeopardy-blue font-bold px-6 py-3 rounded-xl text-base transition-all whitespace-nowrap disabled:opacity-50"
-                  >
-                    {creating ? 'Creating...' : 'Play'}
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayGame(g.game_id_source, 'party') }}
+                      disabled={creating}
+                      className="bg-white hover:bg-gray-100 text-jeopardy-blue font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
+                    >
+                      📺 Party
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePlayGame(g.game_id_source, 'multiplayer') }}
+                      disabled={creating}
+                      className="bg-jeopardy-blue hover:bg-jeopardy-blue/80 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-white/30"
+                    >
+                      🌐 Multiplayer
+                    </button>
+                  </div>
                 )}
               </div>
             </button>
@@ -566,20 +614,29 @@ export function GameBrowser({ compact = false }: Props) {
                   </p>
                 </div>
                 {isSelected && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {user && cb.creator_user_id === user.id && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); router.push(`/create?boardId=${cb.id}`) }}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap"
+                        title="Edit this board"
+                      >
+                        ✏️ Edit
+                      </button>
+                    )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); router.push(`/create?boardId=${cb.id}`) }}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-3 rounded-xl text-base transition-all whitespace-nowrap"
-                      title="Edit this board"
+                      onClick={(e) => { e.stopPropagation(); handlePlayCustom(cb.id, 'party') }}
+                      disabled={creating}
+                      className="bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
                     >
-                      ✏️ Edit
+                      📺 Party
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayCustom(cb.id) }}
+                      onClick={(e) => { e.stopPropagation(); handlePlayCustom(cb.id, 'multiplayer') }}
                       disabled={creating}
-                      className="bg-green-500 hover:bg-green-400 text-black font-bold px-6 py-3 rounded-xl text-base transition-all whitespace-nowrap disabled:opacity-50"
+                      className="bg-green-700 hover:bg-green-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-green-400/40"
                     >
-                      {creating ? 'Creating...' : 'Play'}
+                      🌐 Multiplayer
                     </button>
                   </div>
                 )}

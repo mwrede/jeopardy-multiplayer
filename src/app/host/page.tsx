@@ -1,18 +1,9 @@
-'use client'
-
-import { GameBrowser } from '@/components/GameBrowser'
+import { redirect } from 'next/navigation'
 
 /**
- * HOST / TV SCREEN — Game picker.
- * Renders the unified game browser; everything (search, filters, play) lives there.
+ * Legacy /host route → /find. The game picker now lives at /find since it
+ * covers party AND multiplayer mode selection per result.
  */
-export default function HostPage() {
-  return (
-    <main className="min-h-screen flex flex-col items-center p-8 bg-jeopardy-dark">
-      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-32 md:h-44 w-auto mb-6 mt-4" />
-      <div className="w-full max-w-5xl">
-        <GameBrowser />
-      </div>
-    </main>
-  )
+export default function HostRedirect() {
+  redirect('/find')
 }

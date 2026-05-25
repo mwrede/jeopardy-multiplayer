@@ -3,19 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { joinGame, deleteCustomBoard } from '@/lib/game-api'
-import { GameBrowser } from '@/components/GameBrowser'
 import { useUser } from '@/lib/auth'
 import { getMyBoards, type BoardSummary } from '@/lib/profile-api'
 
 /**
  * LANDING PAGE
  *
- * Two game modes:
- * 1. Party: TV + phones (Jackbox-style) — go to /host for TV, join by code on phone
- * 2. Multiplayer: everything on your device — public or private rooms
+ * Two primary actions:
+ *  - Find a Game  → /find  (search + filter, then pick party/multiplayer)
+ *  - Create a Game → /create (custom board builder)
  *
- * Below the mode cards, the GameBrowser lets you search/filter and start a
- * party game right from the home page.
+ * Join-by-code lives at the top so players hopping in from a TV display
+ * don't have to scroll past anything.
  */
 export default function Home() {
   const router = useRouter()
@@ -26,12 +25,10 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [myBoards, setMyBoards] = useState<BoardSummary[]>([])
 
-  // Pre-fill the join input with the signed-in user's display name.
   useEffect(() => {
     if (profile?.display_name && !playerName) setPlayerName(profile.display_name)
   }, [profile, playerName])
 
-  // Pull the signed-in user's authored boards so they can find them fast.
   useEffect(() => {
     if (!user) {
       setMyBoards([])
@@ -109,33 +106,28 @@ export default function Home() {
         {error && <p className="text-red-400 text-center text-sm mt-2">{error}</p>}
       </div>
 
-      {/* Mode cards */}
-      <div className="w-full max-w-lg lg:max-w-4xl grid gap-4 md:grid-cols-3 lg:gap-6 mb-10">
+      {/* Two primary actions */}
+      <div className="w-full max-w-3xl grid gap-4 md:grid-cols-2 lg:gap-6 mb-10">
         <a
-          href="/multiplayer"
-          className="group bg-jeopardy-blue-cell/30 hover:bg-jeopardy-blue-cell/50 border-2 border-jeopardy-blue rounded-2xl p-6 lg:p-10 text-center transition-all hover:scale-[1.02]"
+          href="/find"
+          className="group bg-jeopardy-blue-cell/30 hover:bg-jeopardy-blue-cell/50 border-2 border-jeopardy-blue rounded-2xl p-8 lg:p-12 text-center transition-all hover:scale-[1.02]"
         >
-          <p className="text-3xl lg:text-5xl mb-2">🌐</p>
-          <h2 className="text-xl lg:text-2xl font-bold text-white mb-1">Multiplayer</h2>
-          <p className="text-gray-400 text-sm lg:text-base">Play on your phone or computer. No TV needed.</p>
-        </a>
-
-        <a
-          href="/host"
-          className="group bg-jeopardy-gold/10 hover:bg-jeopardy-gold/20 border-2 border-jeopardy-gold/50 rounded-2xl p-6 lg:p-10 text-center transition-all hover:scale-[1.02]"
-        >
-          <p className="text-3xl lg:text-5xl mb-2">📺</p>
-          <h2 className="text-xl lg:text-2xl font-bold text-jeopardy-gold mb-1">Party</h2>
-          <p className="text-gray-400 text-sm lg:text-base">Host on a TV, players buzz in on phones.</p>
+          <p className="text-4xl lg:text-6xl mb-3">🔍</p>
+          <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">Find a Game</h2>
+          <p className="text-gray-400 text-sm lg:text-base">
+            Search real Jeopardy! games, themed mashups, and custom boards. Pick party or multiplayer mode.
+          </p>
         </a>
 
         <a
           href="/create"
-          className="group bg-green-900/20 hover:bg-green-900/30 border-2 border-green-500/40 rounded-2xl p-6 lg:p-10 text-center transition-all hover:scale-[1.02]"
+          className="group bg-green-900/20 hover:bg-green-900/30 border-2 border-green-500/40 rounded-2xl p-8 lg:p-12 text-center transition-all hover:scale-[1.02]"
         >
-          <p className="text-3xl lg:text-5xl mb-2">✏️</p>
-          <h2 className="text-xl lg:text-2xl font-bold text-green-400 mb-1">Create Board</h2>
-          <p className="text-gray-400 text-sm lg:text-base">Build your own categories, clues, and answers.</p>
+          <p className="text-4xl lg:text-6xl mb-3">✏️</p>
+          <h2 className="text-2xl lg:text-3xl font-bold text-green-400 mb-2">Create a Game</h2>
+          <p className="text-gray-400 text-sm lg:text-base">
+            Build your own categories, clues, and answers. Save to play again later.
+          </p>
         </a>
       </div>
 
@@ -181,17 +173,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
-      {/* Quick-start game browser */}
-      <div className="w-full max-w-4xl mb-10">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-px bg-white/10 flex-1" />
-          <span className="text-gray-500 text-xs uppercase tracking-wider">Or start a game now</span>
-          <div className="h-px bg-white/10 flex-1" />
-        </div>
-        <GameBrowser compact />
-      </div>
-
     </main>
   )
 }
