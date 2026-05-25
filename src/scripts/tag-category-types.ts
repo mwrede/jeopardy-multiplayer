@@ -20,6 +20,31 @@ const supabase = createClient(
 )
 
 const THEMES: Record<string, { include: string[]; exclude: string[] }> = {
+  // Politics first so categories like "U.S. Presidents" land here instead of history.
+  politics: {
+    include: [
+      'politic', 'political', 'president', 'presidents', 'presidency', 'vice president',
+      'first lady', 'first ladies', 'potus', 'flotus', 'scotus', 'inaugur',
+      'senator', 'senate', 'congress', 'congressional', 'house of representatives',
+      'speaker of the house', 'governor', 'mayor', 'cabinet', 'secretary of',
+      'election', 'elections', 'campaign trail', 'primaries', 'caucus', 'ballot',
+      'vote', 'voting', 'voter', 'voters', 'electoral',
+      'democrat', 'democrats', 'democratic party', 'republican', 'republicans', 'gop',
+      'parliament', 'parliamentary', 'prime minister', 'world leaders',
+      'monarch', 'monarchy', 'kings & queens', 'queens & kings',
+      'white house', 'oval office', 'capitol hill', 'supreme court',
+      'amendment', 'constitution', 'declaration of independence', 'bill of rights',
+      'treaty', 'treaties', 'diplomat', 'diplomacy', 'ambassador',
+      'impeach', 'scandal', 'watergate', 'cold war',
+    ],
+    exclude: [
+      'law & order', 'in-laws', 'mother-in-law', 'father-in-law',
+      'queen song', 'queen band', 'drag queen', 'beauty queen',
+      'king kong', 'king james bible', 'burger king', 'stephen king', 'larry king',
+      'president of the club', 'class president',
+      'political science fiction',
+    ],
+  },
   geography: {
     include: ['geography', 'geograph', 'capital city', 'capital cities', 'capitals of', 'continent', 'on the map', 'atlas', 'latitude', 'longitude', 'border', 'island', 'islands', 'ocean', 'oceans', 'river', 'rivers', 'mountain', 'mountains', 'countries', 'country', 'lake', 'lakes', 'peninsula', 'strait', 'gulf', 'archipelago', 'hemisphere', 'topography', 'landform', 'u.s. state', 'u.s. cities', 'world cities', 'african', 'european', 'asian', 'south american'],
     exclude: ['country music', 'country song', 'country singer', 'country road', 'country cook', 'mountain dew', 'fantasy island', 'gilligan', 'rock island'],

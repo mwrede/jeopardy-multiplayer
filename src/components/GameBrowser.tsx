@@ -24,6 +24,7 @@ const MASHUPS: Mashup[] = [
   { id: 'literature', label: 'Literature Mashup', description: 'Literature-themed categories', theme: 'literature' },
   { id: 'music', label: 'Music Mashup', description: 'Music-themed categories', theme: 'music' },
   { id: 'corporate', label: 'Corporate Mashup', description: 'Corporate-themed categories', theme: 'corporate' },
+  { id: 'politics', label: 'Politics Mashup', description: 'Presidents, elections, world leaders, and government', theme: 'politics' },
 ]
 
 const TOURNAMENTS: Array<{ label: string; season?: string; notesFilter?: string }> = [
