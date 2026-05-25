@@ -126,28 +126,26 @@ export function GameBrowser({ compact = false }: Props) {
       setSearchError('')
     }
     const filters = buildFilters(p)
-    const noQuery = !filters.query
-    const noFilters = !filters.season && !filters.notesFilter
 
-    // Real-games search (isolated so a failure here doesn't wipe custom boards/mashups)
-    if (noQuery && noFilters) {
-      setGameResults([])
-      setHasMore(false)
-      setPage(0)
-    } else {
-      try {
-        const games = await searchGames(filters)
-        setGameResults((prev) => (append ? [...prev, ...games] : games))
-        setHasMore(games.length === 50)
-        setPage(p)
-        if (games.length > 0) {
-          const counts = await getPlayCounts('game', games.map((g) => String(g.game_id_source)))
-          setGameCounts((prev) => (append ? new Map([...prev, ...counts]) : counts))
-        }
-      } catch (e: any) {
-        console.error('Game search failed:', e)
-        setSearchError(e?.message || 'Search failed — try a different query, or check the Supabase console.')
+    // Real-games search — always runs (no-query/no-filter falls back to "recent
+    // J-Archive games" so users see something instead of an empty pane on load).
+    // Isolated so a failure here doesn't wipe custom boards/mashups.
+    try {
+      const games = await searchGames(filters)
+      setGameResults((prev) => (append ? [...prev, ...games] : games))
+      setHasMore(games.length === 50)
+      setPage(p)
+      if (games.length > 0) {
+        const counts = await getPlayCounts('game', games.map((g) => String(g.game_id_source)))
+        setGameCounts((prev) => (append ? new Map([...prev, ...counts]) : counts))
       }
+    } catch (e: any) {
+      console.error('Game search failed:', e)
+      setSearchError(
+        e?.message
+          ? `${e.message} — if this is "function ... does not exist" or "could not find column", run the pending Supabase migrations.`
+          : 'Search failed. Check the browser console.'
+      )
     }
 
     // Custom boards (isolated)
@@ -606,9 +604,9 @@ export function GameBrowser({ compact = false }: Props) {
           </p>
         )}
 
-        {!queryActive && !filtersActive && showGames && gameVisible.length === 0 && (
+        {!queryActive && !filtersActive && showGames && gameVisible.length === 0 && !searching && !searchError && (
           <p className="text-gray-500 text-center py-6 text-sm">
-            Type a name or pick a filter above to find real J-Archive games.
+            No J-Archive games loaded yet. Check that the clue_pool table is populated.
           </p>
         )}
       </div>
