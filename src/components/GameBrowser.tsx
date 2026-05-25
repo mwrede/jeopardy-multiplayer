@@ -46,7 +46,6 @@ type Props = {
 export function GameBrowser({ compact = false }: Props) {
   const router = useRouter()
   const { user, profile } = useUser()
-  const [gameLength, setGameLength] = useState<GameLength>('full')
   const [creating, setCreating] = useState(false)
 
   const [query, setQuery] = useState('')
@@ -66,6 +65,12 @@ export function GameBrowser({ compact = false }: Props) {
   // Mix Mashup builder — which themes the user has picked when the mix
   // card is expanded.
   const [mixThemes, setMixThemes] = useState<Set<string>>(new Set())
+  // Size picker modal: when set, a "Pick board size" overlay appears.
+  // runner receives the chosen size and starts the game.
+  const [pendingPlay, setPendingPlay] = useState<{
+    label: string
+    runner: (size: GameLength) => void
+  } | null>(null)
 
   const [mashupCounts, setMashupCounts] = useState<Map<string, number>>(new Map())
   const [gameCounts, setGameCounts] = useState<Map<string, number>>(new Map())
@@ -261,10 +266,19 @@ export function GameBrowser({ compact = false }: Props) {
     }
   }
 
-  async function handlePlayGame(sourceGameId: number, mode: PlayMode) {
+  /**
+   * Open the size picker. The runner receives the chosen size and actually
+   * starts the game; this keeps the picker generic across mashup / game /
+   * custom / mix.
+   */
+  function promptForSize(label: string, runner: (size: GameLength) => void) {
+    setPendingPlay({ label, runner })
+  }
+
+  async function handlePlayGame(sourceGameId: number, mode: PlayMode, size: GameLength) {
     setCreating(true)
     try {
-      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, sourceGameId }
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength: size, sourceGameId }
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       void incrementPlayCount('game', String(sourceGameId))
@@ -276,10 +290,10 @@ export function GameBrowser({ compact = false }: Props) {
     }
   }
 
-  async function handlePlayMashup(mashup: Mashup, mode: PlayMode) {
+  async function handlePlayMashup(mashup: Mashup, mode: PlayMode, size: GameLength) {
     setCreating(true)
     try {
-      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength }
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength: size }
       if (mashup.theme) settings.categoryTheme = mashup.theme
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
@@ -293,11 +307,11 @@ export function GameBrowser({ compact = false }: Props) {
   }
 
   /** Mix Mashup: starts a game pulling from any of the selected themes. */
-  async function handlePlayMix(themes: string[], mode: PlayMode) {
+  async function handlePlayMix(themes: string[], mode: PlayMode, size: GameLength) {
     if (themes.length === 0) return
     setCreating(true)
     try {
-      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, categoryThemes: themes }
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength: size, categoryThemes: themes }
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       // Record the mix under a stable key so popular combos rise in the count.
@@ -310,11 +324,11 @@ export function GameBrowser({ compact = false }: Props) {
     }
   }
 
-  async function handlePlayCustom(boardId: string, mode: PlayMode) {
+  async function handlePlayCustom(boardId: string, mode: PlayMode, size: GameLength) {
     setCreating(true)
     try {
       const board = await loadCustomBoard(boardId)
-      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength, customBoardId: boardId }
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength: size, customBoardId: boardId }
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       await supabase.from('games').update({
@@ -332,36 +346,12 @@ export function GameBrowser({ compact = false }: Props) {
   const noResults =
     !searching && mashupResults.length === 0 && gameVisible.length === 0 && customVisible.length === 0
 
-  const lengthBtnPad = compact ? 'px-4 py-2' : 'px-6 py-3'
-  const lengthBtnLabel = compact ? 'text-base' : 'text-lg'
   const searchInputPad = compact ? 'px-5 py-3 text-base' : 'px-6 py-4 text-lg'
   const searchBtnPad = compact ? 'px-6 py-3 text-base' : 'px-8 py-4 text-lg'
   const cardPad = compact ? 'p-4' : 'p-5'
-  const sectionMb = compact ? 'mb-4' : 'mb-6'
 
   return (
     <div className="w-full">
-      <div className={`flex flex-wrap gap-3 ${sectionMb} justify-center`}>
-        {([
-          { id: 'full' as GameLength, label: 'Full', desc: '6×5 board' },
-          { id: 'half' as GameLength, label: 'Half', desc: '6×3 board' },
-          { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3 board' },
-        ]).map((gl) => (
-          <button
-            key={gl.id}
-            onClick={() => setGameLength(gl.id)}
-            className={`${lengthBtnPad} rounded-2xl text-center transition-all ${
-              gameLength === gl.id
-                ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold text-jeopardy-gold'
-                : 'bg-white/5 border-2 border-transparent text-gray-400 hover:bg-white/10'
-            }`}
-          >
-            <span className={`font-bold block ${lengthBtnLabel}`}>{gl.label}</span>
-            <span className="text-xs opacity-60">{gl.desc}</span>
-          </button>
-        ))}
-      </div>
-
       <div className="flex flex-wrap gap-2 mb-3 text-sm">
         <button
           onClick={() => handleTypeFilter('games')}
@@ -560,14 +550,22 @@ export function GameBrowser({ compact = false }: Props) {
                 {isSelected && themesArr.length > 0 && (
                   <div className="mt-3 flex flex-col sm:flex-row gap-2">
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayMix(themesArr, 'party') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const labels = themesArr.map((t) => MIXABLE_THEMES.find((m) => m.theme === t)?.label.replace(' Mashup', '') || t).join(' + ')
+                        promptForSize(`${labels} (Party)`, (size) => handlePlayMix(themesArr, 'party', size))
+                      }}
                       disabled={creating}
                       className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
                     >
                       📺 Party ({themesArr.length})
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayMix(themesArr, 'multiplayer') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const labels = themesArr.map((t) => MIXABLE_THEMES.find((m) => m.theme === t)?.label.replace(' Mashup', '') || t).join(' + ')
+                        promptForSize(`${labels} (Multiplayer)`, (size) => handlePlayMix(themesArr, 'multiplayer', size))
+                      }}
                       disabled={creating}
                       className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
                     >
@@ -605,14 +603,20 @@ export function GameBrowser({ compact = false }: Props) {
                 {isSelected && (
                   <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayMashup(m, 'party') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        promptForSize(`${m.label} (Party)`, (size) => handlePlayMashup(m, 'party', size))
+                      }}
                       disabled={creating}
                       className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
                     >
                       📺 Party
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayMashup(m, 'multiplayer') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        promptForSize(`${m.label} (Multiplayer)`, (size) => handlePlayMashup(m, 'multiplayer', size))
+                      }}
                       disabled={creating}
                       className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
                     >
@@ -666,14 +670,22 @@ export function GameBrowser({ compact = false }: Props) {
                 {isSelected && (
                   <div className="flex flex-col sm:flex-row gap-2">
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayGame(g.game_id_source, 'party') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const label = g.game_title || `Game #${g.game_id_source}`
+                        promptForSize(`${label} (Party)`, (size) => handlePlayGame(g.game_id_source, 'party', size))
+                      }}
                       disabled={creating}
                       className="bg-white hover:bg-gray-100 text-jeopardy-blue font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
                     >
                       📺 Party
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayGame(g.game_id_source, 'multiplayer') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const label = g.game_title || `Game #${g.game_id_source}`
+                        promptForSize(`${label} (Multiplayer)`, (size) => handlePlayGame(g.game_id_source, 'multiplayer', size))
+                      }}
                       disabled={creating}
                       className="bg-jeopardy-blue hover:bg-jeopardy-blue/80 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-white/30"
                     >
@@ -721,14 +733,20 @@ export function GameBrowser({ compact = false }: Props) {
                       </button>
                     )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayCustom(cb.id, 'party') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        promptForSize(`${cb.title} (Party)`, (size) => handlePlayCustom(cb.id, 'party', size))
+                      }}
                       disabled={creating}
                       className="bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
                     >
                       📺 Party
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); handlePlayCustom(cb.id, 'multiplayer') }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        promptForSize(`${cb.title} (Multiplayer)`, (size) => handlePlayCustom(cb.id, 'multiplayer', size))
+                      }}
                       disabled={creating}
                       className="bg-green-700 hover:bg-green-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-green-400/40"
                     >
@@ -774,6 +792,53 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
           </div>
         )}
       </div>
+
+      {/* Size-picker modal — appears after clicking Party or Multiplayer */}
+      {pendingPlay && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          onClick={() => setPendingPlay(null)}
+        >
+          <div
+            className="bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Starting</p>
+            <p className="text-white font-bold text-lg mb-5 truncate" title={pendingPlay.label}>
+              {pendingPlay.label}
+            </p>
+            <p className="text-gray-300 text-sm font-semibold mb-3">Pick your board size:</p>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {([
+                { id: 'full' as GameLength, label: 'Full', desc: '6×5', sub: '30 clues' },
+                { id: 'half' as GameLength, label: 'Half', desc: '6×3', sub: '18 clues' },
+                { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3', sub: '9 clues' },
+              ]).map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    const run = pendingPlay.runner
+                    setPendingPlay(null)
+                    run(s.id)
+                  }}
+                  disabled={creating}
+                  className="bg-jeopardy-gold/15 hover:bg-jeopardy-gold/30 border-2 border-jeopardy-gold/60 text-jeopardy-gold rounded-xl py-4 transition-all disabled:opacity-50"
+                >
+                  <div className="font-bold text-lg leading-tight">{s.label}</div>
+                  <div className="text-xs opacity-80 mt-0.5">{s.desc}</div>
+                  <div className="text-[10px] opacity-60">{s.sub}</div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPendingPlay(null)}
+              className="w-full text-gray-400 hover:text-white text-sm py-2"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
