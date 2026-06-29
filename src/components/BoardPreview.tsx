@@ -14,13 +14,25 @@ type Props = {
   showAllRounds?: boolean
 }
 
-function RoundGrid({ round, label }: { round: CustomBoard['rounds'][number]; label?: string }) {
+function RoundGrid({
+  round,
+  label,
+  compact = false,
+}: {
+  round: CustomBoard['rounds'][number]
+  label?: string
+  /** When true, shrink text and remove the min-width so the board fits in a narrow column. */
+  compact?: boolean
+}) {
   if (!round || round.categories.length === 0) return null
   const rowCount = Math.max(...round.categories.map((c) => c.clues.length))
+  const catText = compact ? 'text-[8px] md:text-[10px]' : 'text-[10px] md:text-xs'
+  const catCell = compact ? 'min-h-[34px] md:min-h-[40px] px-1 py-1.5' : 'min-h-[44px] md:min-h-[56px] px-1.5 py-2'
+  const valueText = compact ? 'text-xs md:text-base' : 'text-sm md:text-2xl'
   return (
     <div className="w-full max-w-full">
       {label && (
-        <p className="text-jeopardy-gold-light text-xs uppercase tracking-widest font-bold mb-1.5">
+        <p className="text-jeopardy-gold-light text-xs uppercase tracking-widest font-bold mb-1.5 text-center">
           {label}
         </p>
       )}
@@ -32,16 +44,16 @@ function RoundGrid({ round, label }: { round: CustomBoard['rounds'][number]; lab
             background: '#000428',
             padding: '2px',
             borderRadius: '8px',
-            minWidth: 'min(100%, 600px)',
+            minWidth: compact ? '0' : 'min(100%, 600px)',
           }}
         >
           {round.categories.map((cat, ci) => (
             <div
               key={`cat-${ci}`}
-              className="bg-jeopardy-blue text-white font-bold uppercase tracking-wide flex items-center justify-center text-center min-h-[44px] md:min-h-[56px] px-1.5 py-2"
+              className={`bg-jeopardy-blue text-white font-bold uppercase tracking-wide flex items-center justify-center text-center ${catCell}`}
               style={{ textShadow: '1px 2px 3px rgba(0,0,0,0.5)' }}
             >
-              <span className="text-[10px] md:text-xs leading-tight line-clamp-3">
+              <span className={`${catText} leading-tight line-clamp-3`}>
                 {cat.name || <span className="text-white/40 italic">(untitled)</span>}
               </span>
             </div>
@@ -57,12 +69,12 @@ function RoundGrid({ round, label }: { round: CustomBoard['rounds'][number]; lab
                   className="bg-jeopardy-blue-cell flex items-center justify-center aspect-[4/3] relative"
                 >
                   {isDailyDouble && (
-                    <span className="absolute top-0.5 right-0.5 text-[7px] md:text-[9px] bg-jeopardy-gold/90 text-black font-bold px-1 rounded">
+                    <span className="absolute top-0.5 right-0.5 text-[6px] md:text-[9px] bg-jeopardy-gold/90 text-black font-bold px-1 rounded">
                       DD
                     </span>
                   )}
                   <span
-                    className="text-jeopardy-gold-light font-bold text-sm md:text-2xl"
+                    className={`text-jeopardy-gold-light font-bold ${valueText}`}
                     style={{
                       fontFamily: 'Swiss911, Impact, Arial Black, sans-serif',
                       textShadow: '1px 2px 3px rgba(0,0,0,0.7)',
@@ -94,23 +106,32 @@ export function BoardPreview({ board, round = 0, showAllRounds = false }: Props)
     if (board.rounds.length === 0 && !board.finalJeopardy) {
       return <p className="text-gray-500 text-center text-sm py-8">This game has no clues.</p>
     }
+    const r1 = board.rounds[0]
+    const r2 = board.rounds[1]
     return (
-      <div className="flex flex-col gap-5">
-        {board.rounds.map((r, idx) => (
-          <RoundGrid
-            key={idx}
-            round={r}
-            label={idx === 0 ? 'Jeopardy!' : idx === 1 ? 'Double Jeopardy!' : `Round ${idx + 1}`}
-          />
-        ))}
+      // lg+: 5/5/2 grid so it reads left → right (J!, DJ!, FJ!)
+      // smaller: vertical stack
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        {r1 && (
+          <div className="lg:col-span-5">
+            <RoundGrid round={r1} label="Jeopardy!" compact />
+          </div>
+        )}
+        {r2 && (
+          <div className="lg:col-span-5">
+            <RoundGrid round={r2} label="Double Jeopardy!" compact />
+          </div>
+        )}
         {board.finalJeopardy && (
-          <div className="bg-jeopardy-blue/40 border border-jeopardy-gold/40 rounded-xl px-4 py-3 text-center">
-            <p className="text-jeopardy-gold-light text-xs uppercase tracking-widest mb-1">
-              Final Jeopardy!
-            </p>
-            <p className="text-white font-bold text-base md:text-lg">
-              {board.finalJeopardy.categoryName}
-            </p>
+          <div className="lg:col-span-2 lg:flex lg:items-center">
+            <div className="bg-jeopardy-blue/40 border border-jeopardy-gold/50 rounded-xl px-3 py-4 text-center w-full">
+              <p className="text-jeopardy-gold-light text-[10px] uppercase tracking-widest mb-1.5">
+                Final Jeopardy!
+              </p>
+              <p className="text-white font-bold text-sm md:text-base leading-tight">
+                {board.finalJeopardy.categoryName}
+              </p>
+            </div>
           </div>
         )}
       </div>

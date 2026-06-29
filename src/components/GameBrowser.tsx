@@ -142,6 +142,16 @@ export function GameBrowser({ compact = false }: Props) {
   } | null>(null)
   // Topic Mashup: free-text term the user types to build a custom board.
   const [topicQuery, setTopicQuery] = useState('')
+  // Mashup preview modal — used by themed mashups, mix builder, and topic.
+  // Sized 2×3 mode+size picker inside, plus Share (and Edit where the mashup
+  // has configurable state).
+  const [mashupPreview, setMashupPreview] = useState<
+    | { kind: 'themed'; mashup: Mashup }
+    | { kind: 'mix' }
+    | { kind: 'topic' }
+    | null
+  >(null)
+  const [mashupPreviewMode, setMashupPreviewMode] = useState<'idle' | 'choose-mode' | 'copied'>('idle')
   // Preview modal — works for both custom boards and real J-Archive games.
   // Real games show all rounds stacked; custom boards have round tabs.
   const [previewBoard, setPreviewBoard] = useState<{
@@ -178,22 +188,71 @@ export function GameBrowser({ compact = false }: Props) {
       .catch(() => setCustomResults([]))
   }, [])
 
-  // Deep link: ?board=<id> opens the preview modal automatically (used by Share).
+  // Deep links opened from Share buttons. Each param auto-opens the right
+  // preview modal: ?board=<id>, ?game=<id>, ?mashup=<id>, ?mix=<a,b>, ?topic=<term>.
   useEffect(() => {
-    const id = searchParams?.get('board')
-    if (!id || previewBoard?.id === id) return
-    loadCustomBoard(id)
-      .then((data) => {
-        setPreviewBoard({
-          kind: 'custom',
-          id,
-          title: data.title,
-          board: data.board_data,
-          isOwner: !!(user && data.creator_user_id && user.id === data.creator_user_id),
-          activeRound: 0,
+    if (!searchParams) return
+
+    const boardId = searchParams.get('board')
+    if (boardId && previewBoard?.id !== boardId) {
+      loadCustomBoard(boardId)
+        .then((data) => {
+          setPreviewBoard({
+            kind: 'custom',
+            id: boardId,
+            title: data.title,
+            board: data.board_data,
+            isOwner: !!(user && data.creator_user_id && user.id === data.creator_user_id),
+            activeRound: 0,
+          })
         })
-      })
-      .catch((e) => setPreviewError(e?.message || 'Could not load shared board'))
+        .catch((e) => setPreviewError(e?.message || 'Could not load shared board'))
+    }
+
+    const gameIdRaw = searchParams.get('game')
+    const gameId = gameIdRaw ? parseInt(gameIdRaw, 10) : NaN
+    if (!isNaN(gameId) && previewBoard?.id !== String(gameId)) {
+      openGamePreview({
+        game_id_source: gameId,
+        game_title: '',
+        air_date: '',
+        season: '',
+        player1: '',
+        player2: '',
+        player3: '',
+        clue_count: 0,
+      } as GameSearchResult)
+    }
+
+    const mashupId = searchParams.get('mashup')
+    if (mashupId) {
+      const m = MASHUPS.find((x) => x.id === mashupId)
+      if (m && (!mashupPreview || (mashupPreview.kind === 'themed' && mashupPreview.mashup.id !== m.id))) {
+        setMashupPreview({ kind: 'themed', mashup: m })
+        setMashupPreviewMode('idle')
+      }
+    }
+
+    const mixParam = searchParams.get('mix')
+    if (mixParam) {
+      const themes = mixParam.split(',').filter(Boolean)
+      if (themes.length > 0) {
+        setMixThemes(new Set(themes))
+        if (!mashupPreview || mashupPreview.kind !== 'mix') {
+          setMashupPreview({ kind: 'mix' })
+          setMashupPreviewMode('idle')
+        }
+      }
+    }
+
+    const topicParam = searchParams.get('topic')
+    if (topicParam) {
+      setTopicQuery(topicParam)
+      if (!mashupPreview || mashupPreview.kind !== 'topic') {
+        setMashupPreview({ kind: 'topic' })
+        setMashupPreviewMode('idle')
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -683,18 +742,15 @@ export function GameBrowser({ compact = false }: Props) {
       )}
 
       <div className="space-y-3">
-        {/* Mix Mashup — multi-select builder. Only when type filter includes mashups. */}
+        {/* Mix Mashup card — single click opens the configurator modal. */}
         {showMashups && !filtersActive && (() => {
-          const key = 'mashup:mix'
-          const isSelected = selectedKey === key
           const style = THEME_STYLES.mix
-          const themesArr = Array.from(mixThemes)
           return (
             <button
-              key={key}
-              onClick={() => setSelectedKey(isSelected ? null : key)}
-              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden`}
-              style={isSelected ? style.cardSelectedStyle : style.cardStyle}
+              key="mashup:mix"
+              onClick={() => { setMashupPreview({ kind: 'mix' }); setMashupPreviewMode('idle') }}
+              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden hover:scale-[1.005]`}
+              style={style.cardStyle}
             >
               <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
                 {style.icons.join(' ')}
@@ -707,89 +763,26 @@ export function GameBrowser({ compact = false }: Props) {
                 <p className="text-gray-300 text-sm mt-1">
                   Pick two or more themes to blend them into a single board.
                 </p>
-
-                {isSelected && (
-                  <div className="mt-3 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-                    {MIXABLE_THEMES.map((t) => {
-                      const active = mixThemes.has(t.theme!)
-                      const ts = THEME_STYLES[t.theme!]
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setMixThemes((prev) => {
-                              const next = new Set(prev)
-                              if (next.has(t.theme!)) next.delete(t.theme!)
-                              else next.add(t.theme!)
-                              return next
-                            })
-                          }}
-                          className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                            active
-                              ? 'text-white font-semibold border-white/80'
-                              : 'text-gray-300 border-white/20 hover:border-white/40'
-                          }`}
-                          style={active ? ts.cardSelectedStyle : { background: 'rgba(255,255,255,0.04)' }}
-                        >
-                          {ts.icons[0]} {t.label.replace(' Mashup', '')}
-                        </button>
-                      )
-                    })}
-                    {themesArr.length > 0 && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMixThemes(new Set()) }}
-                        className="text-xs text-gray-400 hover:text-white px-3 py-1.5"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {isSelected && themesArr.length > 0 && (
-                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const labels = themesArr.map((t) => MIXABLE_THEMES.find((m) => m.theme === t)?.label.replace(' Mashup', '') || t).join(' + ')
-                        promptForSize(`${labels} (Party)`, (size) => handlePlayMix(themesArr, 'party', size))
-                      }}
-                      disabled={creating}
-                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
-                    >
-                      📺 Party ({themesArr.length})
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const labels = themesArr.map((t) => MIXABLE_THEMES.find((m) => m.theme === t)?.label.replace(' Mashup', '') || t).join(' + ')
-                        promptForSize(`${labels} (Multiplayer)`, (size) => handlePlayMix(themesArr, 'multiplayer', size))
-                      }}
-                      disabled={creating}
-                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
-                    >
-                      🌐 Multiplayer ({themesArr.length})
-                    </button>
-                  </div>
+                {mixThemes.size > 0 && (
+                  <p className="text-jeopardy-gold-light text-xs mt-1.5">
+                    {mixThemes.size} theme{mixThemes.size === 1 ? '' : 's'} selected
+                  </p>
                 )}
               </div>
             </button>
           )
         })()}
 
-        {/* Topic Mashup — type any topic and we build a board from matching category names. */}
+        {/* Topic Mashup card */}
         {showMashups && !filtersActive && (() => {
-          const key = 'mashup:topic'
-          const isSelected = selectedKey === key
           const style = THEME_STYLES.topic
           const term = topicQuery.trim()
           return (
             <button
-              key={key}
-              onClick={() => setSelectedKey(isSelected ? null : key)}
-              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden`}
-              style={isSelected ? style.cardSelectedStyle : style.cardStyle}
+              key="mashup:topic"
+              onClick={() => { setMashupPreview({ kind: 'topic' }); setMashupPreviewMode('idle') }}
+              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden hover:scale-[1.005]`}
+              style={style.cardStyle}
             >
               <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
                 {style.icons.join(' ')}
@@ -802,49 +795,8 @@ export function GameBrowser({ compact = false }: Props) {
                 <p className="text-gray-300 text-sm mt-1">
                   Anything: football, the Beatles, Africa, dinosaurs — we'll find categories matching the name.
                 </p>
-
-                {isSelected && (
-                  <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="text"
-                      value={topicQuery}
-                      onChange={(e) => setTopicQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && term) {
-                          promptForSize(`Topic: ${term} (Party)`, (size) => handlePlayTopic(term, 'party', size))
-                        }
-                      }}
-                      placeholder="e.g. football"
-                      maxLength={60}
-                      className="w-full bg-white/15 border border-white/30 rounded-xl px-4 py-3 text-white text-base placeholder:text-white/50 focus:outline-none focus:ring-1 focus:ring-yellow-300/50 focus:border-yellow-300/60"
-                      autoFocus
-                    />
-
-                    {term && (
-                      <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            promptForSize(`Topic: ${term} (Party)`, (size) => handlePlayTopic(term, 'party', size))
-                          }}
-                          disabled={creating}
-                          className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
-                        >
-                          📺 Party
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            promptForSize(`Topic: ${term} (Multiplayer)`, (size) => handlePlayTopic(term, 'multiplayer', size))
-                          }}
-                          disabled={creating}
-                          className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
-                        >
-                          🌐 Multiplayer
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                {term && (
+                  <p className="text-jeopardy-gold-light text-xs mt-1.5">Current: "{term}"</p>
                 )}
               </div>
             </button>
@@ -852,15 +804,13 @@ export function GameBrowser({ compact = false }: Props) {
         })()}
 
         {mashupResults.map((m) => {
-          const key = `mashup:${m.id}`
-          const isSelected = selectedKey === key
           const style = THEME_STYLES[m.theme || 'random'] || THEME_STYLES.random
           return (
             <button
-              key={key}
-              onClick={() => setSelectedKey(isSelected ? null : key)}
-              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden`}
-              style={isSelected ? style.cardSelectedStyle : style.cardStyle}
+              key={`mashup:${m.id}`}
+              onClick={() => { setMashupPreview({ kind: 'themed', mashup: m }); setMashupPreviewMode('idle') }}
+              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden hover:scale-[1.005]`}
+              style={style.cardStyle}
             >
               <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
                 {style.icons.join(' ')}
@@ -873,30 +823,9 @@ export function GameBrowser({ compact = false }: Props) {
                   <h3 className="text-white font-bold text-lg">{m.label}</h3>
                   <p className="text-gray-300 text-sm mt-1">{m.description}</p>
                 </div>
-                {isSelected && (
-                  <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        promptForSize(`${m.label} (Party)`, (size) => handlePlayMashup(m, 'party', size))
-                      }}
-                      disabled={creating}
-                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.playBtnClass}`}
-                    >
-                      📺 Party
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        promptForSize(`${m.label} (Multiplayer)`, (size) => handlePlayMashup(m, 'multiplayer', size))
-                      }}
-                      disabled={creating}
-                      className={`font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 ${style.multiplayerBtnClass}`}
-                    >
-                      🌐 Multiplayer
-                    </button>
-                  </div>
-                )}
+                <span className={`text-xs self-center whitespace-nowrap ${style.accentClass}`}>
+                  Preview ›
+                </span>
               </div>
             </button>
           )
@@ -1001,6 +930,228 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
         )}
       </div>
 
+      {/* Mashup preview modal — themed, mix, or topic. */}
+      {mashupPreview && (() => {
+        const mp = mashupPreview
+        const themedStyle = mp.kind === 'themed' ? THEME_STYLES[mp.mashup.theme || 'random'] || THEME_STYLES.random : null
+        const style =
+          mp.kind === 'mix' ? THEME_STYLES.mix : mp.kind === 'topic' ? THEME_STYLES.topic : themedStyle!
+        const title =
+          mp.kind === 'themed' ? mp.mashup.label : mp.kind === 'mix' ? 'Mix Your Own' : 'Topic Mashup'
+        const description =
+          mp.kind === 'themed'
+            ? mp.mashup.description
+            : mp.kind === 'mix'
+              ? 'Pick two or more themes and we\'ll alternate categories from each.'
+              : 'Type any topic and we\'ll find categories whose name matches.'
+        const themesArr = Array.from(mixThemes)
+        const term = topicQuery.trim()
+        const canPlay =
+          mp.kind === 'themed' ||
+          (mp.kind === 'mix' && themesArr.length > 0) ||
+          (mp.kind === 'topic' && !!term)
+
+        const startMode = (mode: PlayMode, size: GameLength) => {
+          setMashupPreview(null)
+          setMashupPreviewMode('idle')
+          if (mp.kind === 'themed') handlePlayMashup(mp.mashup, mode, size)
+          else if (mp.kind === 'mix') handlePlayMix(themesArr, mode, size)
+          else if (mp.kind === 'topic' && term) handlePlayTopic(term, mode, size)
+        }
+
+        const share = async () => {
+          let url = `${window.location.origin}/find`
+          if (mp.kind === 'themed') url += `?mashup=${encodeURIComponent(mp.mashup.id)}`
+          else if (mp.kind === 'mix') url += `?mix=${encodeURIComponent(themesArr.join(','))}`
+          else if (mp.kind === 'topic') url += `?topic=${encodeURIComponent(term)}`
+          try {
+            await navigator.clipboard.writeText(url)
+            setMashupPreviewMode('copied')
+            setTimeout(() => setMashupPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
+          } catch {
+            prompt('Copy this link to share:', url)
+          }
+        }
+
+        return (
+          <div
+            className="fixed inset-0 z-40 flex items-start sm:items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-sm overflow-y-auto animate-fade-in"
+            onClick={() => { setMashupPreview(null); setMashupPreviewMode('idle') }}
+          >
+            <div
+              className="bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-5 sm:p-7 w-full max-w-2xl shadow-2xl my-4 relative overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+              style={style.cardStyle}
+            >
+              <div className="absolute top-3 right-12 text-4xl opacity-25 select-none pointer-events-none">
+                {style.icons.join(' ')}
+              </div>
+              <div className="relative">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="min-w-0">
+                    <p className={`text-xs uppercase tracking-wider mb-1 ${style.accentClass}`}>
+                      {style.icons[0]} {mp.kind === 'mix' ? 'Mix Mashup' : mp.kind === 'topic' ? 'Topic Mashup' : 'Mashup'}
+                    </p>
+                    <h2 className="text-white font-bold text-2xl sm:text-3xl truncate">{title}</h2>
+                    <p className="text-gray-300 text-sm mt-1">{description}</p>
+                  </div>
+                  <button
+                    onClick={() => { setMashupPreview(null); setMashupPreviewMode('idle') }}
+                    className="text-gray-400 hover:text-white text-2xl leading-none px-2 shrink-0"
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Editable content per mashup kind */}
+                {mp.kind === 'mix' && (
+                  <div className="mb-5">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-2">Themes</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MIXABLE_THEMES.map((t) => {
+                        const active = mixThemes.has(t.theme!)
+                        const ts = THEME_STYLES[t.theme!]
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              setMixThemes((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(t.theme!)) next.delete(t.theme!)
+                                else next.add(t.theme!)
+                                return next
+                              })
+                            }}
+                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                              active
+                                ? 'text-white font-semibold border-white/80'
+                                : 'text-gray-300 border-white/20 hover:border-white/40'
+                            }`}
+                            style={active ? ts.cardSelectedStyle : { background: 'rgba(255,255,255,0.04)' }}
+                          >
+                            {ts.icons[0]} {t.label.replace(' Mashup', '')}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {themesArr.length > 0 && (
+                      <button
+                        onClick={() => setMixThemes(new Set())}
+                        className="text-xs text-gray-400 hover:text-white mt-2"
+                      >
+                        Clear selection
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {mp.kind === 'topic' && (
+                  <div className="mb-5">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-2">Topic</p>
+                    <input
+                      type="text"
+                      value={topicQuery}
+                      onChange={(e) => setTopicQuery(e.target.value)}
+                      placeholder="e.g. football"
+                      maxLength={60}
+                      className="w-full bg-white/15 border border-white/30 rounded-xl px-4 py-3 text-white text-base placeholder:text-white/50 focus:outline-none focus:ring-1 focus:ring-yellow-300/50 focus:border-yellow-300/60"
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                {/* Action bar */}
+                {mashupPreviewMode === 'idle' && (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      onClick={() => setMashupPreviewMode('choose-mode')}
+                      disabled={creating || !canPlay}
+                      className={`font-bold px-6 py-2.5 rounded-xl text-base transition-all disabled:opacity-40 ${style.playBtnClass}`}
+                      title={!canPlay ? (mp.kind === 'mix' ? 'Pick at least one theme' : 'Enter a topic first') : undefined}
+                    >
+                      ▶ Play
+                    </button>
+                    <button
+                      onClick={share}
+                      disabled={!canPlay}
+                      className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20 disabled:opacity-40"
+                    >
+                      🔗 Share
+                    </button>
+                  </div>
+                )}
+
+                {mashupPreviewMode === 'copied' && (
+                  <p className="text-green-400 text-center text-sm font-semibold">
+                    ✓ Link copied to clipboard
+                  </p>
+                )}
+
+                {mashupPreviewMode === 'choose-mode' && (() => {
+                  const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
+                    { id: 'full', label: 'Full', desc: '6×5' },
+                    { id: 'half', label: 'Half', desc: '6×3' },
+                    { id: 'rapid', label: 'Rapid', desc: '3×3' },
+                  ]
+                  return (
+                    <div className="flex flex-col items-center gap-3">
+                      <p className="text-gray-200 text-sm font-semibold">Pick a mode and board size:</p>
+                      <div className="w-full max-w-md space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                            📺 Party
+                            <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5 flex-1">
+                            {sizes.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => startMode('party', s.id)}
+                                disabled={creating}
+                                className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${style.playBtnClass}`}
+                              >
+                                {s.label}
+                                <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                            🌐 Multiplayer
+                            <span className="block text-[10px] font-normal opacity-60">Own device</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5 flex-1">
+                            {sizes.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => startMode('multiplayer', s.id)}
+                                disabled={creating}
+                                className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${style.multiplayerBtnClass}`}
+                              >
+                                {s.label}
+                                <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setMashupPreviewMode('idle')}
+                        className="text-gray-400 hover:text-white text-xs mt-1"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Preview modal — opens when a custom board or real game card is clicked */}
       {previewBoard && (() => {
         const pb = previewBoard
@@ -1020,7 +1171,9 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
             onClick={() => { setPreviewBoard(null); setPreviewMode('idle') }}
           >
             <div
-              className="bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-5 sm:p-7 w-full max-w-3xl shadow-2xl my-4"
+              className={`bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-5 sm:p-7 w-full shadow-2xl my-4 ${
+                isGame ? 'max-w-6xl' : 'max-w-3xl'
+              }`}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-4 mb-4">
@@ -1104,23 +1257,23 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                   >
                     ▶ Play
                   </button>
-                  {!isGame && (
-                    <button
-                      onClick={async () => {
-                        const url = `${window.location.origin}/find?board=${pb.id}`
-                        try {
-                          await navigator.clipboard.writeText(url)
-                          setPreviewMode('copied')
-                          setTimeout(() => setPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
-                        } catch {
-                          prompt('Copy this link to share:', url)
-                        }
-                      }}
-                      className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20"
-                    >
-                      🔗 Share
-                    </button>
-                  )}
+                  <button
+                    onClick={async () => {
+                      const url = isGame
+                        ? `${window.location.origin}/find?game=${pb.id}`
+                        : `${window.location.origin}/find?board=${pb.id}`
+                      try {
+                        await navigator.clipboard.writeText(url)
+                        setPreviewMode('copied')
+                        setTimeout(() => setPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
+                      } catch {
+                        prompt('Copy this link to share:', url)
+                      }
+                    }}
+                    className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20"
+                  >
+                    🔗 Share
+                  </button>
                 </div>
               )}
 
