@@ -100,49 +100,73 @@ function CreateBoardContent() {
   const [dropTarget, setDropTarget] = useState<{ kind: 'col' | 'row' | 'cell'; row?: number; col?: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load existing board for editing
-  useEffect(() => {
-    if (!editBoardId) return
-    loadCustomBoard(editBoardId)
-      .then((existing) => {
-        const bd = existing.board_data
-        const r1 = bd.rounds[0]
-        const r2 = bd.rounds[1]
-        const r1Cats = r1?.categories || []
-        const r2Cats = r2?.categories || []
-        const r1Clues = r1Cats[0]?.clues || []
-        const r2Clues = r2Cats[0]?.clues || []
-        setBoard({
-          title: existing.title,
-          categories: r1Cats.map((c) => c.name),
-          values: r1Clues.map((c) => c.value),
-          cells: r1Clues.map((_, rowIdx) =>
-            r1Cats.map((cat) => {
+  /** Apply a CustomBoard + title to the editor's local BoardState shape. */
+  function applyCustomBoardToState(title: string, bd: CustomBoard, isPublic: boolean) {
+    const r1 = bd.rounds[0]
+    const r2 = bd.rounds[1]
+    const r1Cats = r1?.categories || []
+    const r2Cats = r2?.categories || []
+    const r1Clues = r1Cats[0]?.clues || []
+    const r2Clues = r2Cats[0]?.clues || []
+    setBoard({
+      title,
+      categories: r1Cats.map((c) => c.name),
+      values: r1Clues.map((c) => c.value),
+      cells: r1Clues.map((_, rowIdx) =>
+        r1Cats.map((cat) => {
+          const clue = cat.clues[rowIdx]
+          if (!clue || (!clue.question && !clue.answer)) return null
+          return { question: clue.question, answer: clue.answer, isDailyDouble: clue.isDailyDouble }
+        }),
+      ),
+      isPublic,
+      isFullGame: !!r2,
+      dj_categories: r2Cats.length ? r2Cats.map((c) => c.name) : Array(r1Cats.length).fill(''),
+      dj_values: r2Clues.length ? r2Clues.map((c) => c.value) : defaultValues(r1Clues.length || INITIAL_ROWS, 2),
+      dj_cells: r2Cats.length
+        ? r2Clues.map((_, rowIdx) =>
+            r2Cats.map((cat) => {
               const clue = cat.clues[rowIdx]
               if (!clue || (!clue.question && !clue.answer)) return null
               return { question: clue.question, answer: clue.answer, isDailyDouble: clue.isDailyDouble }
-            })
-          ),
-          isPublic: existing.is_public,
-          isFullGame: !!r2,
-          dj_categories: r2Cats.length ? r2Cats.map((c) => c.name) : Array(r1Cats.length).fill(''),
-          dj_values: r2Clues.length ? r2Clues.map((c) => c.value) : defaultValues(r1Clues.length || INITIAL_ROWS, 2),
-          dj_cells: r2Cats.length
-            ? r2Clues.map((_, rowIdx) =>
-                r2Cats.map((cat) => {
-                  const clue = cat.clues[rowIdx]
-                  if (!clue || (!clue.question && !clue.answer)) return null
-                  return { question: clue.question, answer: clue.answer, isDailyDouble: clue.isDailyDouble }
-                })
-              )
-            : createEmptyCells(r1Clues.length || INITIAL_ROWS, r1Cats.length || INITIAL_COLS),
-          fj_category: bd.finalJeopardy?.categoryName || '',
-          fj_question: bd.finalJeopardy?.question || '',
-          fj_answer: bd.finalJeopardy?.answer || '',
+            }),
+          )
+        : createEmptyCells(r1Clues.length || INITIAL_ROWS, r1Cats.length || INITIAL_COLS),
+      fj_category: bd.finalJeopardy?.categoryName || '',
+      fj_question: bd.finalJeopardy?.question || '',
+      fj_answer: bd.finalJeopardy?.answer || '',
+    })
+  }
+
+  // Load existing board for editing — either a real saved board (?boardId=)
+  // or a draft stashed in localStorage by GameBrowser's "fork from real game"
+  // flow (?draft=fork). The draft path needs no DB access and no sign-in.
+  useEffect(() => {
+    if (editBoardId) {
+      loadCustomBoard(editBoardId)
+        .then((existing) => {
+          applyCustomBoardToState(existing.title, existing.board_data, existing.is_public)
         })
-      })
-      .catch((e) => setError(e.message || 'Failed to load board'))
-  }, [editBoardId])
+        .catch((e) => setError(e.message || 'Failed to load board'))
+      return
+    }
+    if (searchParams.get('draft') === 'fork') {
+      try {
+        const raw = localStorage.getItem('jeopardy:draftBoard')
+        if (!raw) {
+          setError('No draft to load — try forking again from /find.')
+          return
+        }
+        const parsed = JSON.parse(raw) as { title: string; board: CustomBoard }
+        applyCustomBoardToState(parsed.title, parsed.board, true)
+        // Clear the draft so a refresh doesn't keep re-applying it.
+        localStorage.removeItem('jeopardy:draftBoard')
+      } catch (e: any) {
+        setError(e?.message || 'Could not load the fork draft')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editBoardId, searchParams])
 
   const pushHistory = useCallback(() => {
     setHistory((h) => [...h.slice(-30), board])

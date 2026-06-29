@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, loadGamePreview, forkGameToCustomBoard, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
+import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, loadGamePreview, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
@@ -121,7 +121,8 @@ export function GameBrowser({ compact = false }: Props) {
   const [difficultyFilter, setDifficultyFilter] = useState('')
   const [yearFilter, setYearFilter] = useState('')
   const [seasonFilter, setSeasonFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'games' | 'mashups' | 'custom'>('all')
+  // Real games front-and-center by default; user can toggle to mashups / custom via the chips.
+  const [typeFilter, setTypeFilter] = useState<'all' | 'games' | 'mashups' | 'custom'>('games')
 
   const [gameResults, setGameResults] = useState<GameSearchResult[]>([])
   const [customResults, setCustomResults] = useState<CustomBoardRow[]>([])
@@ -494,19 +495,20 @@ export function GameBrowser({ compact = false }: Props) {
   }
 
   /**
-   * Fork a real game into a fresh editable custom board, then jump to the
-   * editor. Requires sign-in — custom_boards UPDATE is owner-only, so
-   * anonymous forks would be read-only after creation.
+   * Fork a real game into the editor — no sign-in required. Stashes a draft
+   * in localStorage that /create picks up via the ?draft=fork param; the
+   * user can tweak everything and either Present (no save) or Sign in to
+   * persist the board.
    */
   async function forkAndEdit(sourceGameId: number) {
-    if (!user) {
-      router.push(`/login?next=${encodeURIComponent('/find?game=' + sourceGameId)}`)
-      return
-    }
     setCreating(true)
     try {
-      const { id } = await forkGameToCustomBoard(sourceGameId, user.id)
-      router.push(`/create?boardId=${id}`)
+      const preview = await loadGamePreview(sourceGameId)
+      localStorage.setItem(
+        'jeopardy:draftBoard',
+        JSON.stringify({ title: `Forked: ${preview.title}`, board: preview.board }),
+      )
+      router.push('/create?draft=fork')
     } catch (e: any) {
       setPreviewError(e?.message || 'Could not fork this game')
     } finally {
