@@ -15,13 +15,79 @@ type PlayMode = 'party' | 'multiplayer'
 
 type CustomBoardRow = CustomBoardApiRow
 
-const TOURNAMENTS: Array<{ label: string; season?: string; notesFilter?: string }> = [
-  { label: 'Kids Week', notesFilter: 'Kids Week' },
-  { label: 'Teen Tournament', notesFilter: 'Teen Tournament' },
-  { label: 'College Championship', notesFilter: 'College' },
-  { label: 'Tournament of Champions', notesFilter: 'Tournament of Champions' },
-  { label: 'Jeopardy Masters', season: 'jm' },
-  { label: 'Pop Culture Jeopardy', season: 'pcj' },
+/**
+ * Difficulty tiers, ordered easiest → hardest. Each tier maps to a filter
+ * the backend already understands (notesFilter or season). The "standard"
+ * tier carries no filter — it pulls from the regular daily tape, which is
+ * harder than kids/teen/college but not at Tournament-of-Champions level.
+ * Pop Culture Jeopardy is reachable via the Season dropdown — it doesn't
+ * belong on a difficulty axis.
+ */
+const DIFFICULTIES: Array<{
+  id: string
+  label: string
+  emoji: string
+  description: string
+  season?: string
+  notesFilter?: string
+  /** Tailwind classes for the active state — subtle green→red gradient across the row. */
+  activeClass: string
+  hoverClass: string
+}> = [
+  {
+    id: 'kids',
+    label: 'Kids',
+    emoji: '🍼',
+    description: 'Kids Week — easiest',
+    notesFilter: 'Kids Week',
+    activeClass: 'bg-emerald-500 text-black border-emerald-300',
+    hoverClass: 'hover:bg-emerald-500/20 hover:border-emerald-400/60',
+  },
+  {
+    id: 'teen',
+    label: 'Teen',
+    emoji: '🎓',
+    description: 'Teen Tournament',
+    notesFilter: 'Teen Tournament',
+    activeClass: 'bg-lime-500 text-black border-lime-300',
+    hoverClass: 'hover:bg-lime-500/20 hover:border-lime-400/60',
+  },
+  {
+    id: 'college',
+    label: 'College',
+    emoji: '🏛️',
+    description: 'College Championship',
+    notesFilter: 'College',
+    activeClass: 'bg-yellow-500 text-black border-yellow-300',
+    hoverClass: 'hover:bg-yellow-500/20 hover:border-yellow-400/60',
+  },
+  {
+    id: 'standard',
+    label: 'Standard',
+    emoji: '⭐',
+    description: 'Regular nightly Jeopardy!',
+    // no filter — full clue pool
+    activeClass: 'bg-orange-500 text-black border-orange-300',
+    hoverClass: 'hover:bg-orange-500/20 hover:border-orange-400/60',
+  },
+  {
+    id: 'champions',
+    label: 'Champions',
+    emoji: '🏆',
+    description: 'Tournament of Champions — top adult players',
+    notesFilter: 'Tournament of Champions',
+    activeClass: 'bg-red-500 text-white border-red-300',
+    hoverClass: 'hover:bg-red-500/20 hover:border-red-400/60',
+  },
+  {
+    id: 'masters',
+    label: 'Masters',
+    emoji: '👑',
+    description: 'Jeopardy! Masters — hardest',
+    season: 'jm',
+    activeClass: 'bg-red-700 text-white border-red-400',
+    hoverClass: 'hover:bg-red-700/30 hover:border-red-500/60',
+  },
 ]
 
 const SPECIAL_SEASON_LABELS: Record<string, string> = {
@@ -52,7 +118,7 @@ export function GameBrowser({ compact = false }: Props) {
   const [creating, setCreating] = useState(false)
 
   const [query, setQuery] = useState('')
-  const [tournamentFilter, setTournamentFilter] = useState('')
+  const [difficultyFilter, setDifficultyFilter] = useState('')
   const [yearFilter, setYearFilter] = useState('')
   const [seasonFilter, setSeasonFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'games' | 'mashups' | 'custom'>('all')
@@ -143,14 +209,14 @@ export function GameBrowser({ compact = false }: Props) {
   for (let y = 2025; y >= 1984; y--) years.push(y)
 
   const buildFilters = useCallback((p: number = 0): GameSearchFilters => {
-    const tour = TOURNAMENTS.find((t) => t.label === tournamentFilter)
+    const diff = DIFFICULTIES.find((d) => d.id === difficultyFilter)
     return {
       query: query.trim() || undefined,
-      season: seasonFilter || tour?.season || undefined,
-      notesFilter: tour?.notesFilter || undefined,
+      season: seasonFilter || diff?.season || undefined,
+      notesFilter: diff?.notesFilter || undefined,
       page: p,
     }
-  }, [query, seasonFilter, tournamentFilter])
+  }, [query, seasonFilter, difficultyFilter])
 
   const runSearch = useCallback(async (append: boolean = false, p: number = 0) => {
     setSearching(true)
@@ -199,7 +265,7 @@ export function GameBrowser({ compact = false }: Props) {
   useEffect(() => {
     runSearch(false, 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonFilter, tournamentFilter])
+  }, [seasonFilter, difficultyFilter])
 
   function handleYearChange(year: string) {
     setYearFilter(year)
@@ -219,7 +285,7 @@ export function GameBrowser({ compact = false }: Props) {
 
   function handleClearFilters() {
     setQuery('')
-    setTournamentFilter('')
+    setDifficultyFilter('')
     setYearFilter('')
     setSeasonFilter('')
     setTypeFilter('all')
@@ -233,13 +299,13 @@ export function GameBrowser({ compact = false }: Props) {
     setTypeFilter(value)
     // Tournament/year/season only apply to real games — clear them when switching away.
     if (value === 'mashups' || value === 'custom') {
-      setTournamentFilter('')
+      setDifficultyFilter('')
       setYearFilter('')
       setSeasonFilter('')
     }
   }
 
-  const filtersActive = !!(tournamentFilter || seasonFilter || yearFilter)
+  const filtersActive = !!(difficultyFilter || seasonFilter || yearFilter)
   const queryActive = !!query.trim()
   const showGameFilters = typeFilter === 'all' || typeFilter === 'games'
 
@@ -492,20 +558,40 @@ export function GameBrowser({ compact = false }: Props) {
       )}
 
       {showGameFilters && (
-        <div className="flex flex-wrap gap-3 mb-4 items-end">
-          <div>
-            <label className="text-gray-500 text-xs block mb-1">Tournament</label>
-            <select
-              value={tournamentFilter}
-              onChange={(e) => setTournamentFilter(e.target.value)}
-              className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
-            >
-              <option value="" className="bg-gray-900">Any tournament</option>
-              {TOURNAMENTS.map((t) => (
-                <option key={t.label} value={t.label} className="bg-gray-900">{t.label}</option>
-              ))}
-            </select>
+        <div className="mb-4">
+          <p className="text-gray-500 text-xs mb-2 uppercase tracking-wider">Difficulty</p>
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {DIFFICULTIES.map((d) => {
+              const active = difficultyFilter === d.id
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => setDifficultyFilter(active ? '' : d.id)}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${
+                    active
+                      ? d.activeClass + ' scale-105'
+                      : 'bg-white/5 text-gray-300 border-white/15 ' + d.hoverClass
+                  }`}
+                  title={d.description}
+                >
+                  <span>{d.emoji}</span> {d.label}
+                </button>
+              )
+            })}
+            {difficultyFilter && (
+              <button
+                onClick={() => setDifficultyFilter('')}
+                className="text-gray-500 hover:text-white text-xs px-2 self-center"
+              >
+                Any
+              </button>
+            )}
           </div>
+        </div>
+      )}
+
+      {showGameFilters && (
+        <div className="flex flex-wrap gap-3 mb-4 items-end">
           <div>
             <label className="text-gray-500 text-xs block mb-1">Year</label>
             <select
@@ -1006,47 +1092,70 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                 </p>
               )}
 
-              {previewMode === 'choose-mode' && (
-                <div className="flex flex-col items-center gap-3">
-                  <p className="text-gray-300 text-sm font-semibold">How do you want to play?</p>
-                  <div className="flex flex-col sm:flex-row gap-2 w-full max-w-md">
+              {previewMode === 'choose-mode' && (() => {
+                const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
+                  { id: 'full', label: 'Full', desc: '6×5' },
+                  { id: 'half', label: 'Half', desc: '6×3' },
+                  { id: 'rapid', label: 'Rapid', desc: '3×3' },
+                ]
+                const start = (mode: PlayMode, size: GameLength) => {
+                  const boardId = pb.id
+                  setPreviewBoard(null)
+                  setPreviewMode('idle')
+                  handlePlayCustom(boardId, mode, size)
+                }
+                return (
+                  <div className="flex flex-col items-center gap-3">
+                    <p className="text-gray-300 text-sm font-semibold">Pick a mode and board size:</p>
+                    <div className="w-full max-w-md space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                          📺 Party
+                          <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5 flex-1">
+                          {sizes.map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => start('party', s.id)}
+                              disabled={creating}
+                              className="bg-green-500 hover:bg-green-400 text-black font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50"
+                            >
+                              {s.label}
+                              <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                          🌐 Multiplayer
+                          <span className="block text-[10px] font-normal opacity-60">Own device</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5 flex-1">
+                          {sizes.map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => start('multiplayer', s.id)}
+                              disabled={creating}
+                              className="bg-green-700 hover:bg-green-600 text-white font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 border border-green-400/40"
+                            >
+                              {s.label}
+                              <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                     <button
-                      onClick={() => {
-                        const boardId = pb.id
-                        const title = pb.title
-                        setPreviewBoard(null)
-                        setPreviewMode('idle')
-                        promptForSize(`${title} (Party)`, (size) => handlePlayCustom(boardId, 'party', size))
-                      }}
-                      disabled={creating}
-                      className="flex-1 bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-3 rounded-xl text-base transition-all disabled:opacity-50"
+                      onClick={() => setPreviewMode('idle')}
+                      className="text-gray-400 hover:text-white text-xs mt-1"
                     >
-                      📺 Party Mode
-                      <span className="block text-xs font-normal opacity-80 mt-0.5">TV + phones</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        const boardId = pb.id
-                        const title = pb.title
-                        setPreviewBoard(null)
-                        setPreviewMode('idle')
-                        promptForSize(`${title} (Multiplayer)`, (size) => handlePlayCustom(boardId, 'multiplayer', size))
-                      }}
-                      disabled={creating}
-                      className="flex-1 bg-green-700 hover:bg-green-600 text-white font-bold px-5 py-3 rounded-xl text-base transition-all disabled:opacity-50 border border-green-400/40"
-                    >
-                      🌐 Multiplayer
-                      <span className="block text-xs font-normal opacity-80 mt-0.5">Each on own device</span>
+                      Back
                     </button>
                   </div>
-                  <button
-                    onClick={() => setPreviewMode('idle')}
-                    className="text-gray-400 hover:text-white text-xs mt-1"
-                  >
-                    Back
-                  </button>
-                </div>
-              )}
+                )
+              })()}
             </div>
           </div>
         )
