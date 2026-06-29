@@ -305,11 +305,11 @@ export function GameBrowser({ compact = false }: Props) {
       }
     } catch (e: any) {
       console.error('Game search failed:', e)
-      setSearchError(
-        e?.message
-          ? `${e.message} — if this is "function ... does not exist" or "could not find column", run the pending Supabase migrations.`
-          : 'Search failed. Check the browser console.'
-      )
+      const msg = e?.message || 'Search failed. Check the browser console.'
+      // searchGames already crafts a friendly message for timeouts and short
+      // queries; only append the migration hint for schema-level errors.
+      const isSchemaErr = /does not exist|could not find column/i.test(msg)
+      setSearchError(isSchemaErr ? `${msg} — run the pending Supabase migrations.` : msg)
     }
 
     // Custom boards (isolated)

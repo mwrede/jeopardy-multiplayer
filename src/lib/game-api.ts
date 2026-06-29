@@ -1358,7 +1358,9 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
   }
 
   const cols = 'game_id_source, game_title, air_date, player1, player2, player3, season'
-  const fetchLimit = 5000
+  // 5000 was timing out on free-tier Supabase. 2000 still gives ~30-100 unique
+  // games after dedupe (the page-of-50 slice almost always fits).
+  const fetchLimit = 2000
 
   let allData: any[] = []
 
@@ -1391,29 +1393,55 @@ export async function searchGames(filters: GameSearchFilters = {}): Promise<Game
       allData = result.data || []
     } else {
       // Text search across title, notes, and player names.
-      // Title/notes need pg_trgm GIN indexes (supabase-migration-search-trigram.sql)
-      // to be fast; if that migration isn't applied we fall back to player-only
-      // search so something still shows up.
-      // Values are wrapped in double quotes so commas/parens in the query don't
+      // Title/notes need pg_trgm GIN indexes (supabase-migration-search-trigram.sql).
+      // Strategy: try a broad OR across all 5 cols; on timeout/error, fall back
+      // to progressively narrower queries so something still returns. Values
+      // are wrapped in double quotes so commas/parens in the query don't
       // break PostgREST's OR parser.
       const safe = trimmed.replace(/"/g, '')
-      const buildOr = (cols: string[]) =>
-        cols.map((c) => `${c}.ilike."%${safe}%"`).join(',')
+      if (safe.length < 3) {
+        // pg_trgm needs >= 3 chars to use its index; shorter queries scan the
+        // whole 558K-row table and time out.
+        throw new Error('Type at least 3 characters to search. Or use the difficulty / season filters.')
+      }
+      const TEXT_LIMIT = 2000
+      const buildOr = (cs: string[]) => cs.map((c) => `${c}.ilike."%${safe}%"`).join(',')
 
-      const broad = buildOr(['game_title', 'notes', 'player1', 'player2', 'player3'])
+      // First attempt: broad OR.
       let result = await addDateFilters(
-        supabase.from('clue_pool').select(cols).or(broad)
-      ).order('air_date', { ascending: false }).limit(fetchLimit)
+        supabase.from('clue_pool').select(cols).or(buildOr(['game_title', 'notes', 'player1', 'player2', 'player3']))
+      ).order('air_date', { ascending: false }).limit(TEXT_LIMIT)
 
+      // Fallback 1: title + notes only (drops 3 columns of OR cost).
       if (result.error) {
-        console.warn('[searchGames] broad text search failed, falling back to players:', result.error.message)
-        const playerOnly = buildOr(['player1', 'player2', 'player3'])
+        console.warn('[searchGames] broad search failed, trying title+notes:', result.error.message)
         result = await addDateFilters(
-          supabase.from('clue_pool').select(cols).or(playerOnly)
-        ).order('air_date', { ascending: false }).limit(fetchLimit)
+          supabase.from('clue_pool').select(cols).or(buildOr(['game_title', 'notes']))
+        ).order('air_date', { ascending: false }).limit(TEXT_LIMIT)
       }
 
-      if (result.error) throw result.error
+      // Fallback 2: players only — short, fast columns.
+      if (result.error) {
+        console.warn('[searchGames] title+notes failed, trying players:', result.error.message)
+        result = await addDateFilters(
+          supabase.from('clue_pool').select(cols).or(buildOr(['player1', 'player2', 'player3']))
+        ).order('air_date', { ascending: false }).limit(TEXT_LIMIT)
+      }
+
+      // Fallback 3: just title (single column query, simplest plan).
+      if (result.error) {
+        console.warn('[searchGames] players failed, trying title only:', result.error.message)
+        result = await addDateFilters(
+          supabase.from('clue_pool').select(cols).ilike('game_title', `%${safe}%`)
+        ).order('air_date', { ascending: false }).limit(1000)
+      }
+
+      if (result.error) {
+        const msg = /timeout/i.test(result.error.message)
+          ? `Search for "${safe}" timed out. Try a longer or more specific term, or filter by difficulty / season instead.`
+          : result.error.message
+        throw new Error(msg)
+      }
       allData = result.data || []
     }
   } else {
