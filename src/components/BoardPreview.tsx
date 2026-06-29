@@ -28,7 +28,8 @@ function RoundGrid({
   const rowCount = Math.max(...round.categories.map((c) => c.clues.length))
   const catText = compact ? 'text-[8px] md:text-[10px]' : 'text-[10px] md:text-xs'
   const catCell = compact ? 'min-h-[34px] md:min-h-[40px] px-1 py-1.5' : 'min-h-[44px] md:min-h-[56px] px-1.5 py-2'
-  const valueText = compact ? 'text-xs md:text-base' : 'text-sm md:text-2xl'
+  const valueText = compact ? 'text-[8px] md:text-[10px]' : 'text-[10px] md:text-xs'
+  const questionText = compact ? 'text-[8px] md:text-[10px]' : 'text-[10px] md:text-xs'
   return (
     <div className="w-full max-w-full">
       {label && (
@@ -62,26 +63,28 @@ function RoundGrid({
             round.categories.map((cat, ci) => {
               const clue = cat.clues[ri]
               const value = clue?.value ?? (ri + 1) * 200
-              const isDailyDouble = clue?.isDailyDouble === true
+              const hasQuestion = !!clue?.question?.trim()
               return (
                 <div
                   key={`v-${ri}-${ci}`}
-                  className="bg-jeopardy-blue-cell flex items-center justify-center aspect-[4/3] relative"
+                  className="bg-jeopardy-blue-cell flex flex-col items-stretch justify-start px-1 py-1 aspect-[4/3] relative overflow-hidden"
                 >
-                  {isDailyDouble && (
-                    <span className="absolute top-0.5 right-0.5 text-[6px] md:text-[9px] bg-jeopardy-gold/90 text-black font-bold px-1 rounded">
-                      DD
-                    </span>
-                  )}
                   <span
-                    className={`text-jeopardy-gold-light font-bold ${valueText}`}
-                    style={{
-                      fontFamily: 'Swiss911, Impact, Arial Black, sans-serif',
-                      textShadow: '1px 2px 3px rgba(0,0,0,0.7)',
-                    }}
+                    className={`text-jeopardy-gold-light font-bold ${valueText} text-center shrink-0`}
+                    style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.7)' }}
                   >
                     ${value}
                   </span>
+                  {hasQuestion ? (
+                    <span
+                      className={`text-white ${questionText} leading-tight line-clamp-4 mt-0.5 text-left flex-1`}
+                      style={{ textShadow: 'none' }}
+                    >
+                      {clue!.question}
+                    </span>
+                  ) : (
+                    <span className="flex-1" />
+                  )}
                 </div>
               )
             }),

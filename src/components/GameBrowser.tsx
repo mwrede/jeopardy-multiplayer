@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, loadGamePreview, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
+import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, loadGamePreview, forkGameToCustomBoard, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
@@ -490,6 +490,27 @@ export function GameBrowser({ compact = false }: Props) {
       setPreviewError(e?.message || 'Could not load board')
     } finally {
       setPreviewLoading(false)
+    }
+  }
+
+  /**
+   * Fork a real game into a fresh editable custom board, then jump to the
+   * editor. Requires sign-in — custom_boards UPDATE is owner-only, so
+   * anonymous forks would be read-only after creation.
+   */
+  async function forkAndEdit(sourceGameId: number) {
+    if (!user) {
+      router.push(`/login?next=${encodeURIComponent('/find?game=' + sourceGameId)}`)
+      return
+    }
+    setCreating(true)
+    try {
+      const { id } = await forkGameToCustomBoard(sourceGameId, user.id)
+      router.push(`/create?boardId=${id}`)
+    } catch (e: any) {
+      setPreviewError(e?.message || 'Could not fork this game')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -1242,6 +1263,16 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                     <button
                       onClick={() => router.push(`/create?boardId=${pb.id}`)}
                       className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all"
+                    >
+                      ✏️ Edit
+                    </button>
+                  )}
+                  {isGame && (
+                    <button
+                      onClick={() => forkAndEdit(parseInt(pb.id, 10))}
+                      disabled={creating}
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all disabled:opacity-50"
+                      title={user ? 'Fork this game into a custom board you can edit' : 'Sign in to fork and edit this game'}
                     >
                       ✏️ Edit
                     </button>

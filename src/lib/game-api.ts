@@ -1873,6 +1873,24 @@ export async function loadGamePreview(gameIdSource: number) {
   }
 }
 
+/**
+ * Fork a real J-Archive game into a brand-new editable custom board.
+ * Returns the new custom_boards.id so the caller can navigate to
+ * /create?boardId=<id>. Requires sign-in: anonymous forks can't be edited
+ * later because the custom_boards UPDATE policy is owner-only.
+ */
+export async function forkGameToCustomBoard(sourceGameId: number, creatorUserId: string): Promise<{ id: string }> {
+  const preview = await loadGamePreview(sourceGameId)
+  const data = await saveCustomBoard(
+    `Forked: ${preview.title}`,
+    preview.board,
+    false /* save as private by default — owner can publish from /create */,
+    creatorUserId,
+  )
+  if (!data?.id) throw new Error('Fork failed — no board id returned')
+  return { id: data.id as string }
+}
+
 export async function loadCustomBoard(boardId: string) {
   const { data, error } = await supabase
     .from('custom_boards')
