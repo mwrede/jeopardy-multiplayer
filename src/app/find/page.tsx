@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { GameBrowser } from '@/components/GameBrowser'
 
 /**
@@ -7,6 +8,9 @@ import { GameBrowser } from '@/components/GameBrowser'
  * Search/filter across real J-Archive games, themed mashups, and custom
  * boards. Selecting a result lets you Edit (your own boards only),
  * Play Party Mode (TV + phones), or Play Multiplayer (one screen each).
+ *
+ * Wrapped in Suspense because GameBrowser uses useSearchParams (for the
+ * shareable ?board=<id> deep link).
  */
 export default function FindPage() {
   return (
@@ -14,7 +18,9 @@ export default function FindPage() {
       <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-24 md:h-36 w-auto mb-4 mt-2" />
       <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Find a Game</h1>
       <div className="w-full max-w-5xl">
-        <GameBrowser />
+        <Suspense fallback={<div className="text-gray-500">Loading…</div>}>
+          <GameBrowser />
+        </Suspense>
       </div>
       <a href="/" className="text-gray-500 hover:text-white text-sm mt-10 transition-colors">
         ← Back to home

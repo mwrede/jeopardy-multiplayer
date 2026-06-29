@@ -1800,7 +1800,14 @@ export async function loadCustomBoard(boardId: string) {
     .eq('id', boardId)
     .single()
   if (error) throw error
-  return data as { id: string; title: string; board_data: CustomBoard; is_public: boolean; created_at: string }
+  return data as {
+    id: string
+    title: string
+    board_data: CustomBoard
+    is_public: boolean
+    created_at: string
+    creator_user_id?: string | null
+  }
 }
 
 export type PlayCountKind = 'game' | 'mashup' | 'custom'

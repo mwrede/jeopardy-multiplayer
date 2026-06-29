@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
 import { useUser } from '@/lib/auth'
 import { MASHUPS, MIXABLE_THEMES, THEME_STYLES, type Mashup } from './mashup-themes'
+import { BoardPreview } from './BoardPreview'
+import type { CustomBoard } from '@/types/game'
 
 type PlayMode = 'party' | 'multiplayer'
 
@@ -45,6 +47,7 @@ type Props = {
  */
 export function GameBrowser({ compact = false }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, profile } = useUser()
   const [creating, setCreating] = useState(false)
 
@@ -73,6 +76,17 @@ export function GameBrowser({ compact = false }: Props) {
   } | null>(null)
   // Topic Mashup: free-text term the user types to build a custom board.
   const [topicQuery, setTopicQuery] = useState('')
+  // Preview modal for a custom board: shows categories + values + Edit/Play/Share.
+  const [previewBoard, setPreviewBoard] = useState<{
+    id: string
+    title: string
+    board: CustomBoard
+    isOwner: boolean
+    activeRound: number
+  } | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+  const [previewMode, setPreviewMode] = useState<'idle' | 'choose-mode' | 'copied'>('idle')
 
   const [mashupCounts, setMashupCounts] = useState<Map<string, number>>(new Map())
   const [gameCounts, setGameCounts] = useState<Map<string, number>>(new Map())
@@ -92,6 +106,24 @@ export function GameBrowser({ compact = false }: Props) {
       })
       .catch(() => setCustomResults([]))
   }, [])
+
+  // Deep link: ?board=<id> opens the preview modal automatically (used by Share).
+  useEffect(() => {
+    const id = searchParams?.get('board')
+    if (!id || previewBoard?.id === id) return
+    loadCustomBoard(id)
+      .then((data) => {
+        setPreviewBoard({
+          id,
+          title: data.title,
+          board: data.board_data,
+          isOwner: !!(user && data.creator_user_id && user.id === data.creator_user_id),
+          activeRound: 0,
+        })
+      })
+      .catch((e) => setPreviewError(e?.message || 'Could not load shared board'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const seasonToYear = (s: string) => {
     const n = parseInt(s)
@@ -305,6 +337,27 @@ export function GameBrowser({ compact = false }: Props) {
       console.error('Failed to create mashup:', e)
     } finally {
       setCreating(false)
+    }
+  }
+
+  /** Load a custom board and pop the preview modal. */
+  async function openPreview(boardId: string, boardTitle: string, creatorUserId: string | null | undefined) {
+    setPreviewLoading(true)
+    setPreviewError('')
+    setPreviewMode('idle')
+    try {
+      const data = await loadCustomBoard(boardId)
+      setPreviewBoard({
+        id: boardId,
+        title: boardTitle,
+        board: data.board_data,
+        isOwner: !!(user && creatorUserId && user.id === creatorUserId),
+        activeRound: 0,
+      })
+    } catch (e: any) {
+      setPreviewError(e?.message || 'Could not load board')
+    } finally {
+      setPreviewLoading(false)
     }
   }
 
@@ -792,66 +845,30 @@ export function GameBrowser({ compact = false }: Props) {
           )
         })}
 
-        {customVisible.map((cb) => {
-          const key = `custom:${cb.id}`
-          const isSelected = selectedKey === key
-          return (
-            <button
-              key={key}
-              onClick={() => setSelectedKey(isSelected ? null : key)}
-              className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 ${
-                isSelected
-                  ? 'bg-green-500/25 border-green-400'
-                  : 'bg-green-500/10 border-green-500/40 hover:bg-green-500/15'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs uppercase tracking-wider font-bold text-green-400">
-                    ✏️ Custom Board
-                  </span>
-                  <h3 className="text-white font-bold text-lg">{cb.title}</h3>
-                  <p className="text-gray-500 text-sm mt-1">
-                    Created {new Date(cb.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                {isSelected && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    {user && cb.creator_user_id === user.id && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); router.push(`/create?boardId=${cb.id}`) }}
-                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap"
-                        title="Edit this board"
-                      >
-                        ✏️ Edit
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        promptForSize(`${cb.title} (Party)`, (size) => handlePlayCustom(cb.id, 'party', size))
-                      }}
-                      disabled={creating}
-                      className="bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
-                    >
-                      📺 Party
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        promptForSize(`${cb.title} (Multiplayer)`, (size) => handlePlayCustom(cb.id, 'multiplayer', size))
-                      }}
-                      disabled={creating}
-                      className="bg-green-700 hover:bg-green-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-green-400/40"
-                    >
-                      🌐 Multiplayer
-                    </button>
-                  </div>
-                )}
+        {customVisible.map((cb) => (
+          <button
+            key={`custom:${cb.id}`}
+            onClick={() => openPreview(cb.id, cb.title, cb.creator_user_id)}
+            disabled={previewLoading}
+            className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 bg-green-500/10 border-green-500/40 hover:bg-green-500/20 hover:border-green-400/70 disabled:opacity-50`}
+            title="Click to preview the board"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <span className="text-xs uppercase tracking-wider font-bold text-green-400">
+                  ✏️ Custom Board
+                </span>
+                <h3 className="text-white font-bold text-lg">{cb.title}</h3>
+                <p className="text-gray-500 text-sm mt-1">
+                  Created {new Date(cb.created_at).toLocaleDateString()}
+                </p>
               </div>
-            </button>
-          )
-        })}
+              <span className="text-green-300 text-xs self-center whitespace-nowrap">
+                {previewLoading ? 'Loading…' : 'Preview ›'}
+              </span>
+            </div>
+          </button>
+        ))}
 
         {hasMore && showGames && (
           <button
@@ -886,6 +903,161 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
           </div>
         )}
       </div>
+
+      {/* Board preview modal — opens when a custom board card is clicked */}
+      {previewBoard && (() => {
+        const pb = previewBoard
+        const hasR2 = pb.board.rounds.length > 1
+        return (
+          <div
+            className="fixed inset-0 z-40 flex items-start sm:items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-sm overflow-y-auto animate-fade-in"
+            onClick={() => { setPreviewBoard(null); setPreviewMode('idle') }}
+          >
+            <div
+              className="bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-5 sm:p-7 w-full max-w-3xl shadow-2xl my-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="min-w-0">
+                  <p className="text-green-400 text-xs uppercase tracking-wider mb-1">✏️ Custom Board</p>
+                  <h2 className="text-white font-bold text-2xl sm:text-3xl truncate">{pb.title}</h2>
+                </div>
+                <button
+                  onClick={() => { setPreviewBoard(null); setPreviewMode('idle') }}
+                  className="text-gray-400 hover:text-white text-2xl leading-none px-2 shrink-0"
+                  aria-label="Close preview"
+                >
+                  ×
+                </button>
+              </div>
+
+              {hasR2 && (
+                <div className="flex gap-2 mb-3 text-xs">
+                  {pb.board.rounds.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setPreviewBoard({ ...pb, activeRound: i })}
+                      className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
+                        pb.activeRound === i
+                          ? 'bg-jeopardy-blue text-white'
+                          : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                      }`}
+                    >
+                      {i === 0 ? 'Jeopardy!' : i === 1 ? 'Double Jeopardy!' : `Round ${i + 1}`}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="mb-5">
+                <BoardPreview board={pb.board} round={pb.activeRound} />
+              </div>
+
+              {pb.board.finalJeopardy && (
+                <div className="bg-jeopardy-blue/40 border border-jeopardy-gold/40 rounded-xl px-4 py-3 mb-5 text-center">
+                  <p className="text-jeopardy-gold-light text-xs uppercase tracking-wider mb-1">
+                    Final Jeopardy! Category
+                  </p>
+                  <p className="text-white font-bold text-base">
+                    {pb.board.finalJeopardy.categoryName}
+                  </p>
+                </div>
+              )}
+
+              {/* Action bar */}
+              {previewMode === 'idle' && (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {pb.isOwner && (
+                    <button
+                      onClick={() => router.push(`/create?boardId=${pb.id}`)}
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all"
+                    >
+                      ✏️ Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setPreviewMode('choose-mode')}
+                    disabled={creating}
+                    className="bg-green-500 hover:bg-green-400 text-black font-bold px-6 py-2.5 rounded-xl text-base transition-all disabled:opacity-50"
+                  >
+                    ▶ Play
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const url = `${window.location.origin}/find?board=${pb.id}`
+                      try {
+                        await navigator.clipboard.writeText(url)
+                        setPreviewMode('copied')
+                        setTimeout(() => setPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
+                      } catch {
+                        prompt('Copy this link to share:', url)
+                      }
+                    }}
+                    className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20"
+                  >
+                    🔗 Share
+                  </button>
+                </div>
+              )}
+
+              {previewMode === 'copied' && (
+                <p className="text-green-400 text-center text-sm font-semibold">
+                  ✓ Link copied to clipboard
+                </p>
+              )}
+
+              {previewMode === 'choose-mode' && (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-gray-300 text-sm font-semibold">How do you want to play?</p>
+                  <div className="flex flex-col sm:flex-row gap-2 w-full max-w-md">
+                    <button
+                      onClick={() => {
+                        const boardId = pb.id
+                        const title = pb.title
+                        setPreviewBoard(null)
+                        setPreviewMode('idle')
+                        promptForSize(`${title} (Party)`, (size) => handlePlayCustom(boardId, 'party', size))
+                      }}
+                      disabled={creating}
+                      className="flex-1 bg-green-500 hover:bg-green-400 text-black font-bold px-5 py-3 rounded-xl text-base transition-all disabled:opacity-50"
+                    >
+                      📺 Party Mode
+                      <span className="block text-xs font-normal opacity-80 mt-0.5">TV + phones</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const boardId = pb.id
+                        const title = pb.title
+                        setPreviewBoard(null)
+                        setPreviewMode('idle')
+                        promptForSize(`${title} (Multiplayer)`, (size) => handlePlayCustom(boardId, 'multiplayer', size))
+                      }}
+                      disabled={creating}
+                      className="flex-1 bg-green-700 hover:bg-green-600 text-white font-bold px-5 py-3 rounded-xl text-base transition-all disabled:opacity-50 border border-green-400/40"
+                    >
+                      🌐 Multiplayer
+                      <span className="block text-xs font-normal opacity-80 mt-0.5">Each on own device</span>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setPreviewMode('idle')}
+                    className="text-gray-400 hover:text-white text-xs mt-1"
+                  >
+                    Back
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {previewError && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-sm bg-red-900/90 border border-red-500 text-red-100 text-sm px-4 py-2 rounded-xl shadow-lg">
+          {previewError}
+          <button onClick={() => setPreviewError('')} className="ml-3 text-red-300 hover:text-white">✕</button>
+        </div>
+      )}
 
       {/* Size-picker modal — appears after clicking Party or Multiplayer */}
       {pendingPlay && (
