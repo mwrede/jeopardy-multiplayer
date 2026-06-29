@@ -87,6 +87,17 @@ function CreateBoardContent() {
   const [showImagePicker, setShowImagePicker] = useState(false)
   const [imageUrl, setImageUrl] = useState('')
   const [uploading, setUploading] = useState(false)
+  // Drag state: what's being dragged and where it can land.
+  // - 'col': dragging a whole column by its header
+  // - 'row': dragging a whole row by its dollar-value label
+  // - 'cell': dragging a single cell to swap with another
+  const [dragging, setDragging] = useState<
+    | { kind: 'col'; col: number }
+    | { kind: 'row'; row: number }
+    | { kind: 'cell'; row: number; col: number }
+    | null
+  >(null)
+  const [dropTarget, setDropTarget] = useState<{ kind: 'col' | 'row' | 'cell'; row?: number; col?: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load existing board for editing
@@ -208,6 +219,63 @@ function CreateBoardContent() {
     } else {
       setBoard((b) => ({ ...b, dj_categories: b.dj_categories.map((c, i) => (i === idx ? name : c)) }))
     }
+  }
+
+  /** Reorder columns: pulls column `from` out and inserts it at index `to`. */
+  function reorderColumn(round: 1 | 2, from: number, to: number) {
+    if (from === to) return
+    pushHistory()
+    const moveItem = <T,>(arr: T[]) => {
+      const out = [...arr]
+      const [picked] = out.splice(from, 1)
+      out.splice(to, 0, picked)
+      return out
+    }
+    setBoard((b) => {
+      if (round === 1) {
+        return {
+          ...b,
+          categories: moveItem(b.categories),
+          cells: b.cells.map((row) => moveItem(row)),
+        }
+      }
+      return {
+        ...b,
+        dj_categories: moveItem(b.dj_categories),
+        dj_cells: b.dj_cells.map((row) => moveItem(row)),
+      }
+    })
+  }
+
+  /** Reorder rows within the active round (keeps the dollar values in place). */
+  function reorderRow(round: 1 | 2, from: number, to: number) {
+    if (from === to) return
+    pushHistory()
+    const moveItem = <T,>(arr: T[]) => {
+      const out = [...arr]
+      const [picked] = out.splice(from, 1)
+      out.splice(to, 0, picked)
+      return out
+    }
+    setBoard((b) => {
+      if (round === 1) {
+        return { ...b, cells: moveItem(b.cells) }
+      }
+      return { ...b, dj_cells: moveItem(b.dj_cells) }
+    })
+  }
+
+  /** Swap two cells (drag one cell onto another). */
+  function swapCells(round: 1 | 2, a: { row: number; col: number }, b: { row: number; col: number }) {
+    if (a.row === b.row && a.col === b.col) return
+    pushHistory()
+    setBoard((prev) => {
+      const cells = round === 1 ? prev.cells.map((r) => [...r]) : prev.dj_cells.map((r) => [...r])
+      const tmp = cells[a.row][a.col]
+      cells[a.row][a.col] = cells[b.row][b.col]
+      cells[b.row][b.col] = tmp
+      return round === 1 ? { ...prev, cells } : { ...prev, dj_cells: cells }
+    })
   }
 
   function openCell(round: 1 | 2, row: number, col: number) {
@@ -518,32 +586,94 @@ function CreateBoardContent() {
             <div className="grid gap-[2px]" style={{ gridTemplateColumns: `60px repeat(${cols}, 1fr)` }}>
               {/* Header row: empty corner + category names */}
               <div /> {/* empty corner */}
-              {currentCategories.map((cat, ci) => (
-                <div key={ci} className="board-category px-2 py-3 relative group">
-                  <input
-                    type="text"
-                    value={cat}
-                    onChange={(e) => updateCategory(activeRound as 1 | 2, ci, e.target.value)}
-                    placeholder="Category"
-                    className="bg-transparent text-center text-white font-bold text-xs md:text-sm uppercase
-                               tracking-wide w-full outline-none placeholder:text-white/30"
-                    style={{ textShadow: '1px 2px 3px rgba(0,0,0,0.5)' }}
-                  />
-                  {cols > 1 && (
-                    <button onClick={() => removeColumn(ci)}
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-600 text-white text-xs
-                                 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      x
-                    </button>
-                  )}
-                </div>
-              ))}
+              {currentCategories.map((cat, ci) => {
+                const isDropCol = dragging?.kind === 'col' && dropTarget?.kind === 'col' && dropTarget.col === ci && dragging.col !== ci
+                return (
+                  <div
+                    key={ci}
+                    draggable
+                    onDragStart={(e) => {
+                      // Don't initiate column drag if the user grabbed the input itself
+                      if ((e.target as HTMLElement).tagName === 'INPUT') {
+                        e.preventDefault()
+                        return
+                      }
+                      setDragging({ kind: 'col', col: ci })
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragOver={(e) => {
+                      if (dragging?.kind === 'col') {
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        setDropTarget({ kind: 'col', col: ci })
+                      }
+                    }}
+                    onDragLeave={() => setDropTarget(null)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (dragging?.kind === 'col') reorderColumn(activeRound as 1 | 2, dragging.col, ci)
+                      setDragging(null)
+                      setDropTarget(null)
+                    }}
+                    onDragEnd={() => { setDragging(null); setDropTarget(null) }}
+                    className={`board-category px-2 py-3 relative group cursor-grab active:cursor-grabbing transition-all ${
+                      isDropCol ? 'ring-2 ring-jeopardy-gold scale-[1.03]' : ''
+                    } ${dragging?.kind === 'col' && dragging.col === ci ? 'opacity-40' : ''}`}
+                    title="Drag to reorder"
+                  >
+                    <input
+                      type="text"
+                      value={cat}
+                      onChange={(e) => updateCategory(activeRound as 1 | 2, ci, e.target.value)}
+                      placeholder="Category"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="bg-transparent text-center text-white font-bold text-xs md:text-sm uppercase
+                                 tracking-wide w-full outline-none placeholder:text-white/30"
+                      style={{ textShadow: '1px 2px 3px rgba(0,0,0,0.5)' }}
+                    />
+                    {cols > 1 && (
+                      <button onClick={() => removeColumn(ci)}
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-600 text-white text-xs
+                                   opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        x
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
 
               {/* Clue rows */}
               {currentValues.map((val, ri) => (
                 <Fragment key={`row-${ri}`}>
-                  {/* Row value label */}
-                  <div className="flex items-center justify-center relative group">
+                  {/* Row value label — also the drag handle for reordering rows */}
+                  <div
+                    draggable={editingValue?.row !== ri}
+                    onDragStart={(e) => {
+                      setDragging({ kind: 'row', row: ri })
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
+                    onDragOver={(e) => {
+                      if (dragging?.kind === 'row') {
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        setDropTarget({ kind: 'row', row: ri })
+                      }
+                    }}
+                    onDragLeave={() => setDropTarget(null)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (dragging?.kind === 'row') reorderRow(activeRound as 1 | 2, dragging.row, ri)
+                      setDragging(null)
+                      setDropTarget(null)
+                    }}
+                    onDragEnd={() => { setDragging(null); setDropTarget(null) }}
+                    className={`flex items-center justify-center relative group cursor-grab active:cursor-grabbing transition-all ${
+                      dragging?.kind === 'row' && dropTarget?.kind === 'row' && dropTarget.row === ri && dragging.row !== ri
+                        ? 'ring-2 ring-jeopardy-gold rounded'
+                        : ''
+                    } ${dragging?.kind === 'row' && dragging.row === ri ? 'opacity-40' : ''}`}
+                    title="Drag to reorder row"
+                  >
                     {editingValue?.round === (activeRound as 1 | 2) && editingValue?.row === ri ? (
                       <input type="number" value={valueInput}
                         onChange={(e) => setValueInput(e.target.value)}
@@ -569,25 +699,66 @@ function CreateBoardContent() {
                   {/* Clue cells */}
                   {currentCategories.map((_, ci) => {
                     const cell = currentCells[ri]?.[ci]
-                    const filled = cell && (cell.question || cell.answer)
+                    const filled = !!(cell && (cell.question || cell.answer))
+                    const isDragSource = dragging?.kind === 'cell' && dragging.row === ri && dragging.col === ci
+                    const isDropCell = dragging?.kind === 'cell' && dropTarget?.kind === 'cell' && dropTarget.row === ri && dropTarget.col === ci && !isDragSource
                     return (
                       <button
                         key={`${ri}-${ci}`}
                         onClick={() => openCell(activeRound as 1 | 2, ri, ci)}
-                        className={`board-cell aspect-[4/3] relative overflow-hidden ${
-                          filled ? 'ring-2 ring-green-500/40' : 'text-lg md:text-xl'
-                        } ${cell?.isDailyDouble ? 'ring-2 ring-jeopardy-gold' : ''}`}
+                        draggable={filled}
+                        onDragStart={(e) => {
+                          if (!filled) {
+                            e.preventDefault()
+                            return
+                          }
+                          setDragging({ kind: 'cell', row: ri, col: ci })
+                          e.dataTransfer.effectAllowed = 'move'
+                        }}
+                        onDragOver={(e) => {
+                          if (dragging?.kind === 'cell') {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                            setDropTarget({ kind: 'cell', row: ri, col: ci })
+                          }
+                        }}
+                        onDragLeave={() => setDropTarget(null)}
+                        onDrop={(e) => {
+                          e.preventDefault()
+                          if (dragging?.kind === 'cell') {
+                            swapCells(activeRound as 1 | 2, { row: dragging.row, col: dragging.col }, { row: ri, col: ci })
+                          }
+                          setDragging(null)
+                          setDropTarget(null)
+                        }}
+                        onDragEnd={() => { setDragging(null); setDropTarget(null) }}
+                        className={`board-cell aspect-[4/3] relative overflow-hidden transition-all ${
+                          filled ? 'ring-2 ring-green-500/40 cursor-grab active:cursor-grabbing' : 'text-lg md:text-xl'
+                        } ${cell?.isDailyDouble ? 'ring-2 ring-jeopardy-gold' : ''} ${
+                          isDropCell ? 'ring-4 ring-jeopardy-gold scale-[1.04]' : ''
+                        } ${isDragSource ? 'opacity-40' : ''}`}
+                        title={filled ? 'Click to edit, drag to swap' : 'Click to add a clue'}
                       >
                         {cell?.isDailyDouble && (
-                          <span className="absolute top-0.5 right-0.5 text-[8px] md:text-[10px] bg-jeopardy-gold/90 text-black font-bold px-1 rounded">
+                          <span className="absolute top-0.5 right-0.5 text-[8px] md:text-[10px] bg-jeopardy-gold/90 text-black font-bold px-1 rounded z-10">
                             DD
                           </span>
                         )}
                         {filled ? (
-                          <span className="text-[10px] md:text-xs text-white/80 leading-tight line-clamp-3 px-1 text-center"
-                            style={{ textShadow: 'none' }}>
-                            <ClueText text={cell!.question} />
-                          </span>
+                          <div className="absolute inset-0 flex flex-col items-stretch justify-between px-1.5 py-1.5 gap-1 text-left" style={{ textShadow: 'none' }}>
+                            {cell?.question ? (
+                              <span className="text-[10px] md:text-xs text-white leading-tight line-clamp-4 font-semibold">
+                                <ClueText text={cell.question} />
+                              </span>
+                            ) : (
+                              <span className="text-[10px] md:text-xs text-white/50 italic">(no question yet)</span>
+                            )}
+                            {cell?.answer && (
+                              <span className="text-[9px] md:text-[10px] text-jeopardy-gold-light/90 leading-tight line-clamp-2 mt-auto border-t border-white/15 pt-1">
+                                <span className="opacity-70">A: </span>{cell.answer}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           val
                         )}
