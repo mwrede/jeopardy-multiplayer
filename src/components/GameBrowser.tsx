@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
+import { createGame, searchGames, getSeasons, listCustomBoards, loadCustomBoard, loadGamePreview, incrementPlayCount, getPlayCounts, joinGame, type CustomBoardRow as CustomBoardApiRow } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
@@ -142,11 +142,16 @@ export function GameBrowser({ compact = false }: Props) {
   } | null>(null)
   // Topic Mashup: free-text term the user types to build a custom board.
   const [topicQuery, setTopicQuery] = useState('')
-  // Preview modal for a custom board: shows categories + values + Edit/Play/Share.
+  // Preview modal — works for both custom boards and real J-Archive games.
+  // Real games show all rounds stacked; custom boards have round tabs.
   const [previewBoard, setPreviewBoard] = useState<{
+    kind: 'custom' | 'game'
+    /** boardId (string) for custom, sourceGameId (stringified) for real games. */
     id: string
     title: string
     board: CustomBoard
+    /** Real-game-only metadata for the modal header. */
+    subtitle?: string
     isOwner: boolean
     activeRound: number
   } | null>(null)
@@ -180,6 +185,7 @@ export function GameBrowser({ compact = false }: Props) {
     loadCustomBoard(id)
       .then((data) => {
         setPreviewBoard({
+          kind: 'custom',
           id,
           title: data.title,
           board: data.board_data,
@@ -414,6 +420,7 @@ export function GameBrowser({ compact = false }: Props) {
     try {
       const data = await loadCustomBoard(boardId)
       setPreviewBoard({
+        kind: 'custom',
         id: boardId,
         title: boardTitle,
         board: data.board_data,
@@ -422,6 +429,39 @@ export function GameBrowser({ compact = false }: Props) {
       })
     } catch (e: any) {
       setPreviewError(e?.message || 'Could not load board')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  /** Load a real J-Archive game and pop the preview modal with all rounds. */
+  async function openGamePreview(g: GameSearchResult) {
+    setPreviewLoading(true)
+    setPreviewError('')
+    setPreviewMode('idle')
+    try {
+      const data = await loadGamePreview(g.game_id_source)
+      const dateStr = data.airDate
+        ? new Date(data.airDate + 'T00:00:00').toLocaleDateString('en-US', {
+            weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+          })
+        : null
+      const subtitleParts = [
+        dateStr,
+        data.season ? `Season ${data.season}` : null,
+        data.players.length > 0 ? data.players.join(' • ') : null,
+      ].filter(Boolean) as string[]
+      setPreviewBoard({
+        kind: 'game',
+        id: String(g.game_id_source),
+        title: data.title,
+        board: data.board,
+        subtitle: subtitleParts.join(' · ') || undefined,
+        isOwner: false,
+        activeRound: 0,
+      })
+    } catch (e: any) {
+      setPreviewError(e?.message || 'Could not load game preview')
     } finally {
       setPreviewLoading(false)
     }
@@ -862,74 +902,45 @@ export function GameBrowser({ compact = false }: Props) {
           )
         })}
 
-        {gameVisible.map((g) => {
-          const key = `game:${g.game_id_source}`
-          const isSelected = selectedKey === key
-          return (
-            <button
-              key={key}
-              onClick={() => setSelectedKey(isSelected ? null : key)}
-              className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 ${
-                isSelected
-                  ? 'bg-jeopardy-blue/40 border-jeopardy-blue'
-                  : 'bg-jeopardy-blue/15 border-jeopardy-blue/50 hover:bg-jeopardy-blue/25'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs uppercase tracking-wider font-bold text-white/90">
-                    📺 Real Game
-                  </span>
-                  <h3 className="text-white font-bold text-lg truncate">
-                    {g.game_title || `Game #${g.game_id_source}`}
-                  </h3>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                    {g.air_date && (
-                      <span className="text-gray-300 text-sm">
-                        {new Date(g.air_date + 'T00:00:00').toLocaleDateString('en-US', {
-                          weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-                        })}
-                      </span>
-                    )}
-                    {g.season && <span className="text-gray-400 text-sm">Season {g.season}</span>}
-                    <span className="text-gray-400 text-sm">{g.clue_count} clues</span>
-                  </div>
-                  {(g.player1 || g.player2 || g.player3) && (
-                    <p className="text-gray-400 text-sm mt-1">
-                      {[g.player1, g.player2, g.player3].filter(Boolean).join(' • ')}
-                    </p>
+        {gameVisible.map((g) => (
+          <button
+            key={`game:${g.game_id_source}`}
+            onClick={() => openGamePreview(g)}
+            disabled={previewLoading}
+            className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 bg-jeopardy-blue/15 border-jeopardy-blue/50 hover:bg-jeopardy-blue/25 hover:border-jeopardy-blue disabled:opacity-50`}
+            title="Click to preview all three rounds"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <span className="text-xs uppercase tracking-wider font-bold text-white/90">
+                  📺 Real Game
+                </span>
+                <h3 className="text-white font-bold text-lg truncate">
+                  {g.game_title || `Game #${g.game_id_source}`}
+                </h3>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                  {g.air_date && (
+                    <span className="text-gray-300 text-sm">
+                      {new Date(g.air_date + 'T00:00:00').toLocaleDateString('en-US', {
+                        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                      })}
+                    </span>
                   )}
+                  {g.season && <span className="text-gray-400 text-sm">Season {g.season}</span>}
+                  <span className="text-gray-400 text-sm">{g.clue_count} clues</span>
                 </div>
-                {isSelected && (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const label = g.game_title || `Game #${g.game_id_source}`
-                        promptForSize(`${label} (Party)`, (size) => handlePlayGame(g.game_id_source, 'party', size))
-                      }}
-                      disabled={creating}
-                      className="bg-white hover:bg-gray-100 text-jeopardy-blue font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50"
-                    >
-                      📺 Party
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const label = g.game_title || `Game #${g.game_id_source}`
-                        promptForSize(`${label} (Multiplayer)`, (size) => handlePlayGame(g.game_id_source, 'multiplayer', size))
-                      }}
-                      disabled={creating}
-                      className="bg-jeopardy-blue hover:bg-jeopardy-blue/80 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all whitespace-nowrap disabled:opacity-50 border border-white/30"
-                    >
-                      🌐 Multiplayer
-                    </button>
-                  </div>
+                {(g.player1 || g.player2 || g.player3) && (
+                  <p className="text-gray-400 text-sm mt-1">
+                    {[g.player1, g.player2, g.player3].filter(Boolean).join(' • ')}
+                  </p>
                 )}
               </div>
-            </button>
-          )
-        })}
+              <span className="text-white/80 text-xs self-center whitespace-nowrap">
+                {previewLoading ? 'Loading…' : 'Preview ›'}
+              </span>
+            </div>
+          </button>
+        ))}
 
         {customVisible.map((cb) => (
           <button
@@ -990,10 +1001,19 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
         )}
       </div>
 
-      {/* Board preview modal — opens when a custom board card is clicked */}
+      {/* Preview modal — opens when a custom board or real game card is clicked */}
       {previewBoard && (() => {
         const pb = previewBoard
-        const hasR2 = pb.board.rounds.length > 1
+        const isGame = pb.kind === 'game'
+        const headerLabel = isGame ? '📺 Real Game' : '✏️ Custom Board'
+        const headerClass = isGame ? 'text-jeopardy-blue-light text-white' : 'text-green-400'
+        const startMode = (mode: PlayMode, size: GameLength) => {
+          const id = pb.id
+          setPreviewBoard(null)
+          setPreviewMode('idle')
+          if (isGame) handlePlayGame(parseInt(id, 10), mode, size)
+          else handlePlayCustom(id, mode, size)
+        }
         return (
           <div
             className="fixed inset-0 z-40 flex items-start sm:items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-sm overflow-y-auto animate-fade-in"
@@ -1005,8 +1025,13 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
             >
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="min-w-0">
-                  <p className="text-green-400 text-xs uppercase tracking-wider mb-1">✏️ Custom Board</p>
+                  <p className={`text-xs uppercase tracking-wider mb-1 ${isGame ? 'text-white/70' : 'text-green-400'}`}>
+                    {headerLabel}
+                  </p>
                   <h2 className="text-white font-bold text-2xl sm:text-3xl truncate">{pb.title}</h2>
+                  {pb.subtitle && (
+                    <p className="text-gray-400 text-sm mt-1 truncate">{pb.subtitle}</p>
+                  )}
                 </div>
                 <button
                   onClick={() => { setPreviewBoard(null); setPreviewMode('idle') }}
@@ -1017,43 +1042,50 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                 </button>
               </div>
 
-              {hasR2 && (
-                <div className="flex gap-2 mb-3 text-xs">
-                  {pb.board.rounds.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPreviewBoard({ ...pb, activeRound: i })}
-                      className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
-                        pb.activeRound === i
-                          ? 'bg-jeopardy-blue text-white'
-                          : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                      }`}
-                    >
-                      {i === 0 ? 'Jeopardy!' : i === 1 ? 'Double Jeopardy!' : `Round ${i + 1}`}
-                    </button>
-                  ))}
-                </div>
-              )}
-
+              {/* Board(s) */}
               <div className="mb-5">
-                <BoardPreview board={pb.board} round={pb.activeRound} />
+                {isGame ? (
+                  /* Real games: every round + FJ visible on one page. */
+                  <BoardPreview board={pb.board} showAllRounds />
+                ) : (
+                  /* Custom boards: round tabs (often only have round 1). */
+                  <>
+                    {pb.board.rounds.length > 1 && (
+                      <div className="flex gap-2 mb-3 text-xs">
+                        {pb.board.rounds.map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setPreviewBoard({ ...pb, activeRound: i })}
+                            className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
+                              pb.activeRound === i
+                                ? 'bg-jeopardy-blue text-white'
+                                : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                            }`}
+                          >
+                            {i === 0 ? 'Jeopardy!' : i === 1 ? 'Double Jeopardy!' : `Round ${i + 1}`}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <BoardPreview board={pb.board} round={pb.activeRound} />
+                    {pb.board.finalJeopardy && (
+                      <div className="bg-jeopardy-blue/40 border border-jeopardy-gold/40 rounded-xl px-4 py-3 mt-5 text-center">
+                        <p className="text-jeopardy-gold-light text-xs uppercase tracking-wider mb-1">
+                          Final Jeopardy! Category
+                        </p>
+                        <p className="text-white font-bold text-base">
+                          {pb.board.finalJeopardy.categoryName}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-
-              {pb.board.finalJeopardy && (
-                <div className="bg-jeopardy-blue/40 border border-jeopardy-gold/40 rounded-xl px-4 py-3 mb-5 text-center">
-                  <p className="text-jeopardy-gold-light text-xs uppercase tracking-wider mb-1">
-                    Final Jeopardy! Category
-                  </p>
-                  <p className="text-white font-bold text-base">
-                    {pb.board.finalJeopardy.categoryName}
-                  </p>
-                </div>
-              )}
 
               {/* Action bar */}
               {previewMode === 'idle' && (
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  {pb.isOwner && (
+                  {pb.isOwner && !isGame && (
                     <button
                       onClick={() => router.push(`/create?boardId=${pb.id}`)}
                       className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all"
@@ -1064,25 +1096,31 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                   <button
                     onClick={() => setPreviewMode('choose-mode')}
                     disabled={creating}
-                    className="bg-green-500 hover:bg-green-400 text-black font-bold px-6 py-2.5 rounded-xl text-base transition-all disabled:opacity-50"
+                    className={`font-bold px-6 py-2.5 rounded-xl text-base transition-all disabled:opacity-50 ${
+                      isGame
+                        ? 'bg-white hover:bg-gray-100 text-jeopardy-blue'
+                        : 'bg-green-500 hover:bg-green-400 text-black'
+                    }`}
                   >
                     ▶ Play
                   </button>
-                  <button
-                    onClick={async () => {
-                      const url = `${window.location.origin}/find?board=${pb.id}`
-                      try {
-                        await navigator.clipboard.writeText(url)
-                        setPreviewMode('copied')
-                        setTimeout(() => setPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
-                      } catch {
-                        prompt('Copy this link to share:', url)
-                      }
-                    }}
-                    className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20"
-                  >
-                    🔗 Share
-                  </button>
+                  {!isGame && (
+                    <button
+                      onClick={async () => {
+                        const url = `${window.location.origin}/find?board=${pb.id}`
+                        try {
+                          await navigator.clipboard.writeText(url)
+                          setPreviewMode('copied')
+                          setTimeout(() => setPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
+                        } catch {
+                          prompt('Copy this link to share:', url)
+                        }
+                      }}
+                      className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20"
+                    >
+                      🔗 Share
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1098,12 +1136,12 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                   { id: 'half', label: 'Half', desc: '6×3' },
                   { id: 'rapid', label: 'Rapid', desc: '3×3' },
                 ]
-                const start = (mode: PlayMode, size: GameLength) => {
-                  const boardId = pb.id
-                  setPreviewBoard(null)
-                  setPreviewMode('idle')
-                  handlePlayCustom(boardId, mode, size)
-                }
+                const partyCls = isGame
+                  ? 'bg-white hover:bg-gray-100 text-jeopardy-blue'
+                  : 'bg-green-500 hover:bg-green-400 text-black'
+                const mpCls = isGame
+                  ? 'bg-jeopardy-blue hover:bg-jeopardy-blue/80 text-white border border-white/30'
+                  : 'bg-green-700 hover:bg-green-600 text-white border border-green-400/40'
                 return (
                   <div className="flex flex-col items-center gap-3">
                     <p className="text-gray-300 text-sm font-semibold">Pick a mode and board size:</p>
@@ -1117,9 +1155,9 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                           {sizes.map((s) => (
                             <button
                               key={s.id}
-                              onClick={() => start('party', s.id)}
+                              onClick={() => startMode('party', s.id)}
                               disabled={creating}
-                              className="bg-green-500 hover:bg-green-400 text-black font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50"
+                              className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${partyCls}`}
                             >
                               {s.label}
                               <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
@@ -1136,9 +1174,9 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                           {sizes.map((s) => (
                             <button
                               key={s.id}
-                              onClick={() => start('multiplayer', s.id)}
+                              onClick={() => startMode('multiplayer', s.id)}
                               disabled={creating}
-                              className="bg-green-700 hover:bg-green-600 text-white font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 border border-green-400/40"
+                              className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${mpCls}`}
                             >
                               {s.label}
                               <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>

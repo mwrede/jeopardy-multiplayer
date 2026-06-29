@@ -1793,6 +1793,86 @@ export async function deleteCustomBoard(boardId: string) {
 /**
  * Load a custom board by ID.
  */
+/**
+ * Reshape a J-Archive game (rows in clue_pool) into a CustomBoard for preview.
+ * Returns single / double Jeopardy boards + the Final Jeopardy category. The
+ * actual clue text is included so it can be quoted on the preview if we ever
+ * want; the BoardPreview component itself only shows category names + values.
+ */
+export async function loadGamePreview(gameIdSource: number) {
+  const { data, error } = await supabase
+    .from('clue_pool')
+    .select('round, category, value, question, answer, is_daily_double, game_title, air_date, season, player1, player2, player3')
+    .eq('game_id_source', gameIdSource)
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error(`No clues found for game ${gameIdSource}`)
+
+  const first = data[0] as any
+  const players = [first.player1, first.player2, first.player3].filter(Boolean) as string[]
+
+  // Group: round name → category name → list of clue rows
+  const grouped: Record<string, Record<string, Array<{ value: number; question: string; answer: string; is_daily_double: boolean }>>> = {
+    'Jeopardy Round': {},
+    'Double Jeopardy': {},
+  }
+  let finalJeopardy: CustomBoard['finalJeopardy'] = undefined
+
+  for (const row of data) {
+    const r = (row as any).round as string
+    const cat = (row as any).category as string
+    if (!r || !cat) continue
+    if (r === 'Final Jeopardy') {
+      if (!finalJeopardy) {
+        finalJeopardy = {
+          categoryName: cat,
+          question: (row as any).question || '',
+          answer: (row as any).answer || '',
+        }
+      }
+      continue
+    }
+    if (!grouped[r]) continue
+    if (!grouped[r][cat]) grouped[r][cat] = []
+    grouped[r][cat].push({
+      value: (row as any).value || 0,
+      question: (row as any).question || '',
+      answer: (row as any).answer || '',
+      is_daily_double: !!(row as any).is_daily_double,
+    })
+  }
+
+  const buildRound = (roundName: string) => {
+    const cats = Object.entries(grouped[roundName]).map(([name, clues]) => ({
+      name,
+      clues: clues
+        .sort((a, b) => a.value - b.value)
+        .map((c) => ({
+          question: c.question,
+          answer: c.answer,
+          value: c.value,
+          isDailyDouble: c.is_daily_double,
+        })),
+    }))
+    return { categories: cats }
+  }
+
+  const board: CustomBoard = {
+    rounds: [buildRound('Jeopardy Round'), buildRound('Double Jeopardy')].filter(
+      (r) => r.categories.length > 0,
+    ),
+    finalJeopardy,
+  }
+
+  return {
+    sourceGameId: gameIdSource,
+    title: (first.game_title as string) || `Game #${gameIdSource}`,
+    airDate: (first.air_date as string | null) ?? null,
+    season: (first.season as string | null) ?? null,
+    players,
+    board,
+  }
+}
+
 export async function loadCustomBoard(boardId: string) {
   const { data, error } = await supabase
     .from('custom_boards')
