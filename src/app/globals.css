@@ -124,4 +124,265 @@ body {
            focus:outline-none focus:border-jeopardy-gold
            transition-colors;
   }
+
+  /* =========================================================
+     STAGE SET — chrome around gameplay
+     Applied to /, /find, /login, /create chrome, preview modals.
+     Gameplay screens (/game/[roomCode]/*) use the gameplay classes
+     above unchanged.
+     ========================================================= */
+
+  /* Full-height stage backdrop — deep royal blue with a gentle spot light. */
+  .stage-page {
+    @apply min-h-screen text-ink-stage;
+    background:
+      radial-gradient(1400px 900px at 50% -280px, rgba(102, 148, 255, 0.28) 0%, transparent 55%),
+      linear-gradient(180deg, #0F2AB8 0%, #0B1F8E 45%, #08155A 100%);
+    background-attachment: fixed;
+  }
+
+  /* Wood picture-frame — the walnut molding around the Jeopardy! board. */
+  .frame {
+    position: relative;
+    padding: 20px;
+    border-radius: 14px;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 4px),
+      linear-gradient(180deg,
+        rgba(255,210,160,0.16) 0%,
+        transparent 6%,
+        transparent 94%,
+        rgba(0,0,0,0.35) 100%),
+      linear-gradient(90deg,
+        #3D1B0E 0%,
+        #5B2A16 12%,
+        #8B4A28 45%,
+        #5B2A16 78%,
+        #3D1B0E 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,210,160,0.24),
+      inset 0 -2px 0 rgba(0,0,0,0.4),
+      inset 3px 0 5px -3px rgba(0,0,0,0.35),
+      inset -3px 0 5px -3px rgba(0,0,0,0.35),
+      0 20px 60px -18px rgba(0,0,0,0.7);
+  }
+
+  /* Inside the wood frame — a deep blue plate that content sits on. */
+  .frame-inner {
+    position: relative;
+    background: linear-gradient(180deg, #08155A 0%, #050C3E 100%);
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.05);
+    box-shadow:
+      inset 0 0 0 1px rgba(0,0,0,0.5),
+      0 0 60px rgba(0,0,0,0.35);
+  }
+
+  /* Vertical copper LED strip — mimics podium / board frame lights.
+     Use as `<span class="led-strip led-strip-left"></span>` inside `.frame`. */
+  .led-strip {
+    position: absolute;
+    top: 12%;
+    bottom: 12%;
+    width: 10px;
+    border-radius: 3px;
+    background: repeating-linear-gradient(
+      180deg,
+      rgba(255, 220, 160, 0.85) 0 4px,
+      rgba(255, 155, 68, 0.6) 4px 10px,
+      rgba(180, 90, 20, 0.45) 10px 14px
+    );
+    box-shadow:
+      0 0 6px rgba(255, 155, 68, 0.55),
+      0 0 22px 2px rgba(255, 155, 68, 0.45),
+      inset 0 0 4px rgba(255, 240, 200, 0.7);
+    pointer-events: none;
+  }
+  .led-strip-left  { left: 6px; }
+  .led-strip-right { right: 6px; }
+
+  /* Small wood frame around a card (mini-plate). */
+  .plate {
+    position: relative;
+    padding: 8px;
+    border-radius: 12px;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0 1px, transparent 1px 4px),
+      linear-gradient(180deg, rgba(255,210,160,0.14), transparent 6%, transparent 94%, rgba(0,0,0,0.25) 100%),
+      linear-gradient(90deg, #3D1B0E, #6A3218 40%, #8B4A28 55%, #6A3218 70%, #3D1B0E);
+    box-shadow:
+      inset 0 1px 0 rgba(255,210,160,0.28),
+      inset 0 -1px 0 rgba(0,0,0,0.35),
+      0 8px 24px -8px rgba(0,0,0,0.5);
+  }
+  .plate-surface {
+    background: linear-gradient(180deg, #1932C0 0%, #0A1970 100%);
+    border-radius: 6px;
+    border: 1px solid rgba(0,0,0,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  /* Buttons — condensed uppercase, beveled fills. */
+  .btn-stage {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 52px;
+    padding: 0 26px;
+    border-radius: 8px;
+    font-family: "Impact", "Helvetica Neue Condensed Bold", "Arial Black", sans-serif;
+    font-weight: 400;
+    font-size: 15px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #FFF;
+    background: linear-gradient(180deg, #4967E0 0%, #1E38B4 50%, #0F2AB8 100%);
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.35),
+      inset 0 -2px 0 rgba(0,0,0,0.45),
+      0 4px 14px rgba(0,0,0,0.4);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.5);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: transform 100ms, filter 100ms, box-shadow 100ms;
+  }
+  .btn-stage:hover:not(:disabled)  { filter: brightness(1.08); }
+  .btn-stage:active:not(:disabled) { transform: translateY(1px); }
+  .btn-stage:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .btn-stage-sm { height: 40px; padding: 0 16px; font-size: 12px; letter-spacing: 0.12em; }
+  .btn-stage-lg { height: 60px; padding: 0 30px; font-size: 17px; letter-spacing: 0.18em; }
+
+  /* Copper primary (the go-buttons). */
+  .btn-copper {
+    background: linear-gradient(180deg, #FFC57A 0%, #F58A2C 40%, #C4620E 100%);
+    color: #2B0D00;
+    border: 1px solid #FFD9A3;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.6),
+      inset 0 -2px 0 rgba(90,30,0,0.4),
+      0 4px 18px rgba(255, 155, 68, 0.55);
+  }
+
+  /* Chrome — silver secondary. */
+  .btn-chrome {
+    background: linear-gradient(180deg, #F6F8FC 0%, #C9D2E4 45%, #7C8AA9 100%);
+    color: #12163A;
+    border: 1px solid #FFFFFF;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.7);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.8),
+      inset 0 -2px 0 rgba(60,72,110,0.4),
+      0 4px 14px rgba(0,0,0,0.35);
+  }
+
+  /* Ghost — outlined chip on stage. */
+  .btn-stage-ghost {
+    background: transparent;
+    color: #EAF0FF;
+    border: 1px solid rgba(220, 230, 255, 0.28);
+    box-shadow: none;
+  }
+  .btn-stage-ghost:hover:not(:disabled) {
+    color: #FFD59A;
+    border-color: #FF9B44;
+    filter: none;
+  }
+
+  /* Text inputs on the stage. */
+  .field-stage {
+    width: 100%;
+    height: 52px;
+    background: rgba(3, 6, 40, 0.8);
+    border: 1px solid rgba(220, 230, 255, 0.28);
+    border-radius: 6px;
+    padding: 0 14px;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    color: #FFF;
+    outline: none;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.35);
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  .field-stage:focus {
+    border-color: #FF9B44;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.35), 0 0 0 3px rgba(255,155,68,0.2);
+  }
+  .field-stage::placeholder { color: rgba(169, 180, 216, 0.6); }
+
+  /* Room-code / mono input — copper glow. */
+  .field-code-stage {
+    text-align: center;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-family: "Impact", "Arial Black", sans-serif;
+    font-size: 22px;
+    color: #FF9B44;
+    text-shadow: 0 0 10px rgba(255, 155, 68, 0.6);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Filter chip — inactive on the stage. */
+  .chip-stage {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 9999px;
+    background: rgba(3, 6, 40, 0.5);
+    border: 1px solid rgba(220, 230, 255, 0.28);
+    color: #EAF0FF;
+    font-family: inherit;
+    font-weight: 900;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: border-color 120ms, background 120ms, color 120ms;
+    white-space: nowrap;
+  }
+  .chip-stage:hover { border-color: #FF9B44; color: #FFD59A; }
+  .chip-stage-active {
+    background: linear-gradient(180deg, #FFC57A 0%, #F58A2C 100%);
+    color: #2B0D00;
+    border-color: #FFD9A3;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+    box-shadow: 0 0 16px rgba(255, 155, 68, 0.5);
+  }
+
+  /* Section eyebrow with hairline rules on either side. */
+  .eyebrow-copper {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: #FF9B44;
+    font-family: "Impact", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 12px;
+    text-shadow: 0 0 8px rgba(255, 155, 68, 0.35);
+  }
+  .eyebrow-copper::before,
+  .eyebrow-copper::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 155, 68, 0.6), transparent);
+  }
+
+  /* Condensed heavy display headings (for hero titles + card h2). */
+  .display-chrome {
+    font-family: "Impact", "Helvetica Neue Condensed Black", "Arial Narrow", "Arial Black", sans-serif;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #FFF;
+    text-shadow:
+      0 2px 0 rgba(0,0,0,0.55),
+      0 0 20px rgba(255,255,255,0.14);
+  }
 }

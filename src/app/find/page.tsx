@@ -4,27 +4,39 @@ import { Suspense } from 'react'
 import { GameBrowser } from '@/components/GameBrowser'
 
 /**
- * FIND A GAME — full-screen game picker.
- * Search/filter across real J-Archive games, themed mashups, and custom
- * boards. Selecting a result lets you Edit (your own boards only),
- * Play Party Mode (TV + phones), or Play Multiplayer (one screen each).
- *
+ * FIND A GAME — the archive.
+ * Deep stage backdrop with a walnut picture frame around the browser.
  * Wrapped in Suspense because GameBrowser uses useSearchParams (for the
- * shareable ?board=<id> deep link).
+ * shareable `?board=<id>` and `?game=<id>` deep links).
  */
 export default function FindPage() {
   return (
-    <main className="min-h-screen flex flex-col items-center p-6 md:p-8 bg-jeopardy-dark">
-      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-24 md:h-36 w-auto mb-4 mt-2" />
-      <h1 className="text-2xl md:text-3xl font-bold text-white mb-6">Find a Game</h1>
-      <div className="w-full max-w-5xl">
-        <Suspense fallback={<div className="text-gray-500">Loading…</div>}>
-          <GameBrowser />
-        </Suspense>
+    <main className="stage-page p-4 md:p-8 pb-24">
+      <div className="max-w-6xl mx-auto">
+        <div className="frame">
+          <span className="led-strip led-strip-left" />
+          <span className="led-strip led-strip-right" />
+
+          <div className="frame-inner p-6 md:p-10">
+            {/* Masthead */}
+            <div className="flex items-center justify-between gap-4 pb-6 mb-4 border-b border-white/10">
+              <a href="/" className="text-ink-stage-2 uppercase text-[10px] tracking-[0.22em] font-bold hover:text-copper transition-colors">
+                ← Home
+              </a>
+              <div className="text-copper uppercase text-xs tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                ▸ The Archive ◂
+              </div>
+              <div className="text-ink-stage-2 uppercase text-[10px] tracking-[0.22em] font-bold text-right hidden md:block">
+                42 seasons indexed
+              </div>
+            </div>
+
+            <Suspense fallback={<div className="py-16 text-center text-ink-stage-2">Loading…</div>}>
+              <GameBrowser />
+            </Suspense>
+          </div>
+        </div>
       </div>
-      <a href="/" className="text-gray-500 hover:text-white text-sm mt-10 transition-colors">
-        ← Back to home
-      </a>
     </main>
   )
 }

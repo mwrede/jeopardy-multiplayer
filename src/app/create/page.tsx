@@ -505,7 +505,7 @@ function CreateBoardContent() {
   const currentCells = activeRound === 1 ? board.cells : board.dj_cells
 
   return (
-    <div className="min-h-screen bg-jeopardy-dark flex flex-col">
+    <div className="stage-page flex flex-col">
       {/* Instructions banner */}
       {showInstructions && (
         <div className="bg-blue-900/40 border-b border-blue-500/30 px-4 py-3 text-sm">

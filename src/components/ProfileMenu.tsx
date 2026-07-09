@@ -66,7 +66,7 @@ export function ProfileMenu() {
     return (
       <a
         href={`/login?next=${encodeURIComponent(pathname || '/')}`}
-        className="fixed top-3 right-3 z-50 inline-flex items-center gap-2 bg-jeopardy-blue/80 hover:bg-jeopardy-blue text-white text-sm font-semibold px-3 py-2 rounded-full transition-colors"
+        className="btn-stage btn-stage-sm btn-copper fixed top-3 right-3 z-50"
       >
         Sign in
       </a>
@@ -85,10 +85,13 @@ export function ProfileMenu() {
     <div ref={panelRef} className="fixed top-3 right-3 z-50">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/20 text-white text-sm font-semibold pl-1 pr-3 py-1 rounded-full transition-colors"
+        className="inline-flex items-center gap-2 bg-black/50 hover:bg-black/70 border border-white/20 text-white text-sm font-semibold pl-1 pr-3 py-1 rounded-full transition-colors backdrop-blur-sm"
         aria-label="Open profile menu"
       >
-        <span className="w-7 h-7 rounded-full bg-jeopardy-gold text-black text-xs font-bold flex items-center justify-center">
+        <span
+          className="w-7 h-7 rounded-full text-black text-xs font-bold flex items-center justify-center"
+          style={{ background: 'linear-gradient(180deg, #FFC57A, #F58A2C)', boxShadow: '0 0 10px rgba(255,155,68,0.55)' }}
+        >
           {initials || 'P'}
         </span>
         <span className="hidden sm:inline max-w-[120px] truncate">
@@ -97,79 +100,83 @@ export function ProfileMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[min(380px,calc(100vw-1.5rem))] bg-jeopardy-dark border border-white/15 rounded-2xl shadow-2xl p-4 text-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="min-w-0">
-              <p className="text-white font-bold text-base truncate">
-                {profile?.display_name || 'Player'}
-              </p>
-              <p className="text-gray-500 text-xs truncate">{user.email}</p>
+        <div className="plate absolute right-0 mt-2 w-[min(380px,calc(100vw-1.5rem))] shadow-2xl">
+          <div className="plate-surface p-4 text-sm">
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-white/10">
+              <div className="min-w-0">
+                <p className="text-white font-bold text-base truncate">
+                  {profile?.display_name || 'Player'}
+                </p>
+                <p className="text-ink-stage-3 text-xs truncate">{user.email}</p>
+              </div>
+              <button
+                onClick={async () => { await signOut(); setOpen(false); router.refresh() }}
+                className="text-ink-stage-2 hover:text-copper text-xs px-2 py-1 transition-colors uppercase tracking-widest"
+                style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
+              >
+                Sign out
+              </button>
             </div>
-            <button
-              onClick={async () => { await signOut(); setOpen(false); router.refresh() }}
-              className="text-gray-400 hover:text-white text-xs px-2 py-1 transition-colors"
-            >
-              Sign out
-            </button>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <Stat label="Games" value={dataLoading ? '…' : String(stats?.gamesPlayed ?? 0)} />
+              <Stat label="Wins" value={dataLoading ? '…' : String(stats?.wins ?? 0)} />
+              <Stat
+                label="Win rate"
+                value={
+                  dataLoading
+                    ? '…'
+                    : stats && stats.gamesPlayed > 0
+                      ? `${Math.round(stats.winRate * 100)}%`
+                      : '—'
+                }
+              />
+              <Stat
+                label="Total points"
+                value={dataLoading ? '…' : (stats?.totalPoints ?? 0).toLocaleString()}
+              />
+            </div>
+
+            <Section title={`Opponents${opponents.length > 0 ? ` (${opponents.length})` : ''}`}>
+              {opponents.length === 0 ? (
+                <p className="text-ink-stage-3 text-xs italic">No opponents yet. Play a game!</p>
+              ) : (
+                <ul className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                  {opponents.map((o) => (
+                    <li key={(o.userId || 'name') + ':' + o.name} className="flex items-center justify-between text-xs">
+                      <span className="text-white truncate">{o.name}</span>
+                      <span className="text-copper tabular-nums" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>{o.encounters}×</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section title={`Your boards${boards.length > 0 ? ` (${boards.length})` : ''}`}>
+              {boards.length === 0 ? (
+                <p className="text-ink-stage-3 text-xs italic">
+                  You haven't saved any boards.{' '}
+                  <a href="/create" className="text-copper underline underline-offset-2">Create one</a>
+                </p>
+              ) : (
+                <ul className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                  {boards.map((b) => (
+                    <li key={b.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-white truncate flex-1" title={b.title}>{b.title}</span>
+                      <a
+                        href={`/create?boardId=${b.id}`}
+                        className="text-copper hover:text-copper-glow px-2 py-1 uppercase tracking-widest"
+                        style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
+                        onClick={() => setOpen(false)}
+                      >
+                        Edit
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
           </div>
-
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <Stat label="Games" value={dataLoading ? '…' : String(stats?.gamesPlayed ?? 0)} />
-            <Stat label="Wins" value={dataLoading ? '…' : String(stats?.wins ?? 0)} />
-            <Stat
-              label="Win rate"
-              value={
-                dataLoading
-                  ? '…'
-                  : stats && stats.gamesPlayed > 0
-                    ? `${Math.round(stats.winRate * 100)}%`
-                    : '—'
-              }
-            />
-            <Stat
-              label="Total points"
-              value={dataLoading ? '…' : (stats?.totalPoints ?? 0).toLocaleString()}
-            />
-          </div>
-
-          <Section title={`Opponents${opponents.length > 0 ? ` (${opponents.length})` : ''}`}>
-            {opponents.length === 0 ? (
-              <p className="text-gray-500 text-xs">No opponents yet. Play a game!</p>
-            ) : (
-              <ul className="space-y-1 max-h-32 overflow-y-auto pr-1">
-                {opponents.map((o) => (
-                  <li key={(o.userId || 'name') + ':' + o.name} className="flex items-center justify-between text-xs">
-                    <span className="text-white truncate">{o.name}</span>
-                    <span className="text-gray-500">{o.encounters}×</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-
-          <Section title={`Your boards${boards.length > 0 ? ` (${boards.length})` : ''}`}>
-            {boards.length === 0 ? (
-              <p className="text-gray-500 text-xs">
-                You haven't saved any boards.{' '}
-                <a href="/create" className="text-blue-400 underline">Create one</a>
-              </p>
-            ) : (
-              <ul className="space-y-1 max-h-40 overflow-y-auto pr-1">
-                {boards.map((b) => (
-                  <li key={b.id} className="flex items-center justify-between gap-2 text-xs">
-                    <span className="text-white truncate flex-1" title={b.title}>{b.title}</span>
-                    <a
-                      href={`/create?boardId=${b.id}`}
-                      className="text-blue-400 hover:text-blue-300 px-2 py-1 rounded"
-                      onClick={() => setOpen(false)}
-                    >
-                      Edit
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
         </div>
       )}
     </div>
@@ -178,8 +185,8 @@ export function ProfileMenu() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-      <p className="text-gray-500 text-[10px] uppercase tracking-wider">{label}</p>
+    <div className="bg-black/40 border border-white/10 rounded-md px-3 py-2">
+      <p className="text-copper text-[10px] uppercase tracking-[0.2em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>{label}</p>
       <p className="text-white font-bold text-lg">{value}</p>
     </div>
   )
@@ -188,7 +195,9 @@ function Stat({ label, value }: { label: string; value: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mb-3 last:mb-0">
-      <p className="text-gray-400 text-[11px] uppercase tracking-wider font-bold mb-1.5">{title}</p>
+      <p className="text-copper text-[11px] uppercase tracking-[0.24em] mb-1.5" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+        {title}
+      </p>
       {children}
     </div>
   )

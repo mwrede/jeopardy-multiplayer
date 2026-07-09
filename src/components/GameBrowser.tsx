@@ -614,86 +614,92 @@ export function GameBrowser({ compact = false }: Props) {
 
   return (
     <div className="w-full">
-      <div className="flex flex-wrap gap-2 mb-3 text-sm">
+      {/* Hero prompt */}
+      <div className="text-center mb-6">
+        <h2 className="display-chrome text-3xl md:text-4xl leading-none">
+          Type Anything <span className="text-copper" style={{ textShadow: '0 0 18px rgba(255,155,68,0.55)' }}>—</span> Title · Player · Topic
+        </h2>
+      </div>
+
+      {/* Big search bar */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 mb-4">
+        <label className="flex items-center gap-3 h-[68px] px-5 bg-black/75 border border-white/25 rounded-lg shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)] focus-within:border-copper focus-within:shadow-[inset_0_2px_4px_rgba(0,0,0,0.35),0_0_0_3px_rgba(255,155,68,0.2)] transition-all">
+          <span
+            aria-hidden
+            className="relative w-8 h-8 rounded-full border-2 border-copper shadow-[0_0_10px_rgba(255,155,68,0.55)] shrink-0"
+          >
+            <span className="absolute -bottom-2 -right-1.5 w-3 h-[3px] bg-copper rounded-sm rotate-45 origin-left shadow-[0_0_8px_rgba(255,155,68,0.7)]" />
+          </span>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') runSearch(false, 0) }}
+            placeholder="Search titles, players, or a topic…"
+            className="flex-1 bg-transparent border-none outline-none text-white font-bold text-lg placeholder:text-ink-stage-3 placeholder:italic placeholder:font-normal"
+          />
+        </label>
+        <button
+          onClick={() => runSearch(false, 0)}
+          disabled={searching}
+          className="btn-stage btn-copper btn-stage-lg"
+        >
+          {searching ? '…' : 'Search'}
+        </button>
+      </div>
+
+      {/* Type chips */}
+      <div className="flex flex-wrap gap-1.5 items-center mb-3">
+        <span className="text-copper uppercase text-[11px] tracking-[0.28em] mr-1.5 self-center" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+          Show
+        </span>
         <button
           onClick={() => handleTypeFilter('games')}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 transition-all ${
-            typeFilter === 'games'
-              ? 'bg-jeopardy-blue text-white border-jeopardy-blue'
-              : 'bg-jeopardy-blue/15 text-white border-jeopardy-blue/60 hover:bg-jeopardy-blue/25'
-          }`}
+          className={`chip-stage ${typeFilter === 'games' ? 'chip-stage-active' : ''}`}
         >
-          <span className="w-2 h-2 rounded-full bg-jeopardy-blue" /> Real Games
+          📺 Real Games
         </button>
         <button
           onClick={() => handleTypeFilter('mashups')}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 transition-all ${
-            typeFilter === 'mashups'
-              ? 'bg-jeopardy-gold text-black border-jeopardy-gold'
-              : 'bg-jeopardy-gold/15 text-jeopardy-gold border-jeopardy-gold/50 hover:bg-jeopardy-gold/25'
-          }`}
+          className={`chip-stage ${typeFilter === 'mashups' ? 'chip-stage-active' : ''}`}
         >
-          <span className="w-2 h-2 rounded-full bg-jeopardy-gold" /> Mashups
+          🎨 Mashups
         </button>
         <button
           onClick={() => handleTypeFilter('custom')}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 transition-all ${
-            typeFilter === 'custom'
-              ? 'bg-green-500 text-black border-green-400'
-              : 'bg-green-500/15 text-green-400 border-green-500/40 hover:bg-green-500/25'
-          }`}
+          className={`chip-stage ${typeFilter === 'custom' ? 'chip-stage-active' : ''}`}
         >
-          <span className="w-2 h-2 rounded-full bg-green-400" /> Custom Boards
+          ✏️ Custom
         </button>
         {typeFilter !== 'all' && (
           <button
             onClick={() => setTypeFilter('all')}
-            className="text-gray-500 hover:text-white text-xs px-2 transition-colors self-center"
+            className="text-ink-stage-2 hover:text-copper text-xs px-2 self-center uppercase tracking-widest"
           >
-            Show all
+            All
           </button>
         )}
       </div>
 
-      <div className={`flex gap-3 mb-4`}>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') runSearch(false, 0) }}
-          placeholder="Search games, mashups, custom boards..."
-          className={`flex-1 bg-white/5 border border-white/20 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-jeopardy-gold/50 transition-colors ${searchInputPad}`}
-        />
-        <button
-          onClick={() => runSearch(false, 0)}
-          disabled={searching}
-          className={`bg-jeopardy-blue hover:bg-jeopardy-blue/80 text-white rounded-2xl font-semibold transition-colors disabled:opacity-50 ${searchBtnPad}`}
-        >
-          {searching ? '...' : 'Search'}
-        </button>
-      </div>
-
       {searchError && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-red-900/30 border border-red-500/40 text-red-300 text-sm">
+        <div className="mb-4 px-4 py-3 rounded-md bg-red-900/40 border border-red-400/40 text-copper-glow text-sm">
           {searchError}
         </div>
       )}
 
       {showGameFilters && (
         <div className="mb-4">
-          <p className="text-gray-500 text-xs mb-2 uppercase tracking-wider">Difficulty</p>
-          <div className="flex flex-wrap gap-1.5 mb-4">
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-copper uppercase text-[11px] tracking-[0.28em] mr-1.5 self-center" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+              Level
+            </span>
             {DIFFICULTIES.map((d) => {
               const active = difficultyFilter === d.id
               return (
                 <button
                   key={d.id}
                   onClick={() => setDifficultyFilter(active ? '' : d.id)}
-                  className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${
-                    active
-                      ? d.activeClass + ' scale-105'
-                      : 'bg-white/5 text-gray-300 border-white/15 ' + d.hoverClass
-                  }`}
+                  className={`chip-stage ${active ? 'chip-stage-active' : ''}`}
                   title={d.description}
                 >
                   <span>{d.emoji}</span> {d.label}
@@ -703,7 +709,7 @@ export function GameBrowser({ compact = false }: Props) {
             {difficultyFilter && (
               <button
                 onClick={() => setDifficultyFilter('')}
-                className="text-gray-500 hover:text-white text-xs px-2 self-center"
+                className="text-ink-stage-2 hover:text-copper text-xs px-2 self-center uppercase tracking-widest"
               >
                 Any
               </button>
@@ -715,11 +721,13 @@ export function GameBrowser({ compact = false }: Props) {
       {showGameFilters && (
         <div className="flex flex-wrap gap-3 mb-4 items-end">
           <div>
-            <label className="text-gray-500 text-xs block mb-1">Year</label>
+            <label className="text-copper text-[10px] block mb-1 uppercase tracking-[0.22em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+              Year
+            </label>
             <select
               value={yearFilter}
               onChange={(e) => handleYearChange(e.target.value)}
-              className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+              className="field-stage cursor-pointer h-[42px] py-0"
             >
               <option value="" className="bg-gray-900">Any year</option>
               {years.map((y) => (
@@ -728,11 +736,13 @@ export function GameBrowser({ compact = false }: Props) {
             </select>
           </div>
           <div>
-            <label className="text-gray-500 text-xs block mb-1">Season</label>
+            <label className="text-copper text-[10px] block mb-1 uppercase tracking-[0.22em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+              Season
+            </label>
             <select
               value={seasonFilter}
               onChange={(e) => handleSeasonChange(e.target.value)}
-              className="bg-white/5 border border-white/20 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-jeopardy-gold/50 cursor-pointer"
+              className="field-stage cursor-pointer h-[42px] py-0"
             >
               <option value="" className="bg-gray-900">Any season</option>
               <optgroup label="Regular" className="bg-gray-900">
@@ -756,7 +766,7 @@ export function GameBrowser({ compact = false }: Props) {
           {(queryActive || filtersActive) && (
             <button
               onClick={handleClearFilters}
-              className="text-gray-500 hover:text-white text-sm px-3 py-2.5 transition-colors"
+              className="text-ink-stage-2 hover:text-copper text-sm px-3 py-2.5 transition-colors uppercase tracking-widest"
             >
               Clear all
             </button>
@@ -859,37 +869,34 @@ export function GameBrowser({ compact = false }: Props) {
             key={`game:${g.game_id_source}`}
             onClick={() => openGamePreview(g)}
             disabled={previewLoading}
-            className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 bg-jeopardy-blue/15 border-jeopardy-blue/50 hover:bg-jeopardy-blue/25 hover:border-jeopardy-blue disabled:opacity-50`}
+            className="w-full text-left grid grid-cols-[76px_1fr_auto] gap-4 items-center px-4 py-3.5 rounded-md border border-white/10 bg-black/40 hover:border-copper/70 hover:bg-black/60 hover:translate-x-0.5 transition-all disabled:opacity-50"
             title="Click to preview all three rounds"
           >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <span className="text-xs uppercase tracking-wider font-bold text-white/90">
-                  📺 Real Game
-                </span>
-                <h3 className="text-white font-bold text-lg truncate">
-                  {g.game_title || `Game #${g.game_id_source}`}
-                </h3>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                  {g.air_date && (
-                    <span className="text-gray-300 text-sm">
-                      {new Date(g.air_date + 'T00:00:00').toLocaleDateString('en-US', {
-                        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-                      })}
-                    </span>
-                  )}
-                  {g.season && <span className="text-gray-400 text-sm">Season {g.season}</span>}
-                  <span className="text-gray-400 text-sm">{g.clue_count} clues</span>
+            <span
+              className="text-copper text-2xl tabular-nums self-start"
+              style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 10px rgba(255,155,68,0.5)' }}
+            >
+              {g.game_id_source}
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-white font-bold text-base truncate">
+                {g.game_title || `Show No. ${g.game_id_source}`}
+              </h3>
+              {(g.player1 || g.player2 || g.player3) && (
+                <p className="text-ink-stage-2 text-sm italic truncate">
+                  {[g.player1, g.player2, g.player3].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
+            <div className="text-right text-ink-stage-2 uppercase text-[11px] tracking-[0.2em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+              {g.air_date && (
+                <div className="text-copper">
+                  {new Date(g.air_date + 'T00:00:00').toLocaleDateString('en-US', {
+                    weekday: 'short', month: 'short', day: 'numeric', year: '2-digit',
+                  })}
                 </div>
-                {(g.player1 || g.player2 || g.player3) && (
-                  <p className="text-gray-400 text-sm mt-1">
-                    {[g.player1, g.player2, g.player3].filter(Boolean).join(' • ')}
-                  </p>
-                )}
-              </div>
-              <span className="text-white/80 text-xs self-center whitespace-nowrap">
-                {previewLoading ? 'Loading…' : 'Preview ›'}
-              </span>
+              )}
+              <div>{g.season ? `S${g.season} · ` : ''}{g.clue_count} clues</div>
             </div>
           </button>
         ))}
@@ -899,23 +906,19 @@ export function GameBrowser({ compact = false }: Props) {
             key={`custom:${cb.id}`}
             onClick={() => openPreview(cb.id, cb.title, cb.creator_user_id)}
             disabled={previewLoading}
-            className={`w-full text-left rounded-2xl ${cardPad} transition-all border-2 bg-green-500/10 border-green-500/40 hover:bg-green-500/20 hover:border-green-400/70 disabled:opacity-50`}
+            className="w-full text-left grid grid-cols-[40px_1fr_auto] gap-4 items-center px-4 py-3 rounded-md border border-white/10 bg-black/40 hover:border-copper/70 hover:bg-black/60 transition-all disabled:opacity-50"
             title="Click to preview the board"
           >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <span className="text-xs uppercase tracking-wider font-bold text-green-400">
-                  ✏️ Custom Board
-                </span>
-                <h3 className="text-white font-bold text-lg">{cb.title}</h3>
-                <p className="text-gray-500 text-sm mt-1">
-                  Created {new Date(cb.created_at).toLocaleDateString()}
-                </p>
-              </div>
-              <span className="text-green-300 text-xs self-center whitespace-nowrap">
-                {previewLoading ? 'Loading…' : 'Preview ›'}
-              </span>
+            <span className="text-2xl text-center">✏️</span>
+            <div className="min-w-0">
+              <h4 className="m-0 text-white font-bold text-base truncate">{cb.title}</h4>
+              <small className="text-ink-stage-2 uppercase text-[11px] tracking-widest" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                Custom board · {new Date(cb.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </small>
             </div>
+            <span className="text-copper text-[11px] uppercase tracking-[0.2em] self-center" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+              {previewLoading ? 'Loading…' : 'Preview ›'}
+            </span>
           </button>
         ))}
 
@@ -923,28 +926,26 @@ export function GameBrowser({ compact = false }: Props) {
           <button
             onClick={() => runSearch(true, page + 1)}
             disabled={searching}
-            className="w-full py-4 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-2xl text-center transition-colors disabled:opacity-50"
+            className="btn-stage w-full"
           >
-            {searching ? 'Loading...' : 'Load More Games'}
+            {searching ? 'Loading…' : 'Load More Games'}
           </button>
         )}
 
         {noResults && (
           <div className="text-center py-10 px-4">
-            <p className="text-gray-400 text-lg mb-3">
+            <p className="text-ink-stage text-lg mb-3">
               {queryActive || filtersActive ? 'No games match your search.' : 'No J-Archive games found.'}
             </p>
             {!queryActive && !filtersActive && showGames && !searchError && (
-              <div className="inline-block text-left bg-white/5 border border-white/10 rounded-xl px-5 py-4 text-sm">
-                <p className="text-gray-300 mb-2 font-semibold">Common causes:</p>
-                <ul className="text-gray-400 space-y-1 list-disc list-inside">
-                  <li>The <code className="text-jeopardy-gold">clue_pool</code> table is empty (J-Archive data not seeded yet)</li>
+              <div className="inline-block text-left bg-black/40 border border-white/15 rounded-md px-5 py-4 text-sm">
+                <p className="text-ink-stage mb-2 font-semibold">Common causes:</p>
+                <ul className="text-ink-stage-2 space-y-1 list-disc list-inside">
+                  <li>The <code className="text-copper">clue_pool</code> table is empty (J-Archive data not seeded yet)</li>
                   <li>A pending migration hasn't been applied to Supabase</li>
                 </ul>
-                <p className="text-gray-500 text-xs mt-3">
-                  Run in the Supabase SQL editor to check:
-                </p>
-                <pre className="text-gray-300 text-xs font-mono bg-black/30 rounded px-3 py-2 mt-1 overflow-x-auto">
+                <p className="text-ink-stage-3 text-xs mt-3">Run in the Supabase SQL editor to check:</p>
+                <pre className="text-ink-stage text-xs font-mono bg-black/60 rounded px-3 py-2 mt-1 overflow-x-auto">
 SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                 </pre>
               </div>
@@ -998,177 +999,177 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
 
         return (
           <div
-            className="fixed inset-0 z-40 flex items-start sm:items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-sm overflow-y-auto animate-fade-in"
+            className="fixed inset-0 z-40 flex items-start sm:items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm overflow-y-auto animate-fade-in"
             onClick={() => { setMashupPreview(null); setMashupPreviewMode('idle') }}
           >
             <div
-              className="bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-5 sm:p-7 w-full max-w-2xl shadow-2xl my-4 relative overflow-hidden"
+              className="plate w-full max-w-2xl my-4"
               onClick={(e) => e.stopPropagation()}
-              style={style.cardStyle}
             >
-              <div className="absolute top-3 right-12 text-4xl opacity-25 select-none pointer-events-none">
-                {style.icons.join(' ')}
-              </div>
-              <div className="relative">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div className="min-w-0">
-                    <p className={`text-xs uppercase tracking-wider mb-1 ${style.accentClass}`}>
-                      {style.icons[0]} {mp.kind === 'mix' ? 'Mix Mashup' : mp.kind === 'topic' ? 'Topic Mashup' : 'Mashup'}
-                    </p>
-                    <h2 className="text-white font-bold text-2xl sm:text-3xl truncate">{title}</h2>
-                    <p className="text-gray-300 text-sm mt-1">{description}</p>
-                  </div>
-                  <button
-                    onClick={() => { setMashupPreview(null); setMashupPreviewMode('idle') }}
-                    className="text-gray-400 hover:text-white text-2xl leading-none px-2 shrink-0"
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
+              <div className="plate-surface p-5 sm:p-7 relative overflow-hidden">
+                <div className="absolute top-3 right-12 text-4xl opacity-20 select-none pointer-events-none">
+                  {style.icons.join(' ')}
                 </div>
-
-                {/* Editable content per mashup kind */}
-                {mp.kind === 'mix' && (
-                  <div className="mb-5">
-                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-2">Themes</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {MIXABLE_THEMES.map((t) => {
-                        const active = mixThemes.has(t.theme!)
-                        const ts = THEME_STYLES[t.theme!]
-                        return (
-                          <button
-                            key={t.id}
-                            onClick={() => {
-                              setMixThemes((prev) => {
-                                const next = new Set(prev)
-                                if (next.has(t.theme!)) next.delete(t.theme!)
-                                else next.add(t.theme!)
-                                return next
-                              })
-                            }}
-                            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
-                              active
-                                ? 'text-white font-semibold border-white/80'
-                                : 'text-gray-300 border-white/20 hover:border-white/40'
-                            }`}
-                            style={active ? ts.cardSelectedStyle : { background: 'rgba(255,255,255,0.04)' }}
-                          >
-                            {ts.icons[0]} {t.label.replace(' Mashup', '')}
-                          </button>
-                        )
-                      })}
+                <div className="relative">
+                  <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+                    <div className="min-w-0">
+                      <p className="text-copper uppercase text-[11px] tracking-[0.28em] mb-1.5" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.45)' }}>
+                        ▸ {style.icons[0]} {mp.kind === 'mix' ? 'Mix Mashup' : mp.kind === 'topic' ? 'Topic Mashup' : 'Mashup'}
+                      </p>
+                      <h2 className="display-chrome text-3xl sm:text-4xl leading-none truncate">{title}</h2>
+                      <p className="text-ink-stage-2 text-sm mt-2">{description}</p>
                     </div>
-                    {themesArr.length > 0 && (
-                      <button
-                        onClick={() => setMixThemes(new Set())}
-                        className="text-xs text-gray-400 hover:text-white mt-2"
-                      >
-                        Clear selection
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {mp.kind === 'topic' && (
-                  <div className="mb-5">
-                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-2">Topic</p>
-                    <input
-                      type="text"
-                      value={topicQuery}
-                      onChange={(e) => setTopicQuery(e.target.value)}
-                      placeholder="e.g. football"
-                      maxLength={60}
-                      className="w-full bg-white/15 border border-white/30 rounded-xl px-4 py-3 text-white text-base placeholder:text-white/50 focus:outline-none focus:ring-1 focus:ring-yellow-300/50 focus:border-yellow-300/60"
-                      autoFocus
-                    />
-                  </div>
-                )}
-
-                {/* Action bar */}
-                {mashupPreviewMode === 'idle' && (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
                     <button
-                      onClick={() => setMashupPreviewMode('choose-mode')}
-                      disabled={creating || !canPlay}
-                      className={`font-bold px-6 py-2.5 rounded-xl text-base transition-all disabled:opacity-40 ${style.playBtnClass}`}
-                      title={!canPlay ? (mp.kind === 'mix' ? 'Pick at least one theme' : 'Enter a topic first') : undefined}
+                      onClick={() => { setMashupPreview(null); setMashupPreviewMode('idle') }}
+                      className="text-ink-stage-2 hover:text-copper text-2xl leading-none px-2 shrink-0 transition-colors"
+                      aria-label="Close"
                     >
-                      ▶ Play
-                    </button>
-                    <button
-                      onClick={share}
-                      disabled={!canPlay}
-                      className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20 disabled:opacity-40"
-                    >
-                      🔗 Share
+                      ×
                     </button>
                   </div>
-                )}
 
-                {mashupPreviewMode === 'copied' && (
-                  <p className="text-green-400 text-center text-sm font-semibold">
-                    ✓ Link copied to clipboard
-                  </p>
-                )}
-
-                {mashupPreviewMode === 'choose-mode' && (() => {
-                  const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
-                    { id: 'full', label: 'Full', desc: '6×5' },
-                    { id: 'half', label: 'Half', desc: '6×3' },
-                    { id: 'rapid', label: 'Rapid', desc: '3×3' },
-                  ]
-                  return (
-                    <div className="flex flex-col items-center gap-3">
-                      <p className="text-gray-200 text-sm font-semibold">Pick a mode and board size:</p>
-                      <div className="w-full max-w-md space-y-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                            📺 Party
-                            <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5 flex-1">
-                            {sizes.map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => startMode('party', s.id)}
-                                disabled={creating}
-                                className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${style.playBtnClass}`}
-                              >
-                                {s.label}
-                                <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                            🌐 Multiplayer
-                            <span className="block text-[10px] font-normal opacity-60">Own device</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5 flex-1">
-                            {sizes.map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => startMode('multiplayer', s.id)}
-                                disabled={creating}
-                                className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${style.multiplayerBtnClass}`}
-                              >
-                                {s.label}
-                                <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                  {/* Editable content per mashup kind */}
+                  {mp.kind === 'mix' && (
+                    <div className="mb-5">
+                      <p className="text-copper text-xs uppercase tracking-[0.28em] mb-2" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                        Themes
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {MIXABLE_THEMES.map((t) => {
+                          const active = mixThemes.has(t.theme!)
+                          const ts = THEME_STYLES[t.theme!]
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => {
+                                setMixThemes((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(t.theme!)) next.delete(t.theme!)
+                                  else next.add(t.theme!)
+                                  return next
+                                })
+                              }}
+                              className={`chip-stage ${active ? 'chip-stage-active' : ''}`}
+                            >
+                              {ts.icons[0]} {t.label.replace(' Mashup', '')}
+                            </button>
+                          )
+                        })}
                       </div>
+                      {themesArr.length > 0 && (
+                        <button
+                          onClick={() => setMixThemes(new Set())}
+                          className="text-xs text-ink-stage-2 hover:text-copper mt-3 uppercase tracking-widest"
+                        >
+                          Clear selection
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {mp.kind === 'topic' && (
+                    <div className="mb-5">
+                      <p className="text-copper text-xs uppercase tracking-[0.28em] mb-2" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                        Topic
+                      </p>
+                      <input
+                        type="text"
+                        value={topicQuery}
+                        onChange={(e) => setTopicQuery(e.target.value)}
+                        placeholder="e.g. football"
+                        maxLength={60}
+                        className="field-stage"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+
+                  {/* Action bar */}
+                  {mashupPreviewMode === 'idle' && (
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-5 border-t border-white/10">
                       <button
-                        onClick={() => setMashupPreviewMode('idle')}
-                        className="text-gray-400 hover:text-white text-xs mt-1"
+                        onClick={() => setMashupPreviewMode('choose-mode')}
+                        disabled={creating || !canPlay}
+                        className="btn-stage btn-copper btn-stage-lg"
+                        title={!canPlay ? (mp.kind === 'mix' ? 'Pick at least one theme' : 'Enter a topic first') : undefined}
                       >
-                        Back
+                        ▶ Play
+                      </button>
+                      <button
+                        onClick={share}
+                        disabled={!canPlay}
+                        className="btn-stage btn-stage-ghost btn-stage-sm"
+                      >
+                        🔗 Share
                       </button>
                     </div>
-                  )
-                })()}
+                  )}
+
+                  {mashupPreviewMode === 'copied' && (
+                    <p className="text-copper text-center text-sm font-semibold pt-4">
+                      ✓ Link copied to clipboard
+                    </p>
+                  )}
+
+                  {mashupPreviewMode === 'choose-mode' && (() => {
+                    const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
+                      { id: 'full', label: 'Full', desc: '6×5' },
+                      { id: 'half', label: 'Half', desc: '6×3' },
+                      { id: 'rapid', label: 'Rapid', desc: '3×3' },
+                    ]
+                    return (
+                      <div className="flex flex-col items-center gap-4 pt-5 border-t border-white/10">
+                        <p className="text-copper uppercase text-sm tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}>
+                          ▸ Pick a mode and board size ◂
+                        </p>
+                        <div className="w-full max-w-md space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                              📺 Party
+                              <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5 flex-1">
+                              {sizes.map((s) => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => startMode('party', s.id)}
+                                  disabled={creating}
+                                  className="btn-stage btn-copper btn-stage-sm !h-[52px] px-1"
+                                >
+                                  <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                              🌐 Multiplayer
+                              <span className="block text-[10px] font-normal opacity-60">Own device</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5 flex-1">
+                              {sizes.map((s) => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => startMode('multiplayer', s.id)}
+                                  disabled={creating}
+                                  className="btn-stage btn-chrome btn-stage-sm !h-[52px] px-1"
+                                >
+                                  <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setMashupPreviewMode('idle')}
+                          className="text-ink-stage-2 hover:text-copper text-xs mt-1"
+                        >
+                          Back
+                        </button>
+                      </div>
+                    )
+                  })()}
+                </div>
               </div>
             </div>
           </div>
@@ -1190,196 +1191,182 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
         }
         return (
           <div
-            className="fixed inset-0 z-40 flex items-start sm:items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-sm overflow-y-auto animate-fade-in"
+            className="fixed inset-0 z-40 flex items-start sm:items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm overflow-y-auto animate-fade-in"
             onClick={() => { setPreviewBoard(null); setPreviewMode('idle') }}
           >
             <div
-              className={`bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-5 sm:p-7 w-full shadow-2xl my-4 ${
-                isGame ? 'max-w-6xl' : 'max-w-3xl'
-              }`}
+              className={`plate w-full my-4 ${isGame ? 'max-w-6xl' : 'max-w-3xl'}`}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="min-w-0">
-                  <p className={`text-xs uppercase tracking-wider mb-1 ${isGame ? 'text-white/70' : 'text-green-400'}`}>
-                    {headerLabel}
-                  </p>
-                  <h2 className="text-white font-bold text-2xl sm:text-3xl truncate">{pb.title}</h2>
-                  {pb.subtitle && (
-                    <p className="text-gray-400 text-sm mt-1 truncate">{pb.subtitle}</p>
+              <div className="plate-surface p-5 sm:p-7">
+                <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-white/10">
+                  <div className="min-w-0">
+                    <p className="text-copper uppercase text-[11px] tracking-[0.28em] mb-1.5" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.45)' }}>
+                      ▸ {headerLabel}
+                    </p>
+                    <h2 className="display-chrome text-3xl sm:text-4xl leading-none truncate">{pb.title}</h2>
+                    {pb.subtitle && (
+                      <p className="text-ink-stage-2 text-sm mt-2 truncate">{pb.subtitle}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setPreviewBoard(null); setPreviewMode('idle') }}
+                    className="text-ink-stage-2 hover:text-copper text-2xl leading-none px-2 shrink-0 transition-colors"
+                    aria-label="Close preview"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Board(s) */}
+                <div className="mb-5">
+                  {isGame ? (
+                    /* Real games: every round + FJ visible on one page. */
+                    <BoardPreview board={pb.board} showAllRounds />
+                  ) : (
+                    /* Custom boards: round tabs (often only have round 1). */
+                    <>
+                      {pb.board.rounds.length > 1 && (
+                        <div className="flex gap-2 mb-3 text-xs">
+                          {pb.board.rounds.map((_, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setPreviewBoard({ ...pb, activeRound: i })}
+                              className={`chip-stage ${pb.activeRound === i ? 'chip-stage-active' : ''}`}
+                            >
+                              {i === 0 ? 'Jeopardy!' : i === 1 ? 'Double Jeopardy!' : `Round ${i + 1}`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <BoardPreview board={pb.board} round={pb.activeRound} />
+                      {pb.board.finalJeopardy && (
+                        <div className="bg-black/40 border border-copper/40 rounded-md px-4 py-3 mt-5 text-center">
+                          <p className="text-copper text-xs uppercase tracking-[0.28em] mb-1" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                            ▸ Final Jeopardy! Category
+                          </p>
+                          <p className="text-white font-bold text-base">
+                            {pb.board.finalJeopardy.categoryName}
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-                <button
-                  onClick={() => { setPreviewBoard(null); setPreviewMode('idle') }}
-                  className="text-gray-400 hover:text-white text-2xl leading-none px-2 shrink-0"
-                  aria-label="Close preview"
-                >
-                  ×
-                </button>
-              </div>
 
-              {/* Board(s) */}
-              <div className="mb-5">
-                {isGame ? (
-                  /* Real games: every round + FJ visible on one page. */
-                  <BoardPreview board={pb.board} showAllRounds />
-                ) : (
-                  /* Custom boards: round tabs (often only have round 1). */
-                  <>
-                    {pb.board.rounds.length > 1 && (
-                      <div className="flex gap-2 mb-3 text-xs">
-                        {pb.board.rounds.map((_, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setPreviewBoard({ ...pb, activeRound: i })}
-                            className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
-                              pb.activeRound === i
-                                ? 'bg-jeopardy-blue text-white'
-                                : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                            }`}
-                          >
-                            {i === 0 ? 'Jeopardy!' : i === 1 ? 'Double Jeopardy!' : `Round ${i + 1}`}
-                          </button>
-                        ))}
-                      </div>
+                {/* Action bar */}
+                {previewMode === 'idle' && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-5 border-t border-white/10">
+                    {pb.isOwner && !isGame && (
+                      <button
+                        onClick={() => router.push(`/create?boardId=${pb.id}`)}
+                        className="btn-stage btn-chrome btn-stage-sm"
+                      >
+                        ✏️ Edit
+                      </button>
                     )}
-                    <BoardPreview board={pb.board} round={pb.activeRound} />
-                    {pb.board.finalJeopardy && (
-                      <div className="bg-jeopardy-blue/40 border border-jeopardy-gold/40 rounded-xl px-4 py-3 mt-5 text-center">
-                        <p className="text-jeopardy-gold-light text-xs uppercase tracking-wider mb-1">
-                          Final Jeopardy! Category
-                        </p>
-                        <p className="text-white font-bold text-base">
-                          {pb.board.finalJeopardy.categoryName}
-                        </p>
-                      </div>
+                    {isGame && (
+                      <button
+                        onClick={() => forkAndEdit(parseInt(pb.id, 10))}
+                        disabled={creating}
+                        className="btn-stage btn-chrome btn-stage-sm"
+                        title={user ? 'Fork this game into a custom board you can edit' : 'Sign in to fork and edit this game'}
+                      >
+                        ✏️ Edit
+                      </button>
                     )}
-                  </>
-                )}
-              </div>
-
-              {/* Action bar */}
-              {previewMode === 'idle' && (
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {pb.isOwner && !isGame && (
                     <button
-                      onClick={() => router.push(`/create?boardId=${pb.id}`)}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all"
-                    >
-                      ✏️ Edit
-                    </button>
-                  )}
-                  {isGame && (
-                    <button
-                      onClick={() => forkAndEdit(parseInt(pb.id, 10))}
+                      onClick={() => setPreviewMode('choose-mode')}
                       disabled={creating}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all disabled:opacity-50"
-                      title={user ? 'Fork this game into a custom board you can edit' : 'Sign in to fork and edit this game'}
+                      className="btn-stage btn-copper btn-stage-lg"
                     >
-                      ✏️ Edit
+                      ▶ Play
                     </button>
-                  )}
-                  <button
-                    onClick={() => setPreviewMode('choose-mode')}
-                    disabled={creating}
-                    className={`font-bold px-6 py-2.5 rounded-xl text-base transition-all disabled:opacity-50 ${
-                      isGame
-                        ? 'bg-white hover:bg-gray-100 text-jeopardy-blue'
-                        : 'bg-green-500 hover:bg-green-400 text-black'
-                    }`}
-                  >
-                    ▶ Play
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const url = isGame
-                        ? `${window.location.origin}/find?game=${pb.id}`
-                        : `${window.location.origin}/find?board=${pb.id}`
-                      try {
-                        await navigator.clipboard.writeText(url)
-                        setPreviewMode('copied')
-                        setTimeout(() => setPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
-                      } catch {
-                        prompt('Copy this link to share:', url)
-                      }
-                    }}
-                    className="bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all border border-white/20"
-                  >
-                    🔗 Share
-                  </button>
-                </div>
-              )}
-
-              {previewMode === 'copied' && (
-                <p className="text-green-400 text-center text-sm font-semibold">
-                  ✓ Link copied to clipboard
-                </p>
-              )}
-
-              {previewMode === 'choose-mode' && (() => {
-                const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
-                  { id: 'full', label: 'Full', desc: '6×5' },
-                  { id: 'half', label: 'Half', desc: '6×3' },
-                  { id: 'rapid', label: 'Rapid', desc: '3×3' },
-                ]
-                const partyCls = isGame
-                  ? 'bg-white hover:bg-gray-100 text-jeopardy-blue'
-                  : 'bg-green-500 hover:bg-green-400 text-black'
-                const mpCls = isGame
-                  ? 'bg-jeopardy-blue hover:bg-jeopardy-blue/80 text-white border border-white/30'
-                  : 'bg-green-700 hover:bg-green-600 text-white border border-green-400/40'
-                return (
-                  <div className="flex flex-col items-center gap-3">
-                    <p className="text-gray-300 text-sm font-semibold">Pick a mode and board size:</p>
-                    <div className="w-full max-w-md space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                          📺 Party
-                          <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1.5 flex-1">
-                          {sizes.map((s) => (
-                            <button
-                              key={s.id}
-                              onClick={() => startMode('party', s.id)}
-                              disabled={creating}
-                              className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${partyCls}`}
-                            >
-                              {s.label}
-                              <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                          🌐 Multiplayer
-                          <span className="block text-[10px] font-normal opacity-60">Own device</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1.5 flex-1">
-                          {sizes.map((s) => (
-                            <button
-                              key={s.id}
-                              onClick={() => startMode('multiplayer', s.id)}
-                              disabled={creating}
-                              className={`font-bold px-2 py-2.5 rounded-lg text-sm transition-all disabled:opacity-50 ${mpCls}`}
-                            >
-                              {s.label}
-                              <span className="block text-[10px] opacity-70 font-normal">{s.desc}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
                     <button
-                      onClick={() => setPreviewMode('idle')}
-                      className="text-gray-400 hover:text-white text-xs mt-1"
+                      onClick={async () => {
+                        const url = isGame
+                          ? `${window.location.origin}/find?game=${pb.id}`
+                          : `${window.location.origin}/find?board=${pb.id}`
+                        try {
+                          await navigator.clipboard.writeText(url)
+                          setPreviewMode('copied')
+                          setTimeout(() => setPreviewMode((m) => (m === 'copied' ? 'idle' : m)), 1800)
+                        } catch {
+                          prompt('Copy this link to share:', url)
+                        }
+                      }}
+                      className="btn-stage btn-stage-ghost btn-stage-sm"
                     >
-                      Back
+                      🔗 Share
                     </button>
                   </div>
-                )
-              })()}
+                )}
+
+                {previewMode === 'copied' && (
+                  <p className="text-copper text-center text-sm font-semibold pt-4">
+                    ✓ Link copied to clipboard
+                  </p>
+                )}
+
+                {previewMode === 'choose-mode' && (() => {
+                  const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
+                    { id: 'full', label: 'Full', desc: '6×5' },
+                    { id: 'half', label: 'Half', desc: '6×3' },
+                    { id: 'rapid', label: 'Rapid', desc: '3×3' },
+                  ]
+                  return (
+                    <div className="flex flex-col items-center gap-4 pt-5 border-t border-white/10">
+                      <p className="text-copper uppercase text-sm tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}>
+                        ▸ Pick a mode and board size ◂
+                      </p>
+                      <div className="w-full max-w-md space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                            📺 Party
+                            <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5 flex-1">
+                            {sizes.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => startMode('party', s.id)}
+                                disabled={creating}
+                                className="btn-stage btn-copper btn-stage-sm !h-[52px] px-1"
+                              >
+                                <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                            🌐 Multiplayer
+                            <span className="block text-[10px] font-normal opacity-60">Own device</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5 flex-1">
+                            {sizes.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => startMode('multiplayer', s.id)}
+                                disabled={creating}
+                                className="btn-stage btn-chrome btn-stage-sm !h-[52px] px-1"
+                              >
+                                <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setPreviewMode('idle')}
+                        className="text-ink-stage-2 hover:text-copper text-xs mt-1"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  )
+                })()}
+              </div>
             </div>
           </div>
         )
@@ -1395,46 +1382,49 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
       {/* Size-picker modal — appears after clicking Party or Multiplayer */}
       {pendingPlay && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in"
           onClick={() => setPendingPlay(null)}
         >
-          <div
-            className="bg-jeopardy-dark border-2 border-white/20 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Starting</p>
-            <p className="text-white font-bold text-lg mb-5 truncate" title={pendingPlay.label}>
-              {pendingPlay.label}
-            </p>
-            <p className="text-gray-300 text-sm font-semibold mb-3">Pick your board size:</p>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {([
-                { id: 'full' as GameLength, label: 'Full', desc: '6×5', sub: '30 clues' },
-                { id: 'half' as GameLength, label: 'Half', desc: '6×3', sub: '18 clues' },
-                { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3', sub: '9 clues' },
-              ]).map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => {
-                    const run = pendingPlay.runner
-                    setPendingPlay(null)
-                    run(s.id)
-                  }}
-                  disabled={creating}
-                  className="bg-jeopardy-gold/15 hover:bg-jeopardy-gold/30 border-2 border-jeopardy-gold/60 text-jeopardy-gold rounded-xl py-4 transition-all disabled:opacity-50"
-                >
-                  <div className="font-bold text-lg leading-tight">{s.label}</div>
-                  <div className="text-xs opacity-80 mt-0.5">{s.desc}</div>
-                  <div className="text-[10px] opacity-60">{s.sub}</div>
-                </button>
-              ))}
+          <div className="plate max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="plate-surface p-6">
+              <p className="text-copper uppercase text-[11px] tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.45)' }}>
+                ▸ Starting
+              </p>
+              <p className="text-white font-bold text-lg mt-1 mb-5 truncate" title={pendingPlay.label}>
+                {pendingPlay.label}
+              </p>
+              <p className="text-ink-stage-2 uppercase text-xs tracking-[0.22em] mb-3" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                Pick your board size
+              </p>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {([
+                  { id: 'full' as GameLength, label: 'Full', desc: '6×5', sub: '30 clues' },
+                  { id: 'half' as GameLength, label: 'Half', desc: '6×3', sub: '18 clues' },
+                  { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3', sub: '9 clues' },
+                ]).map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      const run = pendingPlay.runner
+                      setPendingPlay(null)
+                      run(s.id)
+                    }}
+                    disabled={creating}
+                    className="btn-stage btn-copper !h-auto py-4 flex-col leading-tight"
+                  >
+                    <span className="text-base">{s.label}</span>
+                    <span className="text-[10px] opacity-80 mt-0.5 tracking-normal normal-case font-normal">{s.desc}</span>
+                    <span className="text-[9px] opacity-70 tracking-normal normal-case font-normal">{s.sub}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setPendingPlay(null)}
+                className="w-full text-ink-stage-2 hover:text-copper text-sm py-2"
+              >
+                Cancel
+              </button>
             </div>
-            <button
-              onClick={() => setPendingPlay(null)}
-              className="w-full text-gray-400 hover:text-white text-sm py-2"
-            >
-              Cancel
-            </button>
           </div>
         </div>
       )}

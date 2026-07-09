@@ -5,16 +5,14 @@ import { useRouter } from 'next/navigation'
 import { joinGame, deleteCustomBoard } from '@/lib/game-api'
 import { useUser } from '@/lib/auth'
 import { getMyBoards, type BoardSummary } from '@/lib/profile-api'
+import { ChromeWordmark } from '@/components/ChromeWordmark'
 
 /**
- * LANDING PAGE
+ * LANDING PAGE — stage set
  *
- * Two primary actions:
- *  - Find a Game  → /find  (search + filter, then pick party/multiplayer)
- *  - Create a Game → /create (custom board builder)
- *
- * Join-by-code lives at the top so players hopping in from a TV display
- * don't have to scroll past anything.
+ * Wood picture-frame around a deep-blue stage plate. Chrome JEOPARDY!
+ * wordmark on top, then a Reservations panel (Join by code), then two
+ * action cards for Find / Create, then the signed-in user's boards.
  */
 export default function Home() {
   const router = useRouter()
@@ -48,16 +46,9 @@ export default function Home() {
   }
 
   async function handleJoinParty() {
-    if (!playerName.trim()) {
-      setError('Enter your name')
-      return
-    }
-    if (!roomCode.trim() || roomCode.trim().length < 4) {
-      setError('Enter the room code from the TV')
-      return
-    }
-    setLoading(true)
-    setError('')
+    if (!playerName.trim()) { setError('Enter your name'); return }
+    if (!roomCode.trim() || roomCode.trim().length < 4) { setError('Enter the room code from the TV'); return }
+    setLoading(true); setError('')
     try {
       const { game, player } = await joinGame(roomCode.trim(), playerName.trim(), user?.id)
       localStorage.setItem('playerId', player.id)
@@ -71,108 +62,162 @@ export default function Home() {
     }
   }
 
+  const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+
   return (
-    <main className="min-h-screen flex flex-col items-center p-6">
-      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-28 md:h-40 lg:h-52 w-auto mb-6 mt-4" />
+    <main className="stage-page p-4 md:p-8 pb-24">
+      <div className="max-w-5xl mx-auto">
+        <div className="frame">
+          <span className="led-strip led-strip-left" />
+          <span className="led-strip led-strip-right" />
 
-      {/* Join existing party game — top spot for fast access */}
-      <div className="w-full max-w-sm mb-10">
-        <p className="text-gray-500 text-sm text-center mb-3">Join a party game by code</p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Your name"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            maxLength={30}
-            className="input-base text-base flex-1"
-          />
-          <input
-            type="text"
-            placeholder="Code"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            className="input-base text-lg tracking-[0.2em] text-center font-mono w-28"
-          />
-          <button
-            onClick={handleJoinParty}
-            disabled={loading}
-            className="btn-primary px-5 py-3 text-base whitespace-nowrap"
-          >
-            {loading ? '...' : 'Join'}
-          </button>
-        </div>
-        {error && <p className="text-red-400 text-center text-sm mt-2">{error}</p>}
-      </div>
-
-      {/* Two primary actions */}
-      <div className="w-full max-w-3xl grid gap-4 md:grid-cols-2 lg:gap-6 mb-10">
-        <a
-          href="/find"
-          className="group bg-jeopardy-blue-cell/30 hover:bg-jeopardy-blue-cell/50 border-2 border-jeopardy-blue rounded-2xl p-8 lg:p-12 text-center transition-all hover:scale-[1.02]"
-        >
-          <p className="text-4xl lg:text-6xl mb-3">🔍</p>
-          <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">Find a Game</h2>
-          <p className="text-gray-400 text-sm lg:text-base">
-            Search real Jeopardy! games, themed mashups, and custom boards. Pick party or multiplayer mode.
-          </p>
-        </a>
-
-        <a
-          href="/create"
-          className="group bg-green-900/20 hover:bg-green-900/30 border-2 border-green-500/40 rounded-2xl p-8 lg:p-12 text-center transition-all hover:scale-[1.02]"
-        >
-          <p className="text-4xl lg:text-6xl mb-3">✏️</p>
-          <h2 className="text-2xl lg:text-3xl font-bold text-green-400 mb-2">Create a Game</h2>
-          <p className="text-gray-400 text-sm lg:text-base">
-            Build your own categories, clues, and answers. Save to play again later.
-          </p>
-        </a>
-      </div>
-
-      {/* Your saved boards — only when signed in and you have some */}
-      {user && myBoards.length > 0 && (
-        <div className="w-full max-w-4xl mb-10">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-gray-400 text-sm font-semibold uppercase tracking-wider">
-              Your boards ({myBoards.length})
-            </p>
-            <a href="/create" className="text-green-400 hover:text-green-300 text-xs">
-              + New board
-            </a>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-            {myBoards.map((b) => (
-              <div
-                key={b.id}
-                className="flex items-center gap-1.5 bg-green-900/15 hover:bg-green-900/25 border border-green-500/40 rounded-lg px-3 py-2 transition-colors"
-              >
-                <span className="text-white text-sm truncate flex-1" title={b.title}>
-                  {b.title}
-                </span>
-                {!b.is_public && (
-                  <span className="text-[10px] text-gray-500 uppercase">Private</span>
-                )}
-                <button
-                  onClick={() => router.push(`/create?boardId=${b.id}`)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-2.5 py-1.5 rounded transition-colors whitespace-nowrap"
-                  title="Edit this board"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => handleDeleteBoard(b.id, b.title)}
-                  className="bg-red-700/60 hover:bg-red-600 text-white text-xs font-bold px-2 py-1.5 rounded transition-colors whitespace-nowrap"
-                  title="Delete this board"
-                >
-                  ✕
-                </button>
+          <div className="frame-inner p-6 md:p-10">
+            {/* Masthead */}
+            <div className="flex items-center justify-between gap-4 pb-6 mb-2 border-b border-white/10">
+              <div className="text-ink-stage-2 uppercase text-[10px] tracking-[0.22em] font-bold">
+                {profile?.display_name || 'Guest'}
               </div>
-            ))}
+              <div className="text-copper uppercase text-xs tracking-[0.24em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                ▸ Multiplayer ◂
+              </div>
+              <div className="text-ink-stage-2 uppercase text-[10px] tracking-[0.22em] font-bold text-right">
+                {dateLabel}
+              </div>
+            </div>
+
+            {/* Hero wordmark */}
+            <div className="text-center py-10 md:py-12">
+              <ChromeWordmark className="mx-auto w-full max-w-[640px] h-auto" />
+              <p className="mt-4 text-copper tracking-[0.32em] uppercase text-xs md:text-sm" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 10px rgba(255,155,68,0.5)' }}>
+                ▸ A Trivia Party in Three Rounds ◂
+              </p>
+              <p className="mt-4 text-ink-stage text-sm md:text-base max-w-xl mx-auto">
+                Search 42 seasons of Jeopardy!, build your own board, or drop into a friend's game with a room code.
+              </p>
+            </div>
+
+            {/* Join a party */}
+            <div className="eyebrow-copper my-6">Jump into a party</div>
+            <div className="plate">
+              <div className="plate-surface p-5 md:p-7">
+                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] gap-4 md:items-end">
+                  <div>
+                    <label className="block mb-1.5 text-copper uppercase text-[10px] tracking-[0.22em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                      Your name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Your name"
+                      value={playerName}
+                      onChange={(e) => setPlayerName(e.target.value)}
+                      maxLength={30}
+                      className="field-stage"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1.5 text-copper uppercase text-[10px] tracking-[0.22em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                      Room code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ABCDEF"
+                      value={roomCode}
+                      onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                      maxLength={6}
+                      className="field-stage field-code-stage"
+                    />
+                  </div>
+                  <button
+                    onClick={handleJoinParty}
+                    disabled={loading}
+                    className="btn-stage btn-copper btn-stage-lg md:mt-0"
+                  >
+                    {loading ? '…' : 'Join Room'}
+                  </button>
+                </div>
+                {error && <p className="mt-3 text-center text-sm text-copper-glow">{error}</p>}
+              </div>
+            </div>
+
+            {/* Action cards */}
+            <div className="eyebrow-copper my-6 mt-8">Or start something new</div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <a href="/find" className="plate group transition-transform hover:-translate-y-0.5">
+                <div className="plate-surface grid grid-rows-[auto_1fr_auto] gap-3 p-6 md:p-7 min-h-[210px]">
+                  <span className="text-copper uppercase text-xs tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}>
+                    ▸ Play
+                  </span>
+                  <div>
+                    <h2 className="display-chrome text-4xl md:text-[42px] leading-none">Find a Game</h2>
+                    <p className="mt-3 text-ink-stage text-sm max-w-[34ch]">
+                      Real Jeopardy! episodes, themed mashups, and community boards — searchable end-to-end.
+                    </p>
+                  </div>
+                  <span className="btn-stage btn-copper self-start">Open Archive →</span>
+                </div>
+              </a>
+
+              <a href="/create" className="plate group transition-transform hover:-translate-y-0.5">
+                <div className="plate-surface grid grid-rows-[auto_1fr_auto] gap-3 p-6 md:p-7 min-h-[210px]">
+                  <span className="text-copper uppercase text-xs tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}>
+                    ▸ Create
+                  </span>
+                  <div>
+                    <h2 className="display-chrome text-4xl md:text-[42px] leading-none">Build a Board</h2>
+                    <p className="mt-3 text-ink-stage text-sm max-w-[34ch]">
+                      Draft your own categories and clues. Present at a party or save it for later.
+                    </p>
+                  </div>
+                  <span className="btn-stage btn-chrome self-start">New Board →</span>
+                </div>
+              </a>
+            </div>
+
+            {/* Saved boards (only when signed in and non-empty) */}
+            {user && myBoards.length > 0 && (
+              <>
+                <div className="eyebrow-copper my-6 mt-8">Your saved boards</div>
+                <div className="grid gap-1">
+                  {myBoards.map((b, i) => (
+                    <div
+                      key={b.id}
+                      className="grid grid-cols-[44px_1fr_auto_auto] gap-4 items-center px-4 py-3 rounded-md border border-white/10 bg-black/40 hover:border-copper/60 hover:bg-black/60 transition-colors"
+                    >
+                      <span
+                        className="text-copper text-xl tabular-nums"
+                        style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 10px rgba(255,155,68,0.55)' }}
+                      >
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span className="text-white font-semibold truncate">{b.title}</span>
+                      <span className="text-ink-stage-2 uppercase text-[11px] tracking-[0.2em] hidden md:block" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
+                        {!b.is_public && 'Private · '}
+                        {new Date(b.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                      <span className="flex gap-1.5">
+                        <button
+                          onClick={() => router.push(`/create?boardId=${b.id}`)}
+                          className="btn-stage btn-stage-sm btn-stage-ghost"
+                          title="Edit this board"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBoard(b.id, b.title)}
+                          className="btn-stage btn-stage-sm btn-stage-ghost"
+                          title="Delete this board"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
-      )}
+      </div>
     </main>
   )
 }
