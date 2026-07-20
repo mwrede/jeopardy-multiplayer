@@ -219,7 +219,9 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
       game_id: game.id,
       name: playerName,
       join_order: (count ?? 0) + 1,
-      is_ready: true, // everyone is auto-ready — no ready-up step in party mode
+      // Party mode has no ready-up step (auto-ready). Multiplayer keeps the
+      // ready toggle — everyone confirms they're on their own device first.
+      is_ready: isActive || !isMultiplayerMode,
       is_creator: isFirstPlayer, // first player to join is the creator
     })
     .select()
