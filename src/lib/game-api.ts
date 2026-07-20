@@ -1269,16 +1269,25 @@ export async function advanceFromClueResult(gameId: string) {
 
 /**
  * Submit a Daily Double wager.
- * After wagering, move to the answering phase.
+ * Server clamps to Jeopardy! rules: minimum $5, maximum is max(player.score, round max clue).
+ * Round-1 max is $1000, round-2 max is $2000 — so a player under those scores can still wager
+ * up to that floor. After wagering, move to the answering phase.
  */
 export async function submitWager(gameId: string, playerId: string, wager: number) {
-  // Store the wager on the player (reuse final_wager field for DD too)
+  const [{ data: game }, { data: player }] = await Promise.all([
+    supabase.from('games').select('current_round, settings').eq('id', gameId).single(),
+    supabase.from('players').select('score').eq('id', playerId).single(),
+  ])
+
+  const roundMax = game?.current_round === 2 ? 2000 : 1000
+  const maxWager = Math.max(player?.score ?? 0, roundMax)
+  const clamped = Math.min(Math.max(Math.floor(wager) || 5, 5), maxWager)
+
   await supabase
     .from('players')
-    .update({ final_wager: wager })
+    .update({ final_wager: clamped })
     .eq('id', playerId)
 
-  // Move to daily double answering phase
   const { error } = await supabase
     .from('games')
     .update({
@@ -1291,20 +1300,46 @@ export async function submitWager(gameId: string, playerId: string, wager: numbe
 }
 
 /**
- * Player passes after buzzing in ("I Don't Know" during answering phase).
- * No points are deducted. Clue is marked as answered with no answerer.
+ * Player who buzzed in fails to answer in time (or taps "I Don't Know").
+ * Deducts the clue value — or the Daily Double wager — from their score,
+ * same as if they had answered incorrectly.
  */
 export async function passAfterBuzz(gameId: string, clueId: string, playerId: string) {
-  // Mark clue as answered with no one getting it (no score change)
+  const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
+    supabase.from('clues').select('value, is_daily_double').eq('id', clueId).single(),
+    supabase.from('games').select('phase').eq('id', gameId).single(),
+    supabase.from('players').select('score, final_wager').eq('id', playerId).single(),
+  ])
+
+  const isDailyDouble = clue?.is_daily_double && (game?.phase === 'daily_double_answering')
+  const pointValue = isDailyDouble ? (playerData?.final_wager || clue?.value || 0) : (clue?.value || 0)
+
+  if (playerData && pointValue > 0) {
+    await supabase
+      .from('players')
+      .update({ score: playerData.score - pointValue })
+      .eq('id', playerId)
+  }
+
+  // Mark clue as answered incorrectly by the buzzer so the result screen shows the swing.
   await supabase
     .from('clues')
     .update({
       is_answered: true,
-      answered_by: null,
+      answered_by: playerId,
+      answered_correct: false,
     })
     .eq('id', clueId)
 
-  // Go to clue_result phase — keep current_player_id so same player picks next
+  // Try to record the "no answer" on the player's buzz row for the reveal
+  await supabase
+    .from('buzzes')
+    .update({ answer: '', is_correct: false })
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('player_id', playerId)
+
+  // Go to clue_result phase — same player still picks next (wrong answer keeps picker)
   await supabase
     .from('games')
     .update({

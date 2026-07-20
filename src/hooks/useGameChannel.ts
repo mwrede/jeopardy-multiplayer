@@ -65,16 +65,29 @@ export function useGameChannel(roomCode: string) {
   const gameIdRef = useRef<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Full refresh from DB
+  // Full refresh from DB.
+  // A late-arriving poll can clobber fresher state pushed by realtime, which
+  // shows up as "wrong clue flashes for a moment" on the party display. Guard
+  // by comparing updated_at — if what we already have is newer, keep it.
   const refreshState = useCallback(async () => {
     const gameId = gameIdRef.current
     if (!gameId) return
 
     const fullState = await fetchFullState(gameId)
-    setState((s) => ({
-      ...s,
-      ...fullState,
-    }))
+    setState((s) => {
+      const localTs = s.game?.updated_at ? new Date(s.game.updated_at).getTime() : 0
+      const fetchedTs = fullState.game?.updated_at
+        ? new Date(fullState.game.updated_at).getTime()
+        : 0
+      // Keep the fresher game row; still merge players/clues/categories since
+      // those don't have a shared timestamp and are additive/idempotent.
+      const game = fetchedTs >= localTs ? fullState.game : s.game
+      return {
+        ...s,
+        ...fullState,
+        game,
+      }
+    })
   }, [])
 
   // 1. Initial load: find the game by room code

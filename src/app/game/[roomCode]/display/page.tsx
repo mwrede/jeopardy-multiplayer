@@ -151,7 +151,9 @@ export default function DisplayPage() {
         .update({
           phase: 'buzz_window',
           buzz_window_open: true,
-          buzz_window_start: new Date().toISOString(),
+          // 700ms lead time so realtime can propagate to all phones before
+          // buzzers arm. Every client schedules against this same target.
+          buzz_window_start: new Date(Date.now() + 700).toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', game.id)
@@ -177,26 +179,26 @@ export default function DisplayPage() {
     }
 
     const totalMs = game.settings?.buzz_window_ms ?? 15000
-    // Sync timer to when the buzz window actually opened
-    const startTime = game.buzz_window_start ? new Date(game.buzz_window_start).getTime() : Date.now()
-    const elapsed = Date.now() - startTime
-    const remainingMs = Math.max(0, totalMs - elapsed)
-    setBuzzCountdown(Math.ceil(remainingMs / 1000))
+    // buzz_window_start is a scheduled-future timestamp (writer added ~700ms lead).
+    // Wait for that moment locally so all clients open together. Clamp the delay
+    // to [0, 1200ms] so a badly-skewed device clock still opens promptly.
+    const scheduledMs = game.buzz_window_start
+      ? new Date(game.buzz_window_start).getTime()
+      : Date.now()
+    const openDelay = Math.max(0, Math.min(1200, scheduledMs - Date.now()))
+    const armAt = Date.now() + openDelay
+    setBuzzCountdown(Math.ceil(totalMs / 1000))
 
-    // Tick down every second (synced)
     buzzIntervalRef.current = setInterval(() => {
-      const remaining = Math.max(0, totalMs - (Date.now() - startTime))
+      const remaining = Math.max(0, totalMs - (Date.now() - armAt))
       setBuzzCountdown(Math.ceil(remaining / 1000))
-    }, 1000)
+    }, 250)
 
-    // Auto-skip when time runs out (synced)
-    if (remainingMs > 0) {
-      buzzTimeoutRef.current = setTimeout(async () => {
-        if (game.current_clue_id) {
-          await skipClue(game.id, game.current_clue_id)
-        }
-      }, remainingMs)
-    }
+    buzzTimeoutRef.current = setTimeout(async () => {
+      if (game.current_clue_id) {
+        await skipClue(game.id, game.current_clue_id)
+      }
+    }, openDelay + totalMs)
 
     return () => {
       if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)
@@ -833,7 +835,8 @@ export default function DisplayPage() {
 
       {/* Board or Clue display */}
       {showClue && currentClue ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-12">
+        // key forces a fresh remount when clue changes so no stale render lingers
+        <div key={currentClue.id} className="flex-1 flex flex-col items-center justify-center px-12">
           {/* Category name */}
           {(() => {
             const clueCategory = categories.find((c) => c.id === currentClue.category_id)

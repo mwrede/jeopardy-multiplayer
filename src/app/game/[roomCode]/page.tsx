@@ -62,6 +62,7 @@ export default function PlayerPage() {
   const [finalAnswerLocked, setFinalAnswerLocked] = useState(false)
   const [hasPassed, setHasPassed] = useState(false)
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
+  const [buzzArmed, setBuzzArmed] = useState(false)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
   const buzzIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -109,7 +110,7 @@ export default function PlayerPage() {
       await supabase.from('games').update({
         phase: 'buzz_window',
         buzz_window_open: true,
-        buzz_window_start: new Date().toISOString(),
+        buzz_window_start: new Date(Date.now() + 700).toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', game.id).eq('phase', 'clue_reading')  // only flip if still clue_reading
     }, delay)
@@ -118,31 +119,41 @@ export default function PlayerPage() {
     }
   }, [game?.phase, game?.id, game?.settings?.reading_period_ms])
 
-  // Buzz window countdown timer on player view
+  // Buzz window countdown + arming. Scheduled against buzz_window_start (a
+  // ~700ms-future timestamp) so every phone arms at the same moment.
+  const buzzArmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    setBuzzArmed(false)
     if (!game || game.phase !== 'buzz_window') {
       setBuzzCountdown(null)
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
+      if (buzzArmTimeoutRef.current) clearTimeout(buzzArmTimeoutRef.current)
       buzzIntervalRef.current = null
+      buzzArmTimeoutRef.current = null
       return
     }
 
     const totalMs = game.settings?.buzz_window_ms ?? 15000
-    // Sync timer to when the buzz window actually opened
-    const startTime = game.buzz_window_start ? new Date(game.buzz_window_start).getTime() : Date.now()
-    const elapsed = Date.now() - startTime
-    const remainingMs = Math.max(0, totalMs - elapsed)
-    setBuzzCountdown(Math.ceil(remainingMs / 1000))
+    const scheduledMs = game.buzz_window_start
+      ? new Date(game.buzz_window_start).getTime()
+      : Date.now()
+    // Clamp so a badly-skewed device clock still arms within 1.2s.
+    const openDelay = Math.max(0, Math.min(1200, scheduledMs - Date.now()))
+    const armAt = Date.now() + openDelay
+
+    buzzArmTimeoutRef.current = setTimeout(() => setBuzzArmed(true), openDelay)
+    setBuzzCountdown(Math.ceil(totalMs / 1000))
 
     buzzIntervalRef.current = setInterval(() => {
-      const remaining = Math.max(0, totalMs - (Date.now() - startTime))
+      const remaining = Math.max(0, totalMs - (Date.now() - armAt))
       setBuzzCountdown(Math.ceil(remaining / 1000))
-    }, 1000)
+    }, 250)
 
     return () => {
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
+      if (buzzArmTimeoutRef.current) clearTimeout(buzzArmTimeoutRef.current)
     }
-  }, [game?.phase, game?.id])
+  }, [game?.phase, game?.id, game?.buzz_window_start])
 
   // Answer countdown timer when it's your turn to answer
   useEffect(() => {
@@ -632,6 +643,9 @@ export default function PlayerPage() {
             )}
           </div>
 
+          {/* What the buzzer typed (only when someone got it wrong) */}
+          <WrongAnswerDisplay gameId={game.id} clueId={currentClue.id} answererId={currentClue.answered_by} />
+
           {/* Correct answer */}
           <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm mb-1">Correct answer:</p>
@@ -761,7 +775,7 @@ export default function PlayerPage() {
                 gameId={game.id}
                 clueId={currentClue.id}
                 playerId={myPlayer.id}
-                buzzWindowOpen={game.phase === 'buzz_window'}
+                buzzWindowOpen={game.phase === 'buzz_window' && buzzArmed}
                 isBuzzWinner={false}
                 isLockedOut={false}
                 onBuzz={handleBuzz}
@@ -871,9 +885,16 @@ export default function PlayerPage() {
         <input
           type="number"
           value={wager}
-          onChange={(e) => setWager(e.target.value)}
+          onChange={(e) => {
+            // Clamp on type so a player under $1000 can't stage a wager they can't afford
+            const raw = e.target.value.replace(/[^0-9]/g, '')
+            if (!raw) { setWager(''); return }
+            const n = parseInt(raw, 10)
+            setWager(String(Math.min(n, maxWager)))
+          }}
           min={5}
           max={maxWager}
+          inputMode="numeric"
           className="input-base max-w-xs text-2xl text-center"
           autoFocus
         />
@@ -922,6 +943,55 @@ function PlayerHeader({ myPlayer, game }: { myPlayer: { name: string; score: num
       <span className={`text-xl font-bold ${myPlayer.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
         ${myPlayer.score.toLocaleString()}
       </span>
+    </div>
+  )
+}
+
+/**
+ * Fetches the answerer's buzz row to show what they typed when they got the
+ * clue wrong (or auto-passed with no text). Renders nothing when the answer
+ * was correct or nobody buzzed.
+ */
+function WrongAnswerDisplay({
+  gameId,
+  clueId,
+  answererId,
+}: {
+  gameId: string
+  clueId: string
+  answererId: string | null | undefined
+}) {
+  const [typed, setTyped] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!answererId) { setTyped(null); return }
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('buzzes')
+        .select('answer, is_correct')
+        .eq('game_id', gameId)
+        .eq('clue_id', clueId)
+        .eq('player_id', answererId)
+        .maybeSingle()
+      if (cancelled) return
+      // Show only when they got it wrong
+      if (data && data.is_correct === false) {
+        setTyped((data.answer ?? '').trim())
+      } else {
+        setTyped(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [gameId, clueId, answererId])
+
+  if (typed === null) return null
+  return (
+    <div className="mt-5 text-center">
+      <p className="text-gray-500 text-sm mb-1">Their answer:</p>
+      <p className="text-red-300 text-lg font-semibold italic">
+        {typed ? `"${typed}"` : '(no answer)'}
+      </p>
     </div>
   )
 }
