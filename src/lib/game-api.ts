@@ -219,7 +219,7 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
       game_id: game.id,
       name: playerName,
       join_order: (count ?? 0) + 1,
-      is_ready: isActive, // auto-ready if game already started
+      is_ready: true, // everyone is auto-ready — no ready-up step in party mode
       is_creator: isFirstPlayer, // first player to join is the creator
     })
     .select()

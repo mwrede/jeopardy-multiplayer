@@ -6,7 +6,6 @@ import { BuzzerButton } from '@/components/BuzzerButton'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import {
-  setReady,
   removePlayer,
   startGame,
   startGameFromSource,
@@ -225,11 +224,6 @@ export default function PlayerPage() {
     }
   }
 
-  const handleReady = () => doAction(async () => {
-    if (!myPlayer) return
-    await setReady(myPlayer.id, !myPlayer.is_ready)
-  })
-
   const handleStartGame = () => doAction(async () => {
     if (!game) return
     const settings = game.settings as any
@@ -365,45 +359,38 @@ export default function PlayerPage() {
                   : 'bg-white/5'
               }`}
             >
-              <span className="font-semibold">{p.name}</span>
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-semibold ${p.is_ready ? 'text-green-400' : 'text-gray-500'}`}>
-                  {p.is_ready ? 'Ready' : 'Not ready'}
-                </span>
-                {p.id !== myPlayerId && (
-                  <button
-                    onClick={async () => { await removePlayer(p.id); await refreshState() }}
-                    className="text-xs text-red-400/60 hover:text-red-400 transition-colors px-2"
-                    title="Remove player"
-                  >
-                    ✕
-                  </button>
+              <span className="font-semibold flex items-center gap-2">
+                {p.name}
+                {p.is_creator && (
+                  <span className="text-[10px] uppercase tracking-widest text-jeopardy-gold font-bold">Host</span>
                 )}
-              </div>
+              </span>
+              {/* Only the host can kick, and never themselves */}
+              {myPlayer.is_creator && p.id !== myPlayerId && (
+                <button
+                  onClick={async () => { await removePlayer(p.id); await refreshState() }}
+                  className="text-xs text-red-400/60 hover:text-red-400 transition-colors px-2"
+                  title="Remove player"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
         </div>
 
-        <button
-          onClick={handleReady}
-          disabled={busy}
-          className={`w-full max-w-sm py-5 rounded-2xl font-bold text-xl transition-all active:scale-[0.98] disabled:opacity-50 ${
-            myPlayer.is_ready
-              ? 'btn-secondary'
-              : 'bg-green-600 text-white'
-          }`}
-        >
-          {myPlayer.is_ready ? 'Cancel Ready' : 'Ready Up'}
-        </button>
-
-        {players.every((p) => p.is_ready) && players.length >= 1 && (
+        {myPlayer.is_creator ? (
           <button
             onClick={handleStartGame}
-            disabled={busy}
-            className="btn-primary w-full max-w-sm mt-3 py-5 text-xl"
+            disabled={busy || players.length < 1}
+            className="btn-primary w-full max-w-sm py-5 text-xl"
           >
             {busy ? 'Starting...' : 'Start Game'}
           </button>
+        ) : (
+          <p className="text-gray-400 text-center max-w-sm">
+            Waiting for the host to start the game...
+          </p>
         )}
 
         {error && <p className="text-red-400 text-center text-sm mt-4 max-w-sm">{error}</p>}

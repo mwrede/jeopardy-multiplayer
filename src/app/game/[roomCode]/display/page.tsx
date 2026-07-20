@@ -395,14 +395,12 @@ export default function DisplayPage() {
           {players.map((p) => (
             <div
               key={p.id}
-              className={`px-6 py-3 rounded-2xl text-xl font-semibold transition-all ${
-                p.is_ready
-                  ? 'bg-green-600/20 border border-green-500 text-green-400'
-                  : 'bg-white/5 border border-white/10 text-gray-300'
-              }`}
+              className="px-6 py-3 rounded-2xl text-xl font-semibold bg-white/5 border border-white/10 text-gray-100 flex items-center gap-2"
             >
               {p.name}
-              {p.is_ready && <span className="ml-2 text-green-500">&#10003;</span>}
+              {p.is_creator && (
+                <span className="text-[10px] uppercase tracking-widest text-jeopardy-gold font-bold">Host</span>
+              )}
             </div>
           ))}
           {players.length === 0 && (
@@ -412,8 +410,8 @@ export default function DisplayPage() {
 
         <p className="mt-8 text-gray-500">
           {players.length}/15 players
-          {players.length >= 1 && players.every((p) => p.is_ready) && (
-            <span className="text-jeopardy-gold ml-4">Ready to start!</span>
+          {players.length >= 1 && (
+            <span className="text-jeopardy-gold ml-4">Waiting for host to start...</span>
           )}
         </p>
       </div>
