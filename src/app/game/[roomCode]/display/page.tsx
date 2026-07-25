@@ -108,6 +108,29 @@ export default function DisplayPage() {
   const [isRebuzz, setIsRebuzz] = useState(false)
   useEffect(() => { setIsRebuzz(false) }, [game?.current_clue_id])
 
+  // Speech synth needs a user gesture before it will speak (Chrome/Safari
+  // autoplay policy). Show a one-click overlay to prime it; once primed we
+  // don't ask again on this browser.
+  const [audioReady, setAudioReady] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.localStorage.getItem('displayAudioPrimed') === '1') setAudioReady(true)
+  }, [])
+  const primeAudio = () => {
+    if (typeof window === 'undefined') return
+    try {
+      const synth = window.speechSynthesis
+      if (synth) {
+        // A tiny silent utterance is enough to unlock later speak() calls.
+        const u = new SpeechSynthesisUtterance(' ')
+        u.volume = 0
+        synth.speak(u)
+      }
+      window.localStorage.setItem('displayAudioPrimed', '1')
+    } catch {}
+    setAudioReady(true)
+  }
+
   // === SOUND EFFECTS ===
   const prevPhaseRef = useRef<string | null>(null)
   useEffect(() => {
@@ -190,9 +213,12 @@ export default function DisplayPage() {
     const fallback = setTimeout(() => { if (!cancelled) { cancelled = true; doTransition() } }, speechFallbackMs)
 
     const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
-    if (synth) {
+    if (synth && audioReady) {
       try {
         synth.cancel()
+        // Chrome sometimes gets stuck in a paused state after idle — resume
+        // before speak() so the utterance actually fires.
+        try { synth.resume() } catch {}
         const utter = new SpeechSynthesisUtterance(currentClue.question)
         utter.rate = 0.95
         utter.pitch = 1.0
@@ -202,7 +228,8 @@ export default function DisplayPage() {
         }
         utter.onend = () => { if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() } }
         utter.onerror = () => { if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() } }
-        synth.speak(utter)
+        // Small delay so cancel() has fully settled before speak() lands.
+        setTimeout(() => { if (!cancelled) synth.speak(utter) }, 60)
       } catch {
         // fallback timer already scheduled
       }
@@ -213,7 +240,7 @@ export default function DisplayPage() {
       clearTimeout(fallback)
       if (synth) synth.cancel()
     }
-  }, [game?.phase, game?.id, game?.current_clue_id, clueRevealed, clues, game?.settings?.reading_period_ms])
+  }, [game?.phase, game?.id, game?.current_clue_id, clueRevealed, clues, game?.settings?.reading_period_ms, audioReady])
 
   // Buzz window countdown timer + auto-skip on timeout
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
@@ -804,6 +831,19 @@ export default function DisplayPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+      {/* Audio unlock: browsers block speechSynthesis until user gesture.
+          Overlay dismisses once and remembers for future visits. */}
+      {!audioReady && (
+        <button
+          onClick={primeAudio}
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm text-white"
+        >
+          <span className="text-6xl">🔊</span>
+          <span className="text-2xl font-bold">Click to enable clue reader</span>
+          <span className="text-sm text-gray-400">The TV will read each clue aloud</span>
+        </button>
+      )}
+
       {/* Connection indicator + debug skip buttons */}
       <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
         {game.phase === 'board_selection' && game.current_round === 1 && (

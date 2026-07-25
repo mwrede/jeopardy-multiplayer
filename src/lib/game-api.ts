@@ -1145,7 +1145,7 @@ export async function skipClue(gameId: string, clueId: string) {
 export async function submitAnswer(gameId: string, clueId: string, playerId: string, answer: string) {
   const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
     supabase.from('clues').select('answer, value, is_daily_double').eq('id', clueId).single(),
-    supabase.from('games').select('current_round, phase').eq('id', gameId).single(),
+    supabase.from('games').select('current_round, phase, settings').eq('id', gameId).single(),
     supabase.from('players').select('final_wager').eq('id', playerId).single(),
   ])
 
@@ -1155,6 +1155,7 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
   const isDailyDouble = clue.is_daily_double && (game?.phase === 'daily_double_answering')
   const pointValue = isDailyDouble ? (playerData?.final_wager || clue.value) : clue.value
   const scoreChange = correct ? pointValue : -pointValue
+  const isPartyMode = (game?.settings as any)?.gameMode !== 'multiplayer'
 
   const { data: player } = await supabase
     .from('players').select('score').eq('id', playerId).single()
@@ -1174,8 +1175,9 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     .eq('clue_id', clueId)
     .eq('player_id', playerId)
 
-  // Correct answer, or a Daily Double (single-answerer): resolve immediately.
-  if (correct || isDailyDouble) {
+  // Correct answer, Daily Double (single-answerer), or a wrong answer in
+  // multiplayer mode (one-and-done rule): close out the clue immediately.
+  if (correct || isDailyDouble || !isPartyMode) {
     await supabase.from('clues').update({
       is_answered: true,
       answered_by: playerId,
@@ -1188,8 +1190,8 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     return { correct, scoreChange }
   }
 
-  // Regular clue, wrong answer: rebound to the next-fastest buzzer if any,
-  // otherwise close out the clue.
+  // Party-mode regular clue, wrong answer: rebound to the next-fastest
+  // buzzer, or reopen the buzz window for untried players.
   await advanceAfterFailedAnswer(gameId, clueId, playerId)
   return { correct, scoreChange }
 }
@@ -1343,12 +1345,13 @@ export async function submitWager(gameId: string, playerId: string, wager: numbe
 export async function passAfterBuzz(gameId: string, clueId: string, playerId: string) {
   const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
     supabase.from('clues').select('value, is_daily_double').eq('id', clueId).single(),
-    supabase.from('games').select('phase').eq('id', gameId).single(),
+    supabase.from('games').select('phase, settings').eq('id', gameId).single(),
     supabase.from('players').select('score, final_wager').eq('id', playerId).single(),
   ])
 
   const isDailyDouble = clue?.is_daily_double && (game?.phase === 'daily_double_answering')
   const pointValue = isDailyDouble ? (playerData?.final_wager || clue?.value || 0) : (clue?.value || 0)
+  const isPartyMode = (game?.settings as any)?.gameMode !== 'multiplayer'
 
   if (playerData && pointValue > 0) {
     await supabase
@@ -1365,8 +1368,9 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
     .eq('clue_id', clueId)
     .eq('player_id', playerId)
 
-  // Daily Doubles have only one attempt — close it out immediately.
-  if (isDailyDouble) {
+  // Daily Doubles (single-answerer) and multiplayer regular clues (one-and-done):
+  // close out the clue immediately with the wrong-answerer's score already docked.
+  if (isDailyDouble || !isPartyMode) {
     await supabase.from('clues').update({
       is_answered: true,
       answered_by: playerId,
@@ -1380,7 +1384,7 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
     return
   }
 
-  // Regular clue — rebound to the next buzzer in the queue, if any.
+  // Party-mode regular clue — rebound to the next buzzer or reopen the window.
   await advanceAfterFailedAnswer(gameId, clueId, playerId)
 }
 
