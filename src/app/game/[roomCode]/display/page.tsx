@@ -228,10 +228,13 @@ export default function DisplayPage() {
     const settingsDelay = game.settings?.reading_period_ms
     // Estimated reading duration (matches computeReadingMs): ~55ms/char.
     const estimatedReadMs = Math.max(3000, Math.min(15000, totalChars * 55))
+    // Fallback: if the voice never fires (or gets muted), we still want the
+    // buzzer to open a beat after the letter animation completes — not 4s
+    // later like before.
     const speechFallbackMs =
       typeof settingsDelay === 'number'
         ? settingsDelay
-        : estimatedReadMs + 4000
+        : estimatedReadMs + 800
     const fallback = setTimeout(() => {
       console.log('[tts] fallback timer fired — transitioning to buzz')
       if (!cancelled) { cancelled = true; doTransition() }
@@ -240,6 +243,7 @@ export default function DisplayPage() {
     // Karaoke: reveal letters at ~55ms each so they appear in step with the
     // voice. Runs independently of TTS so the reveal still animates even if
     // speech is muted.
+    console.log('[tts] starting letter reveal', { totalChars, estimatedReadMs })
     const revealStart = Date.now()
     const revealInterval = setInterval(() => {
       const elapsed = Date.now() - revealStart

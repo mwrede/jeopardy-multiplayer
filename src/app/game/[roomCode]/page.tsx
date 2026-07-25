@@ -654,14 +654,7 @@ export default function PlayerPage() {
             )}
           </div>
 
-          {/* What the buzzer typed (only when someone got it wrong) */}
-          <WrongAnswerDisplay gameId={game.id} clueId={currentClue.id} answererId={currentClue.answered_by} />
-
-          {/* Correct answer */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-500 text-sm mb-1">Correct answer:</p>
-            <p className="text-white text-lg font-bold">{currentClue.answer}</p>
-          </div>
+          {/* Answer + wrong-answer text live on the TV only, not on phones. */}
         </div>
       </div>
     )
