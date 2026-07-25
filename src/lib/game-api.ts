@@ -1143,7 +1143,6 @@ export async function skipClue(gameId: string, clueId: string) {
  * After answering, checks if the round is complete and auto-advances.
  */
 export async function submitAnswer(gameId: string, clueId: string, playerId: string, answer: string) {
-  // Get the correct answer and the game's current round
   const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
     supabase.from('clues').select('answer, value, is_daily_double').eq('id', clueId).single(),
     supabase.from('games').select('current_round, phase').eq('id', gameId).single(),
@@ -1153,18 +1152,12 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
   if (!clue) throw new Error('Clue not found')
 
   const correct = checkAnswer(answer, clue.answer)
-
-  // For Daily Doubles, use the player's wager instead of clue value
   const isDailyDouble = clue.is_daily_double && (game?.phase === 'daily_double_answering')
   const pointValue = isDailyDouble ? (playerData?.final_wager || clue.value) : clue.value
   const scoreChange = correct ? pointValue : -pointValue
 
-  // Update player score
   const { data: player } = await supabase
-    .from('players')
-    .select('score')
-    .eq('id', playerId)
-    .single()
+    .from('players').select('score').eq('id', playerId).single()
 
   if (player) {
     await supabase
@@ -1173,17 +1166,7 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
       .eq('id', playerId)
   }
 
-  // Mark clue as answered — always store who answered and whether correct
-  await supabase
-    .from('clues')
-    .update({
-      is_answered: true,
-      answered_by: playerId,
-      answered_correct: correct,
-    })
-    .eq('id', clueId)
-
-  // Save the player's typed answer to their buzz record for display on result screen
+  // Record this attempt on the buzz row
   await supabase
     .from('buzzes')
     .update({ answer, is_correct: correct })
@@ -1191,22 +1174,70 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     .eq('clue_id', clueId)
     .eq('player_id', playerId)
 
-  // Go to clue_result phase to show the result animation
-  // Only change current_player_id to the answerer if they got it right
-  // (correct player gets to pick next; wrong answer keeps the previous picker)
-  const updateFields: any = {
+  // Correct answer, or a Daily Double (single-answerer): resolve immediately.
+  if (correct || isDailyDouble) {
+    await supabase.from('clues').update({
+      is_answered: true,
+      answered_by: playerId,
+      answered_correct: correct,
+    }).eq('id', clueId)
+
+    const updateFields: any = { phase: 'clue_result', updated_at: new Date().toISOString() }
+    if (correct) updateFields.current_player_id = playerId
+    await supabase.from('games').update(updateFields).eq('id', gameId)
+    return { correct, scoreChange }
+  }
+
+  // Regular clue, wrong answer: rebound to the next-fastest buzzer if any,
+  // otherwise close out the clue.
+  await advanceAfterFailedAnswer(gameId, clueId, playerId)
+  return { correct, scoreChange }
+}
+
+/**
+ * After a buzzer answers wrong or lets the answer clock run out on a regular
+ * clue, promote the next-fastest untried buzzer to answering. If the buzz
+ * queue is exhausted, close the clue and show the result.
+ */
+async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnswererId: string) {
+  const { data: nextRows } = await supabase
+    .from('buzzes')
+    .select('player_id, server_timestamp, client_timestamp')
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('is_pass', false)
+    .is('is_correct', null) // untried — is_correct gets set once they attempt
+    .neq('player_id', lastAnswererId)
+    .order('server_timestamp', { ascending: true })
+    .order('client_timestamp', { ascending: true, nullsFirst: false })
+    .limit(1)
+
+  const next = nextRows?.[0]
+
+  if (next) {
+    // Hand the mic to the next buzzer. Clue stays open.
+    await supabase
+      .from('games')
+      .update({
+        current_player_id: next.player_id,
+        phase: 'player_answering',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+    return
+  }
+
+  // No one left in the queue — mark as wrong for the last attempter and show result.
+  await supabase.from('clues').update({
+    is_answered: true,
+    answered_by: lastAnswererId,
+    answered_correct: false,
+  }).eq('id', clueId)
+
+  await supabase.from('games').update({
     phase: 'clue_result',
     updated_at: new Date().toISOString(),
-  }
-  if (correct) {
-    updateFields.current_player_id = playerId
-  }
-  await supabase
-    .from('games')
-    .update(updateFields)
-    .eq('id', gameId)
-
-  return { correct, scoreChange }
+  }).eq('id', gameId)
 }
 
 /**
@@ -1303,8 +1334,9 @@ export async function submitWager(gameId: string, playerId: string, wager: numbe
 
 /**
  * Player who buzzed in fails to answer in time (or taps "I Don't Know").
- * Deducts the clue value — or the Daily Double wager — from their score,
- * same as if they had answered incorrectly.
+ * Deducts the clue value — or the Daily Double wager — from their score.
+ * If more buzzers are waiting in the queue, hands the mic to the next one
+ * instead of closing the clue.
  */
 export async function passAfterBuzz(gameId: string, clueId: string, playerId: string) {
   const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
@@ -1323,17 +1355,7 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
       .eq('id', playerId)
   }
 
-  // Mark clue as answered incorrectly by the buzzer so the result screen shows the swing.
-  await supabase
-    .from('clues')
-    .update({
-      is_answered: true,
-      answered_by: playerId,
-      answered_correct: false,
-    })
-    .eq('id', clueId)
-
-  // Try to record the "no answer" on the player's buzz row for the reveal
+  // Record the timeout on this player's buzz row so it counts as a tried attempt.
   await supabase
     .from('buzzes')
     .update({ answer: '', is_correct: false })
@@ -1341,14 +1363,23 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
     .eq('clue_id', clueId)
     .eq('player_id', playerId)
 
-  // Go to clue_result phase — same player still picks next (wrong answer keeps picker)
-  await supabase
-    .from('games')
-    .update({
+  // Daily Doubles have only one attempt — close it out immediately.
+  if (isDailyDouble) {
+    await supabase.from('clues').update({
+      is_answered: true,
+      answered_by: playerId,
+      answered_correct: false,
+    }).eq('id', clueId)
+
+    await supabase.from('games').update({
       phase: 'clue_result',
       updated_at: new Date().toISOString(),
-    })
-    .eq('id', gameId)
+    }).eq('id', gameId)
+    return
+  }
+
+  // Regular clue — rebound to the next buzzer in the queue, if any.
+  await advanceAfterFailedAnswer(gameId, clueId, playerId)
 }
 
 /**

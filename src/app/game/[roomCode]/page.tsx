@@ -25,6 +25,7 @@ import {
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { computeClueReadingDelay } from '@/lib/clue-timing'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
@@ -104,7 +105,8 @@ export default function PlayerPage() {
       if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
       return
     }
-    const delay = game.settings?.reading_period_ms ?? 0
+    const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
+    const delay = game.settings?.reading_period_ms ?? computeClueReadingDelay(currentClue?.question)
     phaseTransitionRef.current = setTimeout(async () => {
       await supabase.from('games').update({
         phase: 'buzz_window',
@@ -116,7 +118,7 @@ export default function PlayerPage() {
     return () => {
       if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
     }
-  }, [game?.phase, game?.id, game?.settings?.reading_period_ms])
+  }, [game?.phase, game?.id, game?.current_clue_id, clues, game?.settings?.reading_period_ms])
 
   // Buzz window countdown + arming. Scheduled against buzz_window_start (a
   // ~700ms-future timestamp) so every phone arms at the same moment.

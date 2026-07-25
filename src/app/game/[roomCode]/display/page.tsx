@@ -19,6 +19,7 @@ import {
   passAfterBuzz,
   skipToRound,
 } from '@/lib/game-api'
+import { CLUE_INTRO_MS, computeClueReadingDelay } from '@/lib/clue-timing'
 import type { Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
 
@@ -144,7 +145,10 @@ export default function DisplayPage() {
       return
     }
 
-    const delay = game.settings?.reading_period_ms ?? 0
+    // Party mode: give the question time to be read aloud before arming the
+    // buzzers. Duration scales with question length (clue-timing.ts).
+    const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
+    const delay = game.settings?.reading_period_ms ?? computeClueReadingDelay(currentClue?.question)
     transitionRef.current = setTimeout(async () => {
       await supabase
         .from('games')
@@ -162,7 +166,17 @@ export default function DisplayPage() {
     return () => {
       if (transitionRef.current) clearTimeout(transitionRef.current)
     }
-  }, [game?.phase, game?.id, game?.settings?.reading_period_ms])
+  }, [game?.phase, game?.id, game?.current_clue_id, clues, game?.settings?.reading_period_ms])
+
+  // Party TV clue intro: show CATEGORY — $VALUE for CLUE_INTRO_MS at the top
+  // of clue_reading before revealing the question text.
+  const [clueRevealed, setClueRevealed] = useState(false)
+  useEffect(() => {
+    setClueRevealed(false)
+    if (!game || game.phase !== 'clue_reading') return
+    const t = setTimeout(() => setClueRevealed(true), CLUE_INTRO_MS)
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.current_clue_id])
 
   // Buzz window countdown timer + auto-skip on timeout
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
@@ -835,29 +849,51 @@ export default function DisplayPage() {
       {showClue && currentClue ? (
         // key forces a fresh remount when clue changes so no stale render lingers
         <div key={currentClue.id} className="flex-1 flex flex-col items-center justify-center px-12">
-          {/* Category name */}
-          {(() => {
-            const clueCategory = categories.find((c) => c.id === currentClue.category_id)
-            return clueCategory ? (
-              <p className="text-blue-300 text-2xl font-bold uppercase tracking-wide mb-4">
-                {clueCategory.name}
+          {/* INTRO CARD: during the first CLUE_INTRO_MS of clue_reading we
+              only show the category + value — question is hidden. */}
+          {game.phase === 'clue_reading' && !clueRevealed ? (
+            (() => {
+              const clueCategory = categories.find((c) => c.id === currentClue.category_id)
+              return (
+                <div className="flex flex-col items-center animate-[fadeIn_400ms_ease-out]">
+                  {clueCategory && (
+                    <p className="text-blue-300 text-4xl md:text-6xl font-bold uppercase tracking-wide text-center mb-8">
+                      {clueCategory.name}
+                    </p>
+                  )}
+                  <p className="text-jeopardy-gold text-8xl md:text-9xl font-bold">
+                    ${currentClue.value.toLocaleString()}
+                  </p>
+                </div>
+              )
+            })()
+          ) : (
+            <>
+              {/* Category name */}
+              {(() => {
+                const clueCategory = categories.find((c) => c.id === currentClue.category_id)
+                return clueCategory ? (
+                  <p className="text-blue-300 text-2xl font-bold uppercase tracking-wide mb-4">
+                    {clueCategory.name}
+                  </p>
+                ) : null
+              })()}
+
+              {/* Clue value */}
+              <p className="text-jeopardy-gold text-4xl font-bold mb-8">
+                ${currentClue.value.toLocaleString()}
               </p>
-            ) : null
-          })()}
 
-          {/* Clue value */}
-          <p className="text-jeopardy-gold text-4xl font-bold mb-8">
-            ${currentClue.value.toLocaleString()}
-          </p>
-
-          {/* Clue text */}
-          <p className="text-4xl md:text-6xl text-white text-center leading-relaxed font-serif max-w-5xl">
-            <ClueText text={currentClue.question} />
-          </p>
+              {/* Clue text */}
+              <p className="text-4xl md:text-6xl text-white text-center leading-relaxed font-serif max-w-5xl">
+                <ClueText text={currentClue.question} />
+              </p>
+            </>
+          )}
 
           {/* Phase indicator */}
           <div className="mt-12">
-            {game.phase === 'clue_reading' && (
+            {game.phase === 'clue_reading' && clueRevealed && (
               <p className="text-gray-500 text-xl animate-pulse">Reading...</p>
             )}
             {game.phase === 'buzz_window' && (
