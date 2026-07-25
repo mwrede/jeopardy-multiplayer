@@ -103,6 +103,11 @@ export default function DisplayPage() {
       })
   }, [game?.id, game?.settings])
 
+  // Rebuzz detection: reset on new clue, flip true when the buzz window
+  // opens after someone already answered (player_answering → buzz_window).
+  const [isRebuzz, setIsRebuzz] = useState(false)
+  useEffect(() => { setIsRebuzz(false) }, [game?.current_clue_id])
+
   // === SOUND EFFECTS ===
   const prevPhaseRef = useRef<string | null>(null)
   useEffect(() => {
@@ -115,6 +120,10 @@ export default function DisplayPage() {
       if (curr === 'clue_reading') playSelectSound()
       if (curr === 'player_answering') playBuzzSound()
       if (curr === 'daily_double_wager') playDailyDoubleSound()
+      if (curr === 'buzz_window' && prev === 'player_answering') {
+        setIsRebuzz(true)
+        playSelectSound() // small chime to signal "back to buzz"
+      }
       if (curr === 'clue_result') {
         // Check if the clue was answered correctly
         const resultClue = game.current_clue_id
@@ -134,49 +143,77 @@ export default function DisplayPage() {
     prevPhaseRef.current = curr
   }, [game?.phase, game?.current_clue_id, clues])
 
-  // Auto-transition: clue_reading → buzz_window after reading period
-  const transitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Party TV clue intro: show CATEGORY — $VALUE for CLUE_INTRO_MS at the top
+  // of clue_reading before revealing the question text.
+  const [clueRevealed, setClueRevealed] = useState(false)
+  // Word-index the TTS voice is currently on, for the karaoke-style reveal.
+  const [spokenWordIndex, setSpokenWordIndex] = useState(0)
   useEffect(() => {
-    if (!game || game.phase !== 'clue_reading') {
-      if (transitionRef.current) {
-        clearTimeout(transitionRef.current)
-        transitionRef.current = null
-      }
-      return
-    }
+    setClueRevealed(false)
+    setSpokenWordIndex(0)
+    if (!game || game.phase !== 'clue_reading') return
+    const t = setTimeout(() => setClueRevealed(true), CLUE_INTRO_MS)
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.current_clue_id])
 
-    // Party mode: give the question time to be read aloud before arming the
-    // buzzers. Duration scales with question length (clue-timing.ts).
+  // Party TV voice reader: once the question is revealed, the display reads
+  // the clue aloud with the Web Speech API. The buzz window only opens when
+  // the voice finishes (or a generous safety timer trips if TTS is unavailable
+  // or gets muted by the browser).
+  useEffect(() => {
+    if (!game || game.phase !== 'clue_reading' || !clueRevealed) return
     const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
-    const delay = game.settings?.reading_period_ms ?? computeClueReadingDelay(currentClue?.question)
-    transitionRef.current = setTimeout(async () => {
+    if (!currentClue?.question) return
+
+    const gameId = game.id
+    const doTransition = async () => {
       await supabase
         .from('games')
         .update({
           phase: 'buzz_window',
           buzz_window_open: true,
-          // 700ms lead time so realtime can propagate to all phones before
-          // buzzers arm. Every client schedules against this same target.
+          // 700ms lead time so realtime can propagate to every phone before
+          // buzzers arm — every client schedules against this same target.
           buzz_window_start: new Date(Date.now() + 700).toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', game.id)
-    }, delay)
+        .eq('id', gameId)
+        .eq('phase', 'clue_reading') // only flip if still reading
+    }
+
+    let cancelled = false
+    const settingsDelay = game.settings?.reading_period_ms
+    const speechFallbackMs =
+      typeof settingsDelay === 'number'
+        ? settingsDelay
+        : computeClueReadingDelay(currentClue.question) - CLUE_INTRO_MS + 4000
+    const fallback = setTimeout(() => { if (!cancelled) { cancelled = true; doTransition() } }, speechFallbackMs)
+
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
+    if (synth) {
+      try {
+        synth.cancel()
+        const utter = new SpeechSynthesisUtterance(currentClue.question)
+        utter.rate = 0.95
+        utter.pitch = 1.0
+        utter.volume = 1.0
+        utter.onboundary = (ev: SpeechSynthesisEvent) => {
+          if (ev.name === 'word') setSpokenWordIndex((n) => n + 1)
+        }
+        utter.onend = () => { if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() } }
+        utter.onerror = () => { if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() } }
+        synth.speak(utter)
+      } catch {
+        // fallback timer already scheduled
+      }
+    }
 
     return () => {
-      if (transitionRef.current) clearTimeout(transitionRef.current)
+      cancelled = true
+      clearTimeout(fallback)
+      if (synth) synth.cancel()
     }
-  }, [game?.phase, game?.id, game?.current_clue_id, clues, game?.settings?.reading_period_ms])
-
-  // Party TV clue intro: show CATEGORY — $VALUE for CLUE_INTRO_MS at the top
-  // of clue_reading before revealing the question text.
-  const [clueRevealed, setClueRevealed] = useState(false)
-  useEffect(() => {
-    setClueRevealed(false)
-    if (!game || game.phase !== 'clue_reading') return
-    const t = setTimeout(() => setClueRevealed(true), CLUE_INTRO_MS)
-    return () => clearTimeout(t)
-  }, [game?.phase, game?.current_clue_id])
+  }, [game?.phase, game?.id, game?.current_clue_id, clueRevealed, clues, game?.settings?.reading_period_ms])
 
   // Buzz window countdown timer + auto-skip on timeout
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
@@ -898,8 +935,13 @@ export default function DisplayPage() {
             )}
             {game.phase === 'buzz_window' && (
               <div className="flex flex-col items-center gap-3">
+                {isRebuzz && (
+                  <p className="text-jeopardy-gold text-lg font-bold uppercase tracking-[0.3em]">
+                    Buzzer Reopened
+                  </p>
+                )}
                 <p className="text-blue-400 text-2xl font-bold animate-buzz-pulse">
-                  BUZZ IN NOW!
+                  {isRebuzz ? 'ANYONE ELSE?' : 'BUZZ IN NOW!'}
                 </p>
                 {buzzCountdown !== null && (
                   <p className={`text-5xl font-bold font-mono ${

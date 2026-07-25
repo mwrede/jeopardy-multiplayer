@@ -1196,8 +1196,9 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
 
 /**
  * After a buzzer answers wrong or lets the answer clock run out on a regular
- * clue, promote the next-fastest untried buzzer to answering. If the buzz
- * queue is exhausted, close the clue and show the result.
+ * clue, promote the next-fastest untried buzzer. If none, reopen the buzz
+ * window for players who haven't attempted yet. The clue only closes when
+ * skipClue's timeout fires with no fresh buzzer (see the party display page).
  */
 async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnswererId: string) {
   const { data: nextRows } = await supabase
@@ -1215,7 +1216,6 @@ async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnsw
   const next = nextRows?.[0]
 
   if (next) {
-    // Hand the mic to the next buzzer. Clue stays open.
     await supabase
       .from('games')
       .update({
@@ -1227,17 +1227,19 @@ async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnsw
     return
   }
 
-  // No one left in the queue — mark as wrong for the last attempter and show result.
-  await supabase.from('clues').update({
-    is_answered: true,
-    answered_by: lastAnswererId,
-    answered_correct: false,
-  }).eq('id', clueId)
-
-  await supabase.from('games').update({
-    phase: 'clue_result',
-    updated_at: new Date().toISOString(),
-  }).eq('id', gameId)
+  // Buzz queue exhausted. Reopen the buzz window so any player who hasn't
+  // attempted yet gets a shot. Players who already tried are hidden from
+  // the buzzer on the phone side. If nobody buzzes in the reopened window,
+  // skipClue's auto-timeout closes the clue.
+  await supabase
+    .from('games')
+    .update({
+      phase: 'buzz_window',
+      buzz_window_open: true,
+      buzz_window_start: new Date(Date.now() + 700).toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
 }
 
 /**

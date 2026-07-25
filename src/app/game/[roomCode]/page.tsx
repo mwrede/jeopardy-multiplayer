@@ -61,6 +61,25 @@ export default function PlayerPage() {
   const [finalWagerLocked, setFinalWagerLocked] = useState(false)
   const [finalAnswerLocked, setFinalAnswerLocked] = useState(false)
   const [hasPassed, setHasPassed] = useState(false)
+  // Per-clue: has THIS player already attempted (answered wrong or timed out)?
+  // If so, the buzzer is hidden when the window reopens for other players.
+  const [hasTriedAnswer, setHasTriedAnswer] = useState(false)
+  // Rebuzz detection: buzz window reopening after any attempts.
+  const [isRebuzz, setIsRebuzz] = useState(false)
+  // Reset per-clue state when the clue changes.
+  useEffect(() => {
+    setHasTriedAnswer(false)
+    setHasPassed(false)
+    setIsRebuzz(false)
+  }, [game?.current_clue_id])
+  // Detect phase player_answering → buzz_window as a rebuzz.
+  const prevPhaseRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (game?.phase === 'buzz_window' && prevPhaseRef.current === 'player_answering') {
+      setIsRebuzz(true)
+    }
+    prevPhaseRef.current = game?.phase ?? null
+  }, [game?.phase])
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
   const [buzzArmed, setBuzzArmed] = useState(false)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
@@ -180,6 +199,7 @@ export default function PlayerPage() {
     // Auto-pass when time runs out
     answerTimeoutRef.current = setTimeout(async () => {
       if (game.current_clue_id && myPlayerId) {
+        setHasTriedAnswer(true)
         await passAfterBuzz(game.id, game.current_clue_id, myPlayerId)
       }
     }, totalMs)
@@ -263,12 +283,14 @@ export default function PlayerPage() {
 
   const handleSubmitAnswer = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id || !answer.trim()) return
+    setHasTriedAnswer(true)
     await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
     setAnswer('')
   })
 
   const handlePassAfterBuzz = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id) return
+    setHasTriedAnswer(true)
     await passAfterBuzz(game.id, game.current_clue_id, myPlayer.id)
   })
 
@@ -739,6 +761,11 @@ export default function PlayerPage() {
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
         <div className="flex-1 flex flex-col items-center justify-center px-6">
+          {isRebuzz && game.phase === 'buzz_window' && (
+            <p className="text-jeopardy-gold text-sm font-bold uppercase tracking-[0.3em] mb-3">
+              Buzzer Reopened
+            </p>
+          )}
           <p className="text-gray-400 text-center text-lg mb-4">
             Look at the TV for the clue!
           </p>
@@ -753,7 +780,12 @@ export default function PlayerPage() {
         </div>
 
         <div className="p-4 space-y-3">
-          {hasPassed ? (
+          {hasTriedAnswer ? (
+            <div className="w-full py-8 rounded-2xl bg-red-950/40 border border-red-900/60 text-center">
+              <p className="text-red-300 text-xl font-semibold">You got it wrong</p>
+              <p className="text-gray-400 text-sm mt-1">Waiting for other players to buzz in...</p>
+            </div>
+          ) : hasPassed ? (
             <div className="w-full py-8 rounded-2xl bg-gray-800 text-center">
               <p className="text-gray-400 text-xl font-semibold">Passed</p>
               <p className="text-gray-500 text-sm mt-1">Waiting for others...</p>
