@@ -109,25 +109,41 @@ export default function DisplayPage() {
   useEffect(() => { setIsRebuzz(false) }, [game?.current_clue_id])
 
   // Speech synth needs a user gesture before it will speak (Chrome/Safari
-  // autoplay policy). Show a one-click overlay to prime it; once primed we
-  // don't ask again on this browser.
+  // autoplay policy). We always require a click on THIS page load so a
+  // stale localStorage flag can't leave the tab silently un-primed.
   const [audioReady, setAudioReady] = useState(false)
+  // Warm the voices list (Chrome loads voices asynchronously; getVoices()
+  // returns [] until then). We don't need the list — just triggering the
+  // load early means speak() has voices available when we call it.
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (window.localStorage.getItem('displayAudioPrimed') === '1') setAudioReady(true)
+    if (typeof window === 'undefined' || !window.speechSynthesis) return
+    window.speechSynthesis.getVoices()
+    const onVoices = () => { console.log('[tts] voices loaded:', window.speechSynthesis.getVoices().length) }
+    window.speechSynthesis.addEventListener('voiceschanged', onVoices)
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', onVoices)
   }, [])
   const primeAudio = () => {
     if (typeof window === 'undefined') return
+    const synth = window.speechSynthesis
+    if (!synth) {
+      console.warn('[tts] speechSynthesis not available in this browser')
+      setAudioReady(true)
+      return
+    }
     try {
-      const synth = window.speechSynthesis
-      if (synth) {
-        // A tiny silent utterance is enough to unlock later speak() calls.
-        const u = new SpeechSynthesisUtterance(' ')
-        u.volume = 0
-        synth.speak(u)
-      }
-      window.localStorage.setItem('displayAudioPrimed', '1')
-    } catch {}
+      // Immediately speak a short audible confirmation. This is the user
+      // gesture that unlocks future speak() calls, and also gives them
+      // proof that TTS is working.
+      const u = new SpeechSynthesisUtterance('Audio ready.')
+      u.rate = 1.05
+      u.volume = 1
+      u.onstart = () => console.log('[tts] prime spoke')
+      u.onerror = (e) => console.warn('[tts] prime error:', e)
+      synth.cancel()
+      synth.speak(u)
+    } catch (e) {
+      console.warn('[tts] prime threw:', e)
+    }
     setAudioReady(true)
   }
 
@@ -169,11 +185,12 @@ export default function DisplayPage() {
   // Party TV clue intro: show CATEGORY — $VALUE for CLUE_INTRO_MS at the top
   // of clue_reading before revealing the question text.
   const [clueRevealed, setClueRevealed] = useState(false)
-  // Word-index the TTS voice is currently on, for the karaoke-style reveal.
-  const [spokenWordIndex, setSpokenWordIndex] = useState(0)
+  // Number of characters of the question currently visible — animated to
+  // grow in step with the voice so letters appear as they're spoken.
+  const [visibleChars, setVisibleChars] = useState(0)
   useEffect(() => {
     setClueRevealed(false)
-    setSpokenWordIndex(0)
+    setVisibleChars(0)
     if (!game || game.phase !== 'clue_reading') return
     const t = setTimeout(() => setClueRevealed(true), CLUE_INTRO_MS)
     return () => clearTimeout(t)
@@ -204,39 +221,75 @@ export default function DisplayPage() {
         .eq('phase', 'clue_reading') // only flip if still reading
     }
 
+    const questionText = currentClue.question
+    const totalChars = questionText.length
+
     let cancelled = false
     const settingsDelay = game.settings?.reading_period_ms
+    // Estimated reading duration (matches computeReadingMs): ~55ms/char.
+    const estimatedReadMs = Math.max(3000, Math.min(15000, totalChars * 55))
     const speechFallbackMs =
       typeof settingsDelay === 'number'
         ? settingsDelay
-        : computeClueReadingDelay(currentClue.question) - CLUE_INTRO_MS + 4000
-    const fallback = setTimeout(() => { if (!cancelled) { cancelled = true; doTransition() } }, speechFallbackMs)
+        : estimatedReadMs + 4000
+    const fallback = setTimeout(() => {
+      console.log('[tts] fallback timer fired — transitioning to buzz')
+      if (!cancelled) { cancelled = true; doTransition() }
+    }, speechFallbackMs)
+
+    // Karaoke: reveal letters at ~55ms each so they appear in step with the
+    // voice. Runs independently of TTS so the reveal still animates even if
+    // speech is muted.
+    const revealStart = Date.now()
+    const revealInterval = setInterval(() => {
+      const elapsed = Date.now() - revealStart
+      const chars = Math.min(totalChars, Math.floor((elapsed / estimatedReadMs) * totalChars))
+      setVisibleChars(chars)
+      if (chars >= totalChars) clearInterval(revealInterval)
+    }, 40)
 
     const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
+    console.log('[tts] clue_reading fired', {
+      hasSynth: !!synth,
+      audioReady,
+      voices: synth?.getVoices().length ?? 0,
+      questionLen: totalChars,
+    })
     if (synth && audioReady) {
       try {
         synth.cancel()
-        // Chrome sometimes gets stuck in a paused state after idle — resume
-        // before speak() so the utterance actually fires.
         try { synth.resume() } catch {}
-        const utter = new SpeechSynthesisUtterance(currentClue.question)
+        const utter = new SpeechSynthesisUtterance(questionText)
         utter.rate = 0.95
         utter.pitch = 1.0
         utter.volume = 1.0
-        utter.onboundary = (ev: SpeechSynthesisEvent) => {
-          if (ev.name === 'word') setSpokenWordIndex((n) => n + 1)
+        utter.onstart = () => console.log('[tts] speaking clue')
+        utter.onend = () => {
+          console.log('[tts] clue done')
+          if (!cancelled) { cancelled = true; clearTimeout(fallback); setVisibleChars(totalChars); doTransition() }
         }
-        utter.onend = () => { if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() } }
-        utter.onerror = () => { if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() } }
+        utter.onerror = (e) => {
+          console.warn('[tts] utter error', e)
+          if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() }
+        }
         // Small delay so cancel() has fully settled before speak() lands.
-        setTimeout(() => { if (!cancelled) synth.speak(utter) }, 60)
-      } catch {
-        // fallback timer already scheduled
+        setTimeout(() => {
+          if (!cancelled) {
+            try { synth.resume() } catch {}
+            synth.speak(utter)
+            console.log('[tts] speak() called')
+          }
+        }, 80)
+      } catch (e) {
+        console.warn('[tts] speak threw', e)
       }
+    } else if (!audioReady) {
+      console.warn('[tts] audio not primed — user needs to click the enable overlay')
     }
 
     return () => {
       cancelled = true
+      clearInterval(revealInterval)
       clearTimeout(fallback)
       if (synth) synth.cancel()
     }
@@ -961,9 +1014,15 @@ export default function DisplayPage() {
                 ${currentClue.value.toLocaleString()}
               </p>
 
-              {/* Clue text */}
-              <p className="text-4xl md:text-6xl text-white text-center leading-relaxed font-serif max-w-5xl">
-                <ClueText text={currentClue.question} />
+              {/* Clue text — reveals letter-by-letter in step with the voice.
+                  Reserve the full text as invisible so layout doesn't jump. */}
+              <p className="text-4xl md:text-6xl text-center leading-relaxed font-serif max-w-5xl relative">
+                <span className="text-white">
+                  <ClueText text={currentClue.question.slice(0, visibleChars)} />
+                </span>
+                <span className="text-transparent select-none">
+                  {currentClue.question.slice(visibleChars)}
+                </span>
               </p>
             </>
           )}
