@@ -25,7 +25,8 @@ import {
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { computeClueReadingDelay } from '@/lib/clue-timing'
+import { CLUE_INTRO_MS, computeClueReadingDelay } from '@/lib/clue-timing'
+import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
@@ -757,15 +758,29 @@ export default function PlayerPage() {
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
-        <div className="flex-1 flex flex-col items-center justify-center px-6">
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-4 min-h-0">
           {isRebuzz && game.phase === 'buzz_window' && (
-            <p className="text-jeopardy-gold text-sm font-bold uppercase tracking-[0.3em] mb-3">
+            <p className="text-jeopardy-gold text-sm font-bold uppercase tracking-[0.3em]">
               Buzzer Reopened
             </p>
           )}
-          {/* Countdown timer only — clue lives on the TV. */}
+          {/* Same animated intro + typed reveal the TV shows, synced by the
+              server-side clue_reading timestamp. */}
+          <AnimatedClueReveal
+            key={currentClue.id}
+            variant="phone"
+            category={categories.find((c) => c.id === currentClue.category_id)?.name ?? null}
+            value={currentClue.value}
+            question={currentClue.question}
+            phaseStartedAt={game.updated_at ? new Date(game.updated_at).getTime() : Date.now()}
+            revealDurationMs={
+              (game.settings?.reading_period_ms && game.settings.reading_period_ms > 0)
+                ? game.settings.reading_period_ms
+                : Math.max(3000, Math.min(15000, currentClue.question.length * 55))
+            }
+          />
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
-            <p className={`text-6xl font-bold font-mono ${
+            <p className={`text-5xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'
             }`}>
               {buzzCountdown}

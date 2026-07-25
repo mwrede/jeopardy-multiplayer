@@ -19,7 +19,8 @@ import {
   passAfterBuzz,
   skipToRound,
 } from '@/lib/game-api'
-import { CLUE_INTRO_MS, computeClueReadingDelay } from '@/lib/clue-timing'
+import { CLUE_INTRO_MS } from '@/lib/clue-timing'
+import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
 import type { Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
 
@@ -144,72 +145,45 @@ export default function DisplayPage() {
     prevPhaseRef.current = curr
   }, [game?.phase, game?.current_clue_id, clues])
 
-  // Party TV clue intro: show CATEGORY — $VALUE for CLUE_INTRO_MS at the top
-  // of clue_reading before revealing the question text.
-  const [clueRevealed, setClueRevealed] = useState(false)
-  // Number of characters of the question currently visible — animated to
-  // grow in step with the voice so letters appear as they're spoken.
-  const [visibleChars, setVisibleChars] = useState(0)
+  // Reveal writer: display fires the buzz_window transition on its own local
+  // clock once the intro + reveal have finished playing. The animation itself
+  // is rendered by <AnimatedClueReveal>, which is anchored to server time so
+  // display + phone stay perfectly in sync.
   useEffect(() => {
-    setClueRevealed(false)
-    setVisibleChars(0)
     if (!game || game.phase !== 'clue_reading') return
-    const t = setTimeout(() => setClueRevealed(true), CLUE_INTRO_MS)
-    return () => clearTimeout(t)
-  }, [game?.phase, game?.current_clue_id])
-
-  // Party TV clue reveal: once the intro card is done, letters type out over
-  // the estimated reading duration. Buzzer opens ~600ms after the last letter
-  // lands, giving the eye a beat to finish reading.
-  useEffect(() => {
-    if (!game || game.phase !== 'clue_reading' || !clueRevealed) return
     const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
     if (!currentClue?.question) return
 
     const gameId = game.id
-    const questionText = currentClue.question
-    const totalChars = questionText.length
+    const totalChars = currentClue.question.length
     const settingsDelay = game.settings?.reading_period_ms
-    // ~55ms per character = comfortable eye-reading pace. Bounded 3–15s.
     const revealDurationMs =
       typeof settingsDelay === 'number' && settingsDelay > 0
         ? settingsDelay
         : Math.max(3000, Math.min(15000, totalChars * 55))
-
-    let cancelled = false
-    const revealStart = Date.now()
-    const revealInterval = setInterval(() => {
-      if (cancelled) return
-      const elapsed = Date.now() - revealStart
-      const chars = Math.min(totalChars, Math.floor((elapsed / revealDurationMs) * totalChars))
-      setVisibleChars(chars)
-      if (chars >= totalChars) clearInterval(revealInterval)
-    }, 40)
+    const phaseStartedAt = game.updated_at ? new Date(game.updated_at).getTime() : Date.now()
+    // Wait for intro + reveal + 600ms buffer, measured from the server phase
+    // start (converted to local clock). Clamp to reasonable local delay in case
+    // the client clock is way off.
+    const targetAt = phaseStartedAt + CLUE_INTRO_MS + revealDurationMs + 600
+    const delay = Math.max(500, Math.min(30000, targetAt - Date.now()))
 
     const openBuzz = setTimeout(async () => {
-      if (cancelled) return
-      cancelled = true
-      setVisibleChars(totalChars)
       await supabase
         .from('games')
         .update({
           phase: 'buzz_window',
           buzz_window_open: true,
-          // 700ms lead time so realtime can propagate to every phone before
-          // buzzers arm — every client schedules against this same target.
+          // 700ms lead so every phone can arm together via buzz_window_start.
           buzz_window_start: new Date(Date.now() + 700).toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', gameId)
         .eq('phase', 'clue_reading') // only flip if still reading
-    }, revealDurationMs + 600)
+    }, delay)
 
-    return () => {
-      cancelled = true
-      clearInterval(revealInterval)
-      clearTimeout(openBuzz)
-    }
-  }, [game?.phase, game?.id, game?.current_clue_id, clueRevealed, clues, game?.settings?.reading_period_ms])
+    return () => clearTimeout(openBuzz)
+  }, [game?.phase, game?.id, game?.current_clue_id, game?.updated_at, clues, game?.settings?.reading_period_ms])
 
   // Buzz window countdown timer + auto-skip on timeout
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
@@ -882,57 +856,22 @@ export default function DisplayPage() {
       {showClue && currentClue ? (
         // key forces a fresh remount when clue changes so no stale render lingers
         <div key={currentClue.id} className="flex-1 flex flex-col items-center justify-center px-12">
-          {/* INTRO CARD: during the first CLUE_INTRO_MS of clue_reading we
-              only show the category + value — question is hidden. */}
-          {game.phase === 'clue_reading' && !clueRevealed ? (
-            (() => {
-              const clueCategory = categories.find((c) => c.id === currentClue.category_id)
-              return (
-                <div className="flex flex-col items-center animate-[fadeIn_400ms_ease-out]">
-                  {clueCategory && (
-                    <p className="text-blue-300 text-4xl md:text-6xl font-bold uppercase tracking-wide text-center mb-8">
-                      {clueCategory.name}
-                    </p>
-                  )}
-                  <p className="text-jeopardy-gold text-8xl md:text-9xl font-bold">
-                    ${currentClue.value.toLocaleString()}
-                  </p>
-                </div>
-              )
-            })()
-          ) : (
-            <>
-              {/* Category name */}
-              {(() => {
-                const clueCategory = categories.find((c) => c.id === currentClue.category_id)
-                return clueCategory ? (
-                  <p className="text-blue-300 text-2xl font-bold uppercase tracking-wide mb-4">
-                    {clueCategory.name}
-                  </p>
-                ) : null
-              })()}
-
-              {/* Clue value */}
-              <p className="text-jeopardy-gold text-4xl font-bold mb-8">
-                ${currentClue.value.toLocaleString()}
-              </p>
-
-              {/* Clue text — reveals letter-by-letter in step with the voice.
-                  Reserve the full text as invisible so layout doesn't jump. */}
-              <p className="text-4xl md:text-6xl text-center leading-relaxed font-serif max-w-5xl relative">
-                <span className="text-white">
-                  <ClueText text={currentClue.question.slice(0, visibleChars)} />
-                </span>
-                <span className="text-transparent select-none">
-                  {currentClue.question.slice(visibleChars)}
-                </span>
-              </p>
-            </>
-          )}
+          <AnimatedClueReveal
+            variant="tv"
+            category={categories.find((c) => c.id === currentClue.category_id)?.name ?? null}
+            value={currentClue.value}
+            question={currentClue.question}
+            phaseStartedAt={game.updated_at ? new Date(game.updated_at).getTime() : Date.now()}
+            revealDurationMs={
+              (game.settings?.reading_period_ms && game.settings.reading_period_ms > 0)
+                ? game.settings.reading_period_ms
+                : Math.max(3000, Math.min(15000, currentClue.question.length * 55))
+            }
+          />
 
           {/* Phase indicator */}
           <div className="mt-12">
-            {game.phase === 'clue_reading' && clueRevealed && (
+            {game.phase === 'clue_reading' && (
               <p className="text-gray-500 text-xl animate-pulse">Reading...</p>
             )}
             {game.phase === 'buzz_window' && (
