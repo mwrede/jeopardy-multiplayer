@@ -228,11 +228,12 @@ export default function DisplayPage() {
     const settingsDelay = game.settings?.reading_period_ms
     // Estimated reading duration (matches computeReadingMs): ~55ms/char.
     const estimatedReadMs = Math.max(3000, Math.min(15000, totalChars * 55))
-    // Fallback: if the voice never fires (or gets muted), we still want the
-    // buzzer to open a beat after the letter animation completes — not 4s
-    // later like before.
+    // Fallback: if the voice never fires (or gets muted), open the buzzer a
+    // beat after the letter animation completes. Treat legacy 0 the same as
+    // "unset" so casual-mode games (which shipped with reading_period_ms=0)
+    // don't skip the whole intro + voice + animation.
     const speechFallbackMs =
-      typeof settingsDelay === 'number'
+      typeof settingsDelay === 'number' && settingsDelay > 0
         ? settingsDelay
         : estimatedReadMs + 800
     const fallback = setTimeout(() => {

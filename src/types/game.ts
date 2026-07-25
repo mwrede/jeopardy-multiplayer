@@ -74,6 +74,8 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   judgment: 'ai',
   gameMode: 'party',
   gameLength: 'full',
+  // 0 = compute per-clue based on question length + TTS. Casual/party mode
+  // reads each clue aloud on the TV; the buzzer opens when the voice ends.
   reading_period_ms: 0,
   buzz_window_ms: 10000,
   answer_time_ms: 15000,

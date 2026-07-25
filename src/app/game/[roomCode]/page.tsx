@@ -125,7 +125,11 @@ export default function PlayerPage() {
       return
     }
     const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
-    const delay = game.settings?.reading_period_ms ?? computeClueReadingDelay(currentClue?.question)
+    // `|| computeClueReadingDelay` (not `??`) so that legacy games saved with
+    // reading_period_ms=0 still get the intro+voice reveal, not an instant flip.
+    const delay = (game.settings?.reading_period_ms || 0) > 0
+      ? (game.settings!.reading_period_ms as number)
+      : computeClueReadingDelay(currentClue?.question)
     phaseTransitionRef.current = setTimeout(async () => {
       await supabase.from('games').update({
         phase: 'buzz_window',
@@ -759,12 +763,9 @@ export default function PlayerPage() {
               Buzzer Reopened
             </p>
           )}
-          <p className="text-gray-400 text-center text-lg mb-4">
-            Look at the TV for the clue!
-          </p>
-          {/* Countdown timer */}
+          {/* Countdown timer only — clue lives on the TV. */}
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
-            <p className={`text-4xl font-bold font-mono ${
+            <p className={`text-6xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'
             }`}>
               {buzzCountdown}
