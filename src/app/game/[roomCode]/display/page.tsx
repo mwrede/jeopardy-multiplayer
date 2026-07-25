@@ -108,44 +108,6 @@ export default function DisplayPage() {
   const [isRebuzz, setIsRebuzz] = useState(false)
   useEffect(() => { setIsRebuzz(false) }, [game?.current_clue_id])
 
-  // Speech synth needs a user gesture before it will speak (Chrome/Safari
-  // autoplay policy). We always require a click on THIS page load so a
-  // stale localStorage flag can't leave the tab silently un-primed.
-  const [audioReady, setAudioReady] = useState(false)
-  // Warm the voices list (Chrome loads voices asynchronously; getVoices()
-  // returns [] until then). We don't need the list — just triggering the
-  // load early means speak() has voices available when we call it.
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
-    window.speechSynthesis.getVoices()
-    const onVoices = () => { console.log('[tts] voices loaded:', window.speechSynthesis.getVoices().length) }
-    window.speechSynthesis.addEventListener('voiceschanged', onVoices)
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', onVoices)
-  }, [])
-  const primeAudio = () => {
-    if (typeof window === 'undefined') return
-    const synth = window.speechSynthesis
-    if (!synth) {
-      console.warn('[tts] speechSynthesis not available in this browser')
-      setAudioReady(true)
-      return
-    }
-    try {
-      // Immediately speak a short audible confirmation. This is the user
-      // gesture that unlocks future speak() calls, and also gives them
-      // proof that TTS is working.
-      const u = new SpeechSynthesisUtterance('Audio ready.')
-      u.rate = 1.05
-      u.volume = 1
-      u.onstart = () => console.log('[tts] prime spoke')
-      u.onerror = (e) => console.warn('[tts] prime error:', e)
-      synth.cancel()
-      synth.speak(u)
-    } catch (e) {
-      console.warn('[tts] prime threw:', e)
-    }
-    setAudioReady(true)
-  }
 
   // === SOUND EFFECTS ===
   const prevPhaseRef = useRef<string | null>(null)
@@ -196,17 +158,38 @@ export default function DisplayPage() {
     return () => clearTimeout(t)
   }, [game?.phase, game?.current_clue_id])
 
-  // Party TV voice reader: once the question is revealed, the display reads
-  // the clue aloud with the Web Speech API. The buzz window only opens when
-  // the voice finishes (or a generous safety timer trips if TTS is unavailable
-  // or gets muted by the browser).
+  // Party TV clue reveal: once the intro card is done, letters type out over
+  // the estimated reading duration. Buzzer opens ~600ms after the last letter
+  // lands, giving the eye a beat to finish reading.
   useEffect(() => {
     if (!game || game.phase !== 'clue_reading' || !clueRevealed) return
     const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
     if (!currentClue?.question) return
 
     const gameId = game.id
-    const doTransition = async () => {
+    const questionText = currentClue.question
+    const totalChars = questionText.length
+    const settingsDelay = game.settings?.reading_period_ms
+    // ~55ms per character = comfortable eye-reading pace. Bounded 3–15s.
+    const revealDurationMs =
+      typeof settingsDelay === 'number' && settingsDelay > 0
+        ? settingsDelay
+        : Math.max(3000, Math.min(15000, totalChars * 55))
+
+    let cancelled = false
+    const revealStart = Date.now()
+    const revealInterval = setInterval(() => {
+      if (cancelled) return
+      const elapsed = Date.now() - revealStart
+      const chars = Math.min(totalChars, Math.floor((elapsed / revealDurationMs) * totalChars))
+      setVisibleChars(chars)
+      if (chars >= totalChars) clearInterval(revealInterval)
+    }, 40)
+
+    const openBuzz = setTimeout(async () => {
+      if (cancelled) return
+      cancelled = true
+      setVisibleChars(totalChars)
       await supabase
         .from('games')
         .update({
@@ -219,86 +202,14 @@ export default function DisplayPage() {
         })
         .eq('id', gameId)
         .eq('phase', 'clue_reading') // only flip if still reading
-    }
-
-    const questionText = currentClue.question
-    const totalChars = questionText.length
-
-    let cancelled = false
-    const settingsDelay = game.settings?.reading_period_ms
-    // Estimated reading duration (matches computeReadingMs): ~55ms/char.
-    const estimatedReadMs = Math.max(3000, Math.min(15000, totalChars * 55))
-    // Fallback: if the voice never fires (or gets muted), open the buzzer a
-    // beat after the letter animation completes. Treat legacy 0 the same as
-    // "unset" so casual-mode games (which shipped with reading_period_ms=0)
-    // don't skip the whole intro + voice + animation.
-    const speechFallbackMs =
-      typeof settingsDelay === 'number' && settingsDelay > 0
-        ? settingsDelay
-        : estimatedReadMs + 800
-    const fallback = setTimeout(() => {
-      console.log('[tts] fallback timer fired — transitioning to buzz')
-      if (!cancelled) { cancelled = true; doTransition() }
-    }, speechFallbackMs)
-
-    // Karaoke: reveal letters at ~55ms each so they appear in step with the
-    // voice. Runs independently of TTS so the reveal still animates even if
-    // speech is muted.
-    console.log('[tts] starting letter reveal', { totalChars, estimatedReadMs })
-    const revealStart = Date.now()
-    const revealInterval = setInterval(() => {
-      const elapsed = Date.now() - revealStart
-      const chars = Math.min(totalChars, Math.floor((elapsed / estimatedReadMs) * totalChars))
-      setVisibleChars(chars)
-      if (chars >= totalChars) clearInterval(revealInterval)
-    }, 40)
-
-    const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
-    console.log('[tts] clue_reading fired', {
-      hasSynth: !!synth,
-      audioReady,
-      voices: synth?.getVoices().length ?? 0,
-      questionLen: totalChars,
-    })
-    if (synth && audioReady) {
-      try {
-        synth.cancel()
-        try { synth.resume() } catch {}
-        const utter = new SpeechSynthesisUtterance(questionText)
-        utter.rate = 0.95
-        utter.pitch = 1.0
-        utter.volume = 1.0
-        utter.onstart = () => console.log('[tts] speaking clue')
-        utter.onend = () => {
-          console.log('[tts] clue done')
-          if (!cancelled) { cancelled = true; clearTimeout(fallback); setVisibleChars(totalChars); doTransition() }
-        }
-        utter.onerror = (e) => {
-          console.warn('[tts] utter error', e)
-          if (!cancelled) { cancelled = true; clearTimeout(fallback); doTransition() }
-        }
-        // Small delay so cancel() has fully settled before speak() lands.
-        setTimeout(() => {
-          if (!cancelled) {
-            try { synth.resume() } catch {}
-            synth.speak(utter)
-            console.log('[tts] speak() called')
-          }
-        }, 80)
-      } catch (e) {
-        console.warn('[tts] speak threw', e)
-      }
-    } else if (!audioReady) {
-      console.warn('[tts] audio not primed — user needs to click the enable overlay')
-    }
+    }, revealDurationMs + 600)
 
     return () => {
       cancelled = true
       clearInterval(revealInterval)
-      clearTimeout(fallback)
-      if (synth) synth.cancel()
+      clearTimeout(openBuzz)
     }
-  }, [game?.phase, game?.id, game?.current_clue_id, clueRevealed, clues, game?.settings?.reading_period_ms, audioReady])
+  }, [game?.phase, game?.id, game?.current_clue_id, clueRevealed, clues, game?.settings?.reading_period_ms])
 
   // Buzz window countdown timer + auto-skip on timeout
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
@@ -889,19 +800,6 @@ export default function DisplayPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-jeopardy-dark">
-      {/* Audio unlock: browsers block speechSynthesis until user gesture.
-          Overlay dismisses once and remembers for future visits. */}
-      {!audioReady && (
-        <button
-          onClick={primeAudio}
-          className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm text-white"
-        >
-          <span className="text-6xl">🔊</span>
-          <span className="text-2xl font-bold">Click to enable clue reader</span>
-          <span className="text-sm text-gray-400">The TV will read each clue aloud</span>
-        </button>
-      )}
-
       {/* Connection indicator + debug skip buttons */}
       <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
         {game.phase === 'board_selection' && game.current_round === 1 && (
