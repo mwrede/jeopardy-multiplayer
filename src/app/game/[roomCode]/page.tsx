@@ -745,11 +745,13 @@ export default function PlayerPage() {
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
-        <div className="flex-1 flex flex-col items-center justify-center px-6">
-          {/* Countdown only — clue text lives on the TV, phones stay focused
-              on the buzzer. */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
+          {/* Clue text lives on the TV — the phone stays focused on buzzing. */}
+          <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
+            Watch the TV
+          </p>
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
-            <p className={`text-6xl font-bold font-mono ${
+            <p className={`text-7xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'
             }`}>
               {buzzCountdown}
