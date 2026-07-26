@@ -25,8 +25,7 @@ import {
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { CLUE_INTRO_MS, computeClueReadingDelay } from '@/lib/clue-timing'
-import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
+import { computeClueReadingDelay } from '@/lib/clue-timing'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
@@ -63,24 +62,12 @@ export default function PlayerPage() {
   const [finalAnswerLocked, setFinalAnswerLocked] = useState(false)
   const [hasPassed, setHasPassed] = useState(false)
   // Per-clue: has THIS player already attempted (answered wrong or timed out)?
-  // If so, the buzzer is hidden when the window reopens for other players.
+  // If so, hide the buzzer for the rest of this clue.
   const [hasTriedAnswer, setHasTriedAnswer] = useState(false)
-  // Rebuzz detection: buzz window reopening after any attempts.
-  const [isRebuzz, setIsRebuzz] = useState(false)
-  // Reset per-clue state when the clue changes.
   useEffect(() => {
     setHasTriedAnswer(false)
     setHasPassed(false)
-    setIsRebuzz(false)
   }, [game?.current_clue_id])
-  // Detect phase player_answering → buzz_window as a rebuzz.
-  const prevPhaseRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (game?.phase === 'buzz_window' && prevPhaseRef.current === 'player_answering') {
-      setIsRebuzz(true)
-    }
-    prevPhaseRef.current = game?.phase ?? null
-  }, [game?.phase])
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
   const [buzzArmed, setBuzzArmed] = useState(false)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
@@ -758,29 +745,11 @@ export default function PlayerPage() {
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-4 min-h-0">
-          {isRebuzz && game.phase === 'buzz_window' && (
-            <p className="text-jeopardy-gold text-sm font-bold uppercase tracking-[0.3em]">
-              Buzzer Reopened
-            </p>
-          )}
-          {/* Same animated intro + typed reveal the TV shows, synced by the
-              server-side clue_reading timestamp. */}
-          <AnimatedClueReveal
-            key={currentClue.id}
-            variant="phone"
-            category={categories.find((c) => c.id === currentClue.category_id)?.name ?? null}
-            value={currentClue.value}
-            question={currentClue.question}
-            phaseStartedAt={game.updated_at ? new Date(game.updated_at).getTime() : Date.now()}
-            revealDurationMs={
-              (game.settings?.reading_period_ms && game.settings.reading_period_ms > 0)
-                ? game.settings.reading_period_ms
-                : Math.max(3000, Math.min(15000, currentClue.question.length * 55))
-            }
-          />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          {/* Countdown only — clue text lives on the TV, phones stay focused
+              on the buzzer. */}
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
-            <p className={`text-5xl font-bold font-mono ${
+            <p className={`text-6xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'
             }`}>
               {buzzCountdown}

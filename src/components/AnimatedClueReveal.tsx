@@ -1,37 +1,35 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ClueText } from './ClueText'
 import { CLUE_INTRO_MS } from '@/lib/clue-timing'
 
 /**
  * Party-mode clue reveal used on BOTH the TV display and the player phones.
  *
- * Timing is anchored to `phaseStartedAt` (the server-side updated_at when
- * the game entered clue_reading) so every screen animates in lockstep — the
- * TV and every phone see the same character at the same moment, network
- * jitter aside.
+ * Callers pass a `key={clueId}` so this component remounts fresh on every
+ * new clue. Timing anchors to the mount moment (local Date.now()), NOT to
+ * game.updated_at — because that timestamp changes on rebuzz phase flips,
+ * which would restart the animation and look like a loop.
  *
  *   [0 → CLUE_INTRO_MS]                   Big category + $ value intro card
  *   [CLUE_INTRO_MS → + revealDurationMs]  Question types out letter-by-letter
- *   after that                             Full question shown, parent flips
- *                                          the game to buzz_window
+ *   after that                             Full question shown
  */
 export function AnimatedClueReveal({
   category,
   value,
   question,
-  phaseStartedAt,
   revealDurationMs,
   variant,
 }: {
   category: string | null
   value: number
   question: string
-  phaseStartedAt: number // milliseconds since epoch (server updated_at parsed)
   revealDurationMs: number
   variant: 'tv' | 'phone'
 }) {
+  const mountedAtRef = useRef<number>(Date.now())
   const [now, setNow] = useState<number>(() => Date.now())
 
   useEffect(() => {
@@ -44,7 +42,7 @@ export function AnimatedClueReveal({
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  const elapsed = now - phaseStartedAt
+  const elapsed = now - mountedAtRef.current
   const inIntro = elapsed < CLUE_INTRO_MS
   const revealElapsed = Math.max(0, elapsed - CLUE_INTRO_MS)
   const totalChars = question.length

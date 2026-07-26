@@ -104,11 +104,6 @@ export default function DisplayPage() {
       })
   }, [game?.id, game?.settings])
 
-  // Rebuzz detection: reset on new clue, flip true when the buzz window
-  // opens after someone already answered (player_answering → buzz_window).
-  const [isRebuzz, setIsRebuzz] = useState(false)
-  useEffect(() => { setIsRebuzz(false) }, [game?.current_clue_id])
-
 
   // === SOUND EFFECTS ===
   const prevPhaseRef = useRef<string | null>(null)
@@ -122,10 +117,6 @@ export default function DisplayPage() {
       if (curr === 'clue_reading') playSelectSound()
       if (curr === 'player_answering') playBuzzSound()
       if (curr === 'daily_double_wager') playDailyDoubleSound()
-      if (curr === 'buzz_window' && prev === 'player_answering') {
-        setIsRebuzz(true)
-        playSelectSound() // small chime to signal "back to buzz"
-      }
       if (curr === 'clue_result') {
         // Check if the clue was answered correctly
         const resultClue = game.current_clue_id
@@ -857,11 +848,11 @@ export default function DisplayPage() {
         // key forces a fresh remount when clue changes so no stale render lingers
         <div key={currentClue.id} className="flex-1 flex flex-col items-center justify-center px-12">
           <AnimatedClueReveal
+            key={currentClue.id}
             variant="tv"
             category={categories.find((c) => c.id === currentClue.category_id)?.name ?? null}
             value={currentClue.value}
             question={currentClue.question}
-            phaseStartedAt={game.updated_at ? new Date(game.updated_at).getTime() : Date.now()}
             revealDurationMs={
               (game.settings?.reading_period_ms && game.settings.reading_period_ms > 0)
                 ? game.settings.reading_period_ms
@@ -876,13 +867,8 @@ export default function DisplayPage() {
             )}
             {game.phase === 'buzz_window' && (
               <div className="flex flex-col items-center gap-3">
-                {isRebuzz && (
-                  <p className="text-jeopardy-gold text-lg font-bold uppercase tracking-[0.3em]">
-                    Buzzer Reopened
-                  </p>
-                )}
                 <p className="text-blue-400 text-2xl font-bold animate-buzz-pulse">
-                  {isRebuzz ? 'ANYONE ELSE?' : 'BUZZ IN NOW!'}
+                  BUZZ IN NOW!
                 </p>
                 {buzzCountdown !== null && (
                   <p className={`text-5xl font-bold font-mono ${
