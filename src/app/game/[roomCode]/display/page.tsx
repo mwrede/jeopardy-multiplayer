@@ -240,10 +240,14 @@ export default function DisplayPage() {
       setAnswerCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
     }, 1000)
 
-    // Auto-pass when time runs out
+    // Auto-pass when time runs out — capture the specific player answering
+    // right now so a subsequent rebound (current_player_id changes) can't
+    // let this stale timer double-deduct the original player.
+    const stuckClueId = game.current_clue_id
+    const stuckPlayerId = game.current_player_id
     answerTimeoutRef.current = setTimeout(async () => {
-      if (game.current_clue_id && game.current_player_id) {
-        await passAfterBuzz(game.id, game.current_clue_id, game.current_player_id)
+      if (stuckClueId && stuckPlayerId) {
+        await passAfterBuzz(game.id, stuckClueId, stuckPlayerId)
       }
     }, totalMs)
 
@@ -251,7 +255,7 @@ export default function DisplayPage() {
       if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
       if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
     }
-  }, [game?.phase, game?.id])
+  }, [game?.phase, game?.id, game?.current_player_id, game?.current_clue_id])
 
   // Play tick sounds during buzz countdown
   const prevBuzzCountRef = useRef<number | null>(null)

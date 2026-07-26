@@ -1341,14 +1341,27 @@ export async function submitWager(gameId: string, playerId: string, wager: numbe
  */
 export async function passAfterBuzz(gameId: string, clueId: string, playerId: string) {
   const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
-    supabase.from('clues').select('value, is_daily_double').eq('id', clueId).single(),
-    supabase.from('games').select('phase, settings').eq('id', gameId).single(),
+    supabase.from('clues').select('value, is_daily_double, is_answered').eq('id', clueId).single(),
+    supabase.from('games').select('phase, settings, current_player_id, current_clue_id').eq('id', gameId).single(),
     supabase.from('players').select('score, final_wager').eq('id', playerId).single(),
   ])
 
-  const isDailyDouble = clue?.is_daily_double && (game?.phase === 'daily_double_answering')
-  const pointValue = isDailyDouble ? (playerData?.final_wager || clue?.value || 0) : (clue?.value || 0)
-  const isPartyMode = (game?.settings as any)?.gameMode !== 'multiplayer'
+  // Guard against a stale timer firing after the game has moved on. If the
+  // clue is already closed OR this player is no longer the active answerer
+  // (mic passed to next in queue), do nothing — otherwise we'd re-deduct
+  // and re-run the rebound.
+  if (
+    !clue ||
+    !game ||
+    clue.is_answered ||
+    game.current_clue_id !== clueId ||
+    (game.phase !== 'player_answering' && game.phase !== 'daily_double_answering') ||
+    game.current_player_id !== playerId
+  ) return
+
+  const isDailyDouble = clue.is_daily_double && (game.phase === 'daily_double_answering')
+  const pointValue = isDailyDouble ? (playerData?.final_wager || clue.value || 0) : (clue.value || 0)
+  const isPartyMode = (game.settings as any)?.gameMode !== 'multiplayer'
 
   if (playerData && pointValue > 0) {
     await supabase
