@@ -8,6 +8,17 @@ import { GAME_LENGTH_CONFIG, type GameLength } from '@/types/game'
 export type PlayMode = 'party' | 'multiplayer'
 
 /**
+ * Board sizes, keyed to the real GameLength union. Do NOT hand-write these
+ * strings elsewhere — an invalid key makes GAME_LENGTH_CONFIG[key] undefined
+ * and crashes the render.
+ */
+const SIZES: { key: GameLength; label: string }[] = [
+  { key: 'rapid', label: 'Rapid' },
+  { key: 'half', label: 'Half' },
+  { key: 'full', label: 'Full' },
+]
+
+/**
  * Build-your-own board. The user picks any mix of curated themes and typed
  * headers (up to MAX_TOPICS total); the board splits its category slots as
  * evenly as possible across whatever they chose.
@@ -153,19 +164,19 @@ export function TopicBoardBuilder({
         Board size
       </p>
       <div className="flex gap-2 mb-5">
-        {(['short', 'medium', 'full'] as GameLength[]).map((s) => {
-          const cfg = GAME_LENGTH_CONFIG[s]
+        {SIZES.map(({ key, label }) => {
+          const cfg = GAME_LENGTH_CONFIG[key]
           return (
             <button
-              key={s}
-              onClick={() => setSize(s)}
+              key={key}
+              onClick={() => setSize(key)}
               className={`flex-1 px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
-                size === s
+                size === key
                   ? 'bg-jeopardy-gold/25 border-jeopardy-gold text-white'
                   : 'bg-white/5 border-white/15 text-gray-400 hover:text-white'
               }`}
             >
-              <span className="capitalize">{s}</span>
+              <span>{label}</span>
               <span className="block text-[10px] opacity-70">
                 {cfg.categories}×{cfg.cluesPerCat}
               </span>
