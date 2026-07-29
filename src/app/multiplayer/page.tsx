@@ -194,7 +194,7 @@ export default function MultiplayerPage() {
             placeholder="Your name"
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value)}
-            maxLength={30}
+            maxLength={15}
             className="input-base text-lg"
             autoFocus
           />
@@ -313,7 +313,7 @@ export default function MultiplayerPage() {
           placeholder="Your name"
           value={playerName}
           onChange={(e) => setPlayerName(e.target.value)}
-          maxLength={30}
+          maxLength={15}
           className="input-base text-lg"
           autoFocus
         />

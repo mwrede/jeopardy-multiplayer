@@ -5,6 +5,7 @@ import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { ClueText } from '@/components/ClueText'
 import { BuzzerButton } from '@/components/BuzzerButton'
+import { ClueAttempts } from '@/components/ClueAttempts'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { useState, useEffect, useRef } from 'react'
@@ -73,7 +74,7 @@ function JoinForm({ roomCode, onJoined }: { roomCode: string; onJoined: (playerI
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') handleJoin() }}
-          maxLength={30}
+          maxLength={15}
           className="input-base text-lg"
           autoFocus
         />
@@ -106,12 +107,20 @@ export default function PlayPage() {
   const [wager, setWager] = useState('')
   const [finalWagerInput, setFinalWagerInput] = useState('')
   const [finalAnswerInput, setFinalAnswerInput] = useState('')
+  const [finalCountdown, setFinalCountdown] = useState<number | null>(null)
+  const finalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const finalIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const finalAnswerInputRef = useRef<string>('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [finalWagerLocked, setFinalWagerLocked] = useState(false)
   const [finalAnswerLocked, setFinalAnswerLocked] = useState(false)
   const [hasPassed, setHasPassed] = useState(false)
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
+  const [buzzArmed, setBuzzArmed] = useState(false)
+  // Per-clue: has THIS player already attempted? If so, hide their buzzer
+  // when the window reopens for players who haven't tried yet.
+  const [hasTriedAnswer, setHasTriedAnswer] = useState(false)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
   const [gameAirDate, setGameAirDate] = useState<string | null>(null)
@@ -163,44 +172,51 @@ export default function PlayPage() {
     transitionRef.current = setTimeout(async () => {
       await supabase.from('games').update({
         phase: 'buzz_window', buzz_window_open: true,
-        buzz_window_start: new Date().toISOString(),
+        // 700ms lead so every client arms at the same wall-clock moment.
+        buzz_window_start: new Date(Date.now() + 700).toISOString(),
         updated_at: new Date().toISOString(),
-      }).eq('id', game.id)
+      }).eq('id', game.id).eq('phase', 'clue_reading')
     }, delay)
     return () => { if (transitionRef.current) clearTimeout(transitionRef.current) }
   }, [game?.phase, game?.id])
 
-  // Buzz countdown + auto-skip (synced to buzz_window_start)
+  // Buzz countdown + arming. buzz_window_start is written ~700ms in the
+  // future so every client arms at the same wall-clock moment, not whenever
+  // each one happens to observe the phase change.
   const buzzTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const buzzArmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    setBuzzArmed(false)
     if (!game || game.phase !== 'buzz_window') {
       setBuzzCountdown(null)
       if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)
+      if (buzzArmTimeoutRef.current) clearTimeout(buzzArmTimeoutRef.current)
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
       return
     }
     const totalMs = game.settings?.buzz_window_ms ?? 15000
-    // Sync timer to when the buzz window actually opened
-    const startTime = game.buzz_window_start ? new Date(game.buzz_window_start).getTime() : Date.now()
-    const elapsed = Date.now() - startTime
-    const remainingMs = Math.max(0, totalMs - elapsed)
-    setBuzzCountdown(Math.ceil(remainingMs / 1000))
+    const scheduledMs = game.buzz_window_start
+      ? new Date(game.buzz_window_start).getTime()
+      : Date.now()
+    // Clamp so a badly-skewed device clock still arms within 1.2s.
+    const openDelay = Math.max(0, Math.min(1200, scheduledMs - Date.now()))
+    const armAt = Date.now() + openDelay
+
+    buzzArmTimeoutRef.current = setTimeout(() => setBuzzArmed(true), openDelay)
+    setBuzzCountdown(Math.ceil(totalMs / 1000))
     buzzIntervalRef.current = setInterval(() => {
-      const now = Date.now()
-      const remaining = Math.max(0, totalMs - (now - startTime))
+      const remaining = Math.max(0, totalMs - (Date.now() - armAt))
       setBuzzCountdown(Math.ceil(remaining / 1000))
-    }, 1000)
-    // Auto-skip using synced remaining time
-    if (remainingMs > 0) {
-      buzzTimeoutRef.current = setTimeout(async () => {
-        if (game.current_clue_id) await skipClue(game.id, game.current_clue_id)
-      }, remainingMs)
-    }
+    }, 250)
+    buzzTimeoutRef.current = setTimeout(async () => {
+      if (game.current_clue_id) await skipClue(game.id, game.current_clue_id)
+    }, openDelay + totalMs)
     return () => {
       if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)
+      if (buzzArmTimeoutRef.current) clearTimeout(buzzArmTimeoutRef.current)
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
     }
-  }, [game?.phase, game?.id])
+  }, [game?.phase, game?.id, game?.buzz_window_start])
 
   // Answer countdown + auto-skip
   useEffect(() => {
@@ -217,8 +233,10 @@ export default function PlayPage() {
       setAnswerCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
     }, 1000)
     answerTimeoutRef.current = setTimeout(async () => {
-      if (game.current_clue_id && myPlayerId)
+      if (game.current_clue_id && myPlayerId) {
+        setHasTriedAnswer(true)
         await passAfterBuzz(game.id, game.current_clue_id, myPlayerId)
+      }
     }, totalMs)
     return () => {
       if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
@@ -303,6 +321,12 @@ export default function PlayPage() {
     if (game?.phase === 'clue_reading' || game?.phase === 'board_selection') setHasPassed(false)
   }, [game?.phase])
 
+  // Reset per-clue attempt state when the clue changes
+  useEffect(() => {
+    setHasTriedAnswer(false)
+    setHasPassed(false)
+  }, [game?.current_clue_id])
+
   // Auto-advance finals
   useEffect(() => {
     if (!game || game.phase !== 'final_wager') return
@@ -313,6 +337,40 @@ export default function PlayPage() {
     if (!game || game.phase !== 'final_answering') return
     if (players.length > 0 && players.every((p) => p.final_answer != null && p.final_answer !== '')) startFinalReveal(game.id)
   }, [game?.phase, game?.id, players])
+
+  // Final Jeopardy 15s answer clock. Auto-submits whatever's typed at zero.
+  useEffect(() => { finalAnswerInputRef.current = finalAnswerInput }, [finalAnswerInput])
+  useEffect(() => {
+    const isMyFinal =
+      game?.phase === 'final_answering' &&
+      myPlayer &&
+      !finalAnswerLocked &&
+      (myPlayer.final_answer == null || myPlayer.final_answer === '')
+    if (!isMyFinal) {
+      setFinalCountdown(null)
+      if (finalTimerRef.current) clearTimeout(finalTimerRef.current)
+      if (finalIntervalRef.current) clearInterval(finalIntervalRef.current)
+      finalTimerRef.current = null
+      finalIntervalRef.current = null
+      return
+    }
+    const totalMs = game.settings?.final_answer_ms ?? 15000
+    setFinalCountdown(Math.ceil(totalMs / 1000))
+    finalIntervalRef.current = setInterval(() => {
+      setFinalCountdown((n) => (n !== null && n > 0 ? n - 1 : 0))
+    }, 1000)
+    finalTimerRef.current = setTimeout(async () => {
+      if (myPlayer) {
+        await submitFinalAnswer(myPlayer.id, finalAnswerInputRef.current.trim() || '(no answer)')
+        setFinalAnswerLocked(true)
+        setFinalAnswerInput('')
+      }
+    }, totalMs)
+    return () => {
+      if (finalTimerRef.current) clearTimeout(finalTimerRef.current)
+      if (finalIntervalRef.current) clearInterval(finalIntervalRef.current)
+    }
+  }, [game?.phase, myPlayer?.id, finalAnswerLocked, myPlayer?.final_answer, game?.settings?.final_answer_ms])
 
   // Auto-redirect on rematch
   useEffect(() => {
@@ -385,12 +443,14 @@ export default function PlayPage() {
 
   const handleSubmitAnswer = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id || !answer.trim()) return
+    setHasTriedAnswer(true)
     await submitAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
     setAnswer('')
   })
 
   const handlePassAfterBuzz = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id) return
+    setHasTriedAnswer(true)
     await passAfterBuzz(game.id, game.current_clue_id, myPlayer.id)
   })
 
@@ -587,6 +647,9 @@ export default function PlayPage() {
             <p className="text-gray-500 text-sm mb-1">Answer:</p>
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
           </div>
+
+          {/* Every answer attempted on this clue */}
+          <ClueAttempts gameId={game.id} clueId={currentClue.id} players={players} variant="phone" />
         </div>
       </div>
     )
@@ -640,9 +703,14 @@ export default function PlayPage() {
     }
     return (
       <div className="h-[100dvh] flex flex-col bg-jeopardy-dark overflow-hidden">
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2 overflow-y-auto">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2 overflow-y-auto gap-3">
           <h2 className="text-lg font-bold text-jeopardy-gold mb-1 uppercase flex-shrink-0">{game.final_category_name}</h2>
           <p className="text-xl text-white text-center leading-relaxed font-serif max-w-lg flex-shrink-0">{game.final_clue_text}</p>
+          {finalCountdown !== null && (
+            <p className={`text-5xl font-bold font-mono ${finalCountdown <= 5 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+              {finalCountdown}s
+            </p>
+          )}
         </div>
         <div className="flex-shrink-0 bg-jeopardy-dark/95 border-t border-white/10 p-2 pb-[env(safe-area-inset-bottom,8px)]">
           <div className="w-full max-w-sm mx-auto">
@@ -805,12 +873,17 @@ export default function PlayPage() {
                   secondaryAction={{ label: 'Pass', onClick: handlePassAfterBuzz, disabled: busy }} />
               </div>
             ) : (game.phase === 'buzz_window' || game.phase === 'clue_reading') ? (
-              hasPassed ? (
+              hasTriedAnswer ? (
+                <div className="text-center py-4 rounded-xl bg-red-950/40 border border-red-900/60">
+                  <p className="text-red-300 font-semibold">You got it wrong</p>
+                  <p className="text-gray-400 text-xs mt-0.5">Waiting for other players...</p>
+                </div>
+              ) : hasPassed ? (
                 <div className="text-center py-4"><p className="text-gray-400">Passed</p></div>
               ) : (
                 <div className="space-y-2">
                   <BuzzerButton gameId={game.id} clueId={currentClue.id} playerId={myPlayer.id}
-                    buzzWindowOpen={game.phase === 'buzz_window'} isBuzzWinner={false} isLockedOut={false} onBuzz={handleBuzz} />
+                    buzzWindowOpen={game.phase === 'buzz_window' && buzzArmed} isBuzzWinner={false} isLockedOut={false} onBuzz={handleBuzz} />
                   {game.phase === 'buzz_window' && (
                     <button onClick={handlePass} disabled={busy} className="btn-secondary w-full py-3 text-sm">I Don&apos;t Know</button>
                   )}

@@ -21,6 +21,7 @@ import {
 } from '@/lib/game-api'
 import { CLUE_INTRO_MS } from '@/lib/clue-timing'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
+import { ClueAttempts } from '@/components/ClueAttempts'
 import type { Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
 
@@ -722,7 +723,7 @@ export default function DisplayPage() {
             )}
           </div>
 
-          {/* Correct answer */}
+          {/* Correct answer — always shown */}
           {resultClue && (
             <div className="text-center">
               <p className="text-gray-400 text-lg mb-2">The correct answer:</p>
@@ -730,6 +731,11 @@ export default function DisplayPage() {
                 {resultClue.answer}
               </p>
             </div>
+          )}
+
+          {/* Every answer attempted on this clue, in buzz order */}
+          {resultClue && (
+            <ClueAttempts gameId={game.id} clueId={resultClue.id} players={players} variant="tv" />
           )}
         </div>
       </div>

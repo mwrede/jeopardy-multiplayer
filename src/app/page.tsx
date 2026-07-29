@@ -110,7 +110,7 @@ export default function Home() {
                       placeholder="Your name"
                       value={playerName}
                       onChange={(e) => setPlayerName(e.target.value)}
-                      maxLength={30}
+                      maxLength={15}
                       className="field-stage"
                     />
                   </div>

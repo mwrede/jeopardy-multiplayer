@@ -26,6 +26,7 @@ import {
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { computeClueReadingDelay } from '@/lib/clue-timing'
+import { ClueAttempts } from '@/components/ClueAttempts'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
@@ -68,6 +69,45 @@ export default function PlayerPage() {
     setHasTriedAnswer(false)
     setHasPassed(false)
   }, [game?.current_clue_id])
+
+  // Final Jeopardy countdown (15s default). Auto-submits whatever's typed
+  // when it hits zero.
+  const [finalCountdown, setFinalCountdown] = useState<number | null>(null)
+  const finalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const finalIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const finalAnswerInputRef = useRef<string>('')
+  useEffect(() => { finalAnswerInputRef.current = finalAnswerInput }, [finalAnswerInput])
+  useEffect(() => {
+    const isMyFinal =
+      game?.phase === 'final_answering' &&
+      myPlayer &&
+      !finalAnswerLocked &&
+      (myPlayer.final_answer == null || myPlayer.final_answer === '')
+    if (!isMyFinal) {
+      setFinalCountdown(null)
+      if (finalTimerRef.current) clearTimeout(finalTimerRef.current)
+      if (finalIntervalRef.current) clearInterval(finalIntervalRef.current)
+      finalTimerRef.current = null
+      finalIntervalRef.current = null
+      return
+    }
+    const totalMs = game.settings?.final_answer_ms ?? 15000
+    setFinalCountdown(Math.ceil(totalMs / 1000))
+    finalIntervalRef.current = setInterval(() => {
+      setFinalCountdown((n) => (n !== null && n > 0 ? n - 1 : 0))
+    }, 1000)
+    finalTimerRef.current = setTimeout(async () => {
+      if (myPlayer) {
+        await submitFinalAnswer(myPlayer.id, finalAnswerInputRef.current.trim() || '(no answer)')
+        setFinalAnswerLocked(true)
+        setFinalAnswerInput('')
+      }
+    }, totalMs)
+    return () => {
+      if (finalTimerRef.current) clearTimeout(finalTimerRef.current)
+      if (finalIntervalRef.current) clearInterval(finalIntervalRef.current)
+    }
+  }, [game?.phase, myPlayer?.id, finalAnswerLocked, myPlayer?.final_answer, game?.settings?.final_answer_ms])
   const [buzzCountdown, setBuzzCountdown] = useState<number | null>(null)
   const [buzzArmed, setBuzzArmed] = useState(false)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
@@ -516,7 +556,12 @@ export default function PlayerPage() {
         <PlayerHeader myPlayer={myPlayer} game={game} />
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           <h2 className="text-xl font-bold text-jeopardy-gold mb-2 uppercase">{game.final_category_name}</h2>
-          <p className="text-gray-400 text-sm">Look at the TV for the clue!</p>
+          <p className="text-gray-400 text-sm mb-4">Look at the TV for the clue!</p>
+          {finalCountdown !== null && (
+            <p className={`text-5xl font-bold font-mono ${finalCountdown <= 5 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+              {finalCountdown}s
+            </p>
+          )}
         </div>
 
         <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
@@ -646,7 +691,14 @@ export default function PlayerPage() {
             )}
           </div>
 
-          {/* Answer + wrong-answer text live on the TV only, not on phones. */}
+          {/* Correct answer — always shown on the result screen */}
+          <div className="mt-6 text-center">
+            <p className="text-gray-500 text-sm mb-1">Correct answer:</p>
+            <p className="text-white text-lg font-bold">{currentClue.answer}</p>
+          </div>
+
+          {/* Every answer attempted on this clue */}
+          <ClueAttempts gameId={game.id} clueId={currentClue.id} players={players} variant="phone" />
         </div>
       </div>
     )

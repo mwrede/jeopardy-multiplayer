@@ -1155,7 +1155,6 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
   const isDailyDouble = clue.is_daily_double && (game?.phase === 'daily_double_answering')
   const pointValue = isDailyDouble ? (playerData?.final_wager || clue.value) : clue.value
   const scoreChange = correct ? pointValue : -pointValue
-  const isPartyMode = (game?.settings as any)?.gameMode !== 'multiplayer'
 
   const { data: player } = await supabase
     .from('players').select('score').eq('id', playerId).single()
@@ -1175,9 +1174,8 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     .eq('clue_id', clueId)
     .eq('player_id', playerId)
 
-  // Correct answer, Daily Double (single-answerer), or a wrong answer in
-  // multiplayer mode (one-and-done rule): close out the clue immediately.
-  if (correct || isDailyDouble || !isPartyMode) {
+  // Correct answer or a Daily Double (single-answerer): close out the clue.
+  if (correct || isDailyDouble) {
     await supabase.from('clues').update({
       is_answered: true,
       answered_by: playerId,
@@ -1190,16 +1188,18 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
     return { correct, scoreChange }
   }
 
-  // Party-mode regular clue, wrong answer: rebound to the next-fastest
-  // buzzer, or reopen the buzz window for untried players.
+  // Wrong answer on a regular clue (both party and multiplayer):
+  // rebound to the next-fastest buzzer if any, otherwise reopen the
+  // buzz window so untried players can jump in.
   await advanceAfterFailedAnswer(gameId, clueId, playerId)
   return { correct, scoreChange }
 }
 
 /**
  * After a buzzer answers wrong or lets the answer clock run out on a regular
- * clue, promote the next-fastest untried buzzer. When the queue is empty,
- * close the clue and show the result — the window does NOT reopen.
+ * clue, promote the next-fastest untried buzzer. If none, REOPEN the buzz
+ * window so any player who hasn't attempted yet gets a shot — skipClue's
+ * auto-timeout later closes the clue if nobody jumps in.
  */
 async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnswererId: string) {
   const { data: nextRows } = await supabase
@@ -1228,17 +1228,16 @@ async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnsw
     return
   }
 
-  // Queue exhausted — close the clue with the last wrong-answerer on record.
-  await supabase.from('clues').update({
-    is_answered: true,
-    answered_by: lastAnswererId,
-    answered_correct: false,
-  }).eq('id', clueId)
-
-  await supabase.from('games').update({
-    phase: 'clue_result',
-    updated_at: new Date().toISOString(),
-  }).eq('id', gameId)
+  // Queue exhausted — reopen the buzz window for anyone who hasn't tried.
+  await supabase
+    .from('games')
+    .update({
+      phase: 'buzz_window',
+      buzz_window_open: true,
+      buzz_window_start: new Date(Date.now() + 700).toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
 }
 
 /**
@@ -1361,7 +1360,6 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
 
   const isDailyDouble = clue.is_daily_double && (game.phase === 'daily_double_answering')
   const pointValue = isDailyDouble ? (playerData?.final_wager || clue.value || 0) : (clue.value || 0)
-  const isPartyMode = (game.settings as any)?.gameMode !== 'multiplayer'
 
   if (playerData && pointValue > 0) {
     await supabase
@@ -1378,9 +1376,8 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
     .eq('clue_id', clueId)
     .eq('player_id', playerId)
 
-  // Daily Doubles (single-answerer) and multiplayer regular clues (one-and-done):
-  // close out the clue immediately with the wrong-answerer's score already docked.
-  if (isDailyDouble || !isPartyMode) {
+  // Daily Doubles have only one attempt — close out immediately.
+  if (isDailyDouble) {
     await supabase.from('clues').update({
       is_answered: true,
       answered_by: playerId,
@@ -1394,7 +1391,7 @@ export async function passAfterBuzz(gameId: string, clueId: string, playerId: st
     return
   }
 
-  // Party-mode regular clue — rebound to the next buzzer or reopen the window.
+  // Regular clue in either mode — rebound to next buzzer or reopen the window.
   await advanceAfterFailedAnswer(gameId, clueId, playerId)
 }
 
