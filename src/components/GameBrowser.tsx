@@ -8,6 +8,8 @@ import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/game'
 import { useUser } from '@/lib/auth'
 import { MASHUPS, MIXABLE_THEMES, THEME_STYLES, type Mashup } from './mashup-themes'
+import { TopicBoardBuilder } from './TopicBoardBuilder'
+import type { BoardTopic } from '@/lib/topic-board'
 import { BoardPreview } from './BoardPreview'
 import type { CustomBoard } from '@/types/game'
 
@@ -568,6 +570,28 @@ export function GameBrowser({ compact = false }: Props) {
     }
   }
 
+  /**
+   * Topic Board: user-chosen mix of curated themes and typed headers.
+   * The board splits its category slots evenly across them.
+   */
+  async function handlePlayTopicBoard(topics: BoardTopic[], mode: PlayMode, size: GameLength) {
+    if (topics.length === 0) return
+    setCreating(true)
+    setSearchError('')
+    try {
+      const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength: size, boardTopics: topics }
+      if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
+      const { game } = await createGame(settings)
+      void incrementPlayCount('mashup', 'topics:' + topics.map((t) => t.value).sort().join('+'))
+      await routeToGame(game.room_code, mode)
+    } catch (e: any) {
+      console.error('Failed to create topic board:', e)
+      setSearchError(e?.message || 'Could not build a board from those categories.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   /** Mix Mashup: starts a game pulling from any of the selected themes. */
   async function handlePlayMix(themes: string[], mode: PlayMode, size: GameLength) {
     if (themes.length === 0) return
@@ -775,66 +799,14 @@ export function GameBrowser({ compact = false }: Props) {
       )}
 
       <div className="space-y-3">
-        {/* Mix Mashup card — single click opens the configurator modal. */}
-        {showMashups && !filtersActive && (() => {
-          const style = THEME_STYLES.mix
-          return (
-            <button
-              key="mashup:mix"
-              onClick={() => { setMashupPreview({ kind: 'mix' }); setMashupPreviewMode('idle') }}
-              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden hover:scale-[1.005]`}
-              style={style.cardStyle}
-            >
-              <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
-                {style.icons.join(' ')}
-              </div>
-              <div className="relative">
-                <span className={`text-xs uppercase tracking-wider font-bold ${style.accentClass}`}>
-                  🎨 Mix Mashup
-                </span>
-                <h3 className="text-white font-bold text-lg">Mix Your Own</h3>
-                <p className="text-gray-300 text-sm mt-1">
-                  Pick two or more themes to blend them into a single board.
-                </p>
-                {mixThemes.size > 0 && (
-                  <p className="text-jeopardy-gold-light text-xs mt-1.5">
-                    {mixThemes.size} theme{mixThemes.size === 1 ? '' : 's'} selected
-                  </p>
-                )}
-              </div>
-            </button>
-          )
-        })()}
-
-        {/* Topic Mashup card */}
-        {showMashups && !filtersActive && (() => {
-          const style = THEME_STYLES.topic
-          const term = topicQuery.trim()
-          return (
-            <button
-              key="mashup:topic"
-              onClick={() => { setMashupPreview({ kind: 'topic' }); setMashupPreviewMode('idle') }}
-              className={`relative w-full text-left rounded-2xl ${cardPad} transition-all border-2 overflow-hidden hover:scale-[1.005]`}
-              style={style.cardStyle}
-            >
-              <div className="absolute top-2 right-3 text-2xl opacity-30 select-none pointer-events-none">
-                {style.icons.join(' ')}
-              </div>
-              <div className="relative">
-                <span className={`text-xs uppercase tracking-wider font-bold ${style.accentClass}`}>
-                  🔍 Topic Mashup
-                </span>
-                <h3 className="text-white font-bold text-lg">Type a topic</h3>
-                <p className="text-gray-300 text-sm mt-1">
-                  Anything: football, the Beatles, Africa, dinosaurs — we'll find categories matching the name.
-                </p>
-                {term && (
-                  <p className="text-jeopardy-gold-light text-xs mt-1.5">Current: "{term}"</p>
-                )}
-              </div>
-            </button>
-          )
-        })()}
+        {/* Build-your-own board: curated themes + typed headers in one place. */}
+        {showMashups && !filtersActive && (
+          <TopicBoardBuilder
+            onPlay={handlePlayTopicBoard}
+            creating={creating}
+            error={searchError}
+          />
+        )}
 
         {mashupResults.map((m) => {
           const style = THEME_STYLES[m.theme || 'random'] || THEME_STYLES.random

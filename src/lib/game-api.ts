@@ -1,6 +1,12 @@
 import { supabase } from './supabase'
 import type { Game, Player, Category, Clue, GameSettings, GameSearchResult, GameSearchFilters, CustomBoard } from '@/types/game'
 import { GAME_LENGTH_CONFIG, DEFAULT_CASUAL_SETTINGS } from '@/types/game'
+import {
+  buildTopicRound,
+  pickTopicFinal,
+  MAX_TOPICS,
+  type BoardTopic,
+} from './topic-board'
 
 /**
  * Jeopardy answer checker.
@@ -290,6 +296,93 @@ async function claimGameSeed(gameId: string): Promise<boolean> {
   return (data?.length ?? 0) > 0
 }
 
+/**
+ * Build a game board from user-chosen topics (curated themes and/or free-text
+ * headers). Mirrors the tail end of startGame: rounds → Daily Doubles →
+ * Final Jeopardy → activate.
+ */
+async function buildTopicBoard(
+  gameId: string,
+  topics: BoardTopic[],
+  lengthConfig: (typeof GAME_LENGTH_CONFIG)[keyof typeof GAME_LENGTH_CONFIG],
+) {
+  const trimmed = topics.slice(0, MAX_TOPICS)
+
+  const round1ClueIds = await buildTopicRound({
+    gameId, topics: trimmed,
+    roundName: 'Jeopardy Round', roundNumber: 1, roundIndex: 0,
+    values: lengthConfig.values1,
+    numCategories: lengthConfig.categories,
+    cluesPerCat: lengthConfig.cluesPerCat,
+  })
+
+  const round2ClueIds = await buildTopicRound({
+    gameId, topics: trimmed,
+    roundName: 'Double Jeopardy', roundNumber: 2, roundIndex: 1,
+    values: lengthConfig.values2,
+    numCategories: lengthConfig.categories,
+    cluesPerCat: lengthConfig.cluesPerCat,
+  })
+
+  // Daily Doubles
+  if (round1ClueIds.length > 0) {
+    const dd1 = round1ClueIds[Math.floor(Math.random() * round1ClueIds.length)]
+    await supabase.from('clues').update({ is_daily_double: true }).eq('id', dd1)
+  }
+  if (round2ClueIds.length > 0) {
+    const dd2idx = Math.floor(Math.random() * round2ClueIds.length)
+    await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd2idx])
+    if (lengthConfig.dd2 >= 2 && round2ClueIds.length > 1) {
+      let dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+      while (dd3idx === dd2idx) dd3idx = Math.floor(Math.random() * round2ClueIds.length)
+      await supabase.from('clues').update({ is_daily_double: true }).eq('id', round2ClueIds[dd3idx])
+    }
+  }
+
+  // Final Jeopardy — prefer a clue matching one of the topics
+  let finalCategoryName = 'Final Jeopardy'
+  let finalClueText = 'No Final Jeopardy clue available.'
+  let finalAnswerText = ''
+  const topicFinal = await pickTopicFinal(trimmed)
+  if (topicFinal) {
+    finalCategoryName = topicFinal.category
+    finalClueText = topicFinal.question
+    finalAnswerText = topicFinal.answer
+  } else {
+    const { data: fjCats } = await supabase
+      .from('clue_pool')
+      .select('category, question, answer')
+      .eq('round', 'Final Jeopardy')
+      .limit(50)
+    if (fjCats && fjCats.length > 0) {
+      const pick = fjCats[Math.floor(Math.random() * fjCats.length)] as any
+      finalCategoryName = pick.category
+      finalClueText = pick.question
+      finalAnswerText = pick.answer
+    }
+  }
+
+  const { data: players } = await supabase
+    .from('players').select('id').eq('game_id', gameId)
+  if (!players || players.length === 0) throw new Error('No players in game')
+  const firstPlayer = players[Math.floor(Math.random() * players.length)]
+
+  const { error } = await supabase
+    .from('games')
+    .update({
+      status: 'active',
+      phase: 'board_selection',
+      current_round: 1,
+      current_player_id: firstPlayer.id,
+      final_category_name: finalCategoryName,
+      final_clue_text: finalClueText,
+      final_answer: finalAnswerText,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+  if (error) throw error
+}
+
 export async function startGame(gameId: string) {
   console.log('[startGame] Starting RANDOM game (no sourceGameId)')
   if (!(await claimGameSeed(gameId))) {
@@ -309,6 +402,14 @@ export async function startGame(gameId: string) {
   const ROUND_2_VALUES = lengthConfig.values2
   const NUM_CATEGORIES = lengthConfig.categories
   const CLUES_PER_CAT = lengthConfig.cluesPerCat
+
+  // Topic board: user picked/typed their own category headers. Entirely
+  // separate build path — see lib/topic-board.ts.
+  const boardTopics = (settings as any)?.boardTopics as BoardTopic[] | undefined
+  if (boardTopics && boardTopics.length > 0) {
+    await buildTopicBoard(gameId, boardTopics, lengthConfig)
+    return
+  }
 
   // Determine which game IDs to pull from based on gameType
   const gameType = (settings as any)?.gameType as string | undefined
