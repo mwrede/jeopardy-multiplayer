@@ -85,39 +85,13 @@ export function headerFor(topic: BoardTopic, occurrence: number): string {
  * Fetch a de-duplicated pool of clues for one topic in one round.
  * Themes filter on category_type; terms search category + question + answer.
  */
-export async function fetchTopicPool(
-  topic: BoardTopic,
-  roundName: string,
-  limit = 800,
-): Promise<PoolClue[]> {
-  let query = supabase
-    .from('clue_pool')
-    .select('question, answer')
-    .eq('round', roundName)
-
-  if (topic.kind === 'theme') {
-    query = query.eq('category_type', topic.value)
-  } else {
-    const safe = sanitizeTerm(topic.value)
-    if (!safe) return []
-    // The whole point: a term hits the category name, the clue text, or the answer.
-    query = query.or(
-      `category.ilike.%${safe}%,question.ilike.%${safe}%,answer.ilike.%${safe}%`,
-    )
-  }
-
-  const { data, error } = await query.limit(limit)
-  if (error) {
-    console.warn(`[topic-board] pool fetch failed for "${topic.label}":`, error.message)
-    return []
-  }
-
-  // De-dupe by question — the same clue can appear across multiple airings.
+/** De-dupe rows by question text (the same clue recurs across airings). */
+function dedupe(rows: any[]): PoolClue[] {
   const seen = new Set<string>()
   const out: PoolClue[] = []
-  for (const row of data ?? []) {
-    const q = (row as any).question as string
-    const a = (row as any).answer as string
+  for (const row of rows) {
+    const q = row?.question as string
+    const a = row?.answer as string
     if (!q || !a) continue
     const key = q.trim().toLowerCase()
     if (seen.has(key)) continue
@@ -125,6 +99,122 @@ export async function fetchTopicPool(
     out.push({ question: q, answer: a })
   }
   return out
+}
+
+export async function fetchTopicPool(
+  topic: BoardTopic,
+  roundName: string,
+  limit = 800,
+): Promise<PoolClue[]> {
+  // Curated theme: one indexed equality lookup on the pre-tagged column.
+  if (topic.kind === 'theme') {
+    const { data, error } = await supabase
+      .from('clue_pool')
+      .select('question, answer')
+      .eq('round', roundName)
+      .eq('category_type', topic.value)
+      .limit(limit)
+    if (error) {
+      console.warn(`[topic-board] theme fetch failed for "${topic.label}":`, error.message)
+      return []
+    }
+    return dedupe(data ?? [])
+  }
+
+  // Free-text term: match the category name, the clue text, or the answer.
+  //
+  // Deliberately three separate .ilike() queries rather than one .or().
+  // supabase-js splices an .or() string raw into the URL, where the '%'
+  // wildcards start percent-escape sequences and multi-word values break the
+  // filter grammar — the query silently returns nothing. .ilike() is encoded
+  // properly by the client, so this actually works.
+  const safe = sanitizeTerm(topic.value)
+  if (!safe) return []
+  const pattern = `%${safe}%`
+  const per = Math.ceil(limit / 2)
+
+  const [byCategory, byQuestion, byAnswer] = await Promise.all([
+    supabase.from('clue_pool').select('question, answer')
+      .eq('round', roundName).ilike('category', pattern).limit(per),
+    supabase.from('clue_pool').select('question, answer')
+      .eq('round', roundName).ilike('question', pattern).limit(per),
+    supabase.from('clue_pool').select('question, answer')
+      .eq('round', roundName).ilike('answer', pattern).limit(per),
+  ])
+
+  const failures = [byCategory, byQuestion, byAnswer].filter((r) => r.error)
+  if (failures.length === 3) {
+    // Every probe failed — surface it instead of pretending the topic is empty.
+    throw new Error(
+      `Clue search failed for "${topic.label}": ${failures[0].error!.message}. ` +
+      `If this says "statement timeout", the clue-text search indexes are missing — ` +
+      `run supabase-migration-clue-text-trigram.sql.`,
+    )
+  }
+  for (const f of failures) {
+    console.warn(`[topic-board] partial miss for "${topic.label}":`, f.error!.message)
+  }
+
+  // Category-name hits first — those are whole real categories, so they play
+  // best; clue-text and answer hits backfill.
+  const exact = dedupe([
+    ...(byCategory.data ?? []),
+    ...(byQuestion.data ?? []),
+    ...(byAnswer.data ?? []),
+  ])
+
+  // A multi-word phrase rarely appears verbatim in clue text — "mechanical
+  // engineering" as a literal substring is nearly empty. When the exact search
+  // comes up thin, widen to clues that mention every significant word, even if
+  // they're apart. Single-word topics skip this entirely.
+  const terms = significantWords(safe)
+  if (exact.length >= 40 || terms.length < 2) return exact
+
+  const widened = await fetchAllWordsPool(terms, roundName, per)
+  return dedupe([...exact, ...widened])
+}
+
+/** Words worth searching on — drops stopwords and very short tokens. */
+function significantWords(phrase: string): string[] {
+  const STOP = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'in', 'on', 'for', 'to'])
+  return phrase
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !STOP.has(w))
+}
+
+/**
+ * Find clues mentioning EVERY given word (not necessarily adjacent).
+ * Anchors on the longest word — the most selective — then filters the rest
+ * client-side, since chaining .ilike() across different columns would AND them
+ * per-column rather than across the row.
+ */
+async function fetchAllWordsPool(
+  terms: string[],
+  roundName: string,
+  limit: number,
+): Promise<PoolClue[]> {
+  const anchor = [...terms].sort((a, b) => b.length - a.length)[0]
+  const pattern = `%${anchor}%`
+
+  const [cat, q, a] = await Promise.all([
+    supabase.from('clue_pool').select('category, question, answer')
+      .eq('round', roundName).ilike('category', pattern).limit(limit),
+    supabase.from('clue_pool').select('category, question, answer')
+      .eq('round', roundName).ilike('question', pattern).limit(limit),
+    supabase.from('clue_pool').select('category, question, answer')
+      .eq('round', roundName).ilike('answer', pattern).limit(limit),
+  ])
+
+  const rows = [...(cat.data ?? []), ...(q.data ?? []), ...(a.data ?? [])]
+  const others = terms.filter((t) => t !== anchor)
+
+  const matching = rows.filter((r: any) => {
+    const haystack = `${r.category ?? ''} ${r.question ?? ''} ${r.answer ?? ''}`.toLowerCase()
+    return others.every((t) => haystack.includes(t))
+  })
+
+  return dedupe(matching)
 }
 
 /** In-place Fisher-Yates. */
@@ -266,9 +356,15 @@ export async function buildTopicRound(opts: {
   }
 
   if (position === 0) {
+    const found = distinct
+      .map((v) => {
+        const label = slotTopics.find((t) => t.value === v)!.label
+        return `${label}: ${(pools.get(v) ?? []).length} clues`
+      })
+      .join(', ')
     throw new Error(
-      `No clues found for ${thin.join(', ') || 'those topics'} in ${roundName}. ` +
-      `Try broader topics or a smaller board size.`,
+      `Not enough clues to fill ${roundName} — each column needs ${cluesPerCat}. ` +
+      `Found ${found}. Try broader topics, fewer of them, or the Rapid board size.`,
     )
   }
 
@@ -285,24 +381,34 @@ export async function pickTopicFinal(topics: BoardTopic[]): Promise<{
   answer: string
 } | null> {
   for (const topic of shuffle([...topics])) {
-    let query = supabase
-      .from('clue_pool')
-      .select('category, question, answer')
-      .eq('round', 'Final Jeopardy')
+    let rows: any[] = []
 
     if (topic.kind === 'theme') {
-      query = query.eq('category_type', topic.value)
+      const { data } = await supabase
+        .from('clue_pool')
+        .select('category, question, answer')
+        .eq('round', 'Final Jeopardy')
+        .eq('category_type', topic.value)
+        .limit(50)
+      rows = data ?? []
     } else {
       const safe = sanitizeTerm(topic.value)
       if (!safe) continue
-      query = query.or(
-        `category.ilike.%${safe}%,question.ilike.%${safe}%,answer.ilike.%${safe}%`,
-      )
+      const pattern = `%${safe}%`
+      // Separate .ilike() calls for the same reason as fetchTopicPool.
+      const [cat, q, a] = await Promise.all([
+        supabase.from('clue_pool').select('category, question, answer')
+          .eq('round', 'Final Jeopardy').ilike('category', pattern).limit(25),
+        supabase.from('clue_pool').select('category, question, answer')
+          .eq('round', 'Final Jeopardy').ilike('question', pattern).limit(25),
+        supabase.from('clue_pool').select('category, question, answer')
+          .eq('round', 'Final Jeopardy').ilike('answer', pattern).limit(25),
+      ])
+      rows = [...(cat.data ?? []), ...(q.data ?? []), ...(a.data ?? [])]
     }
 
-    const { data } = await query.limit(50)
-    if (data && data.length > 0) {
-      const pick = data[Math.floor(Math.random() * data.length)] as any
+    if (rows.length > 0) {
+      const pick = rows[Math.floor(Math.random() * rows.length)]
       return { category: pick.category, question: pick.question, answer: pick.answer }
     }
   }
