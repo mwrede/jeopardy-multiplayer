@@ -194,7 +194,9 @@ export default function PlayPage() {
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
       return
     }
-    const totalMs = game.settings?.buzz_window_ms ?? 15000
+    // Per-window duration wins over the game-wide setting: a REOPENED buzz
+    // window after a wrong answer is deliberately shorter than the first one.
+    const totalMs = game.buzz_window_ms ?? game.settings?.buzz_window_ms ?? 15000
     const scheduledMs = game.buzz_window_start
       ? new Date(game.buzz_window_start).getTime()
       : Date.now()

@@ -947,17 +947,22 @@ export async function selectClue(gameId: string, clueId: string, playerId: strin
   // Set the current clue and change phase
   const nextPhase = clue.is_daily_double ? 'daily_double_wager' : 'clue_reading'
 
-  const { error } = await supabase
-    .from('games')
-    .update({
-      current_clue_id: clueId,
-      phase: nextPhase,
-      current_player_id: playerId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', gameId)
+  const update: any = {
+    current_clue_id: clueId,
+    phase: nextPhase,
+    current_player_id: playerId,
+    // Clear any shortened rebuzz duration left over from the previous clue.
+    buzz_window_ms: null,
+    updated_at: new Date().toISOString(),
+  }
 
-  if (error) throw error
+  const { error } = await supabase.from('games').update(update).eq('id', gameId)
+  if (error) {
+    // Column may not exist yet (migration not applied) — retry without it.
+    delete update.buzz_window_ms
+    const { error: retryErr } = await supabase.from('games').update(update).eq('id', gameId)
+    if (retryErr) throw retryErr
+  }
 }
 
 /**
@@ -1203,15 +1208,28 @@ async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnsw
   }
 
   // Queue exhausted — reopen the buzz window for anyone who hasn't tried.
-  await supabase
-    .from('games')
-    .update({
-      phase: 'buzz_window',
-      buzz_window_open: true,
-      buzz_window_start: new Date(Date.now() + 700).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', gameId)
+  // Shorter than the opening window: everyone has already heard the clue, so
+  // this is a quick "anyone else?" rather than a fresh read.
+  const { data: g } = await supabase
+    .from('games').select('settings').eq('id', gameId).single()
+  const fullWindow = (g?.settings as any)?.buzz_window_ms ?? 10000
+  const reopenMs = Math.max(4000, Math.round(fullWindow * 0.5))
+
+  const update: any = {
+    phase: 'buzz_window',
+    buzz_window_open: true,
+    buzz_window_start: new Date(Date.now() + 700).toISOString(),
+    buzz_window_ms: reopenMs,
+    updated_at: new Date().toISOString(),
+  }
+  const { error } = await supabase.from('games').update(update).eq('id', gameId)
+  if (error) {
+    // buzz_window_ms column missing (migration not applied) — reopen anyway
+    // at the default duration rather than stranding the clue.
+    console.warn('[advanceAfterFailedAnswer] retrying without buzz_window_ms:', error.message)
+    delete update.buzz_window_ms
+    await supabase.from('games').update(update).eq('id', gameId)
+  }
 }
 
 /**

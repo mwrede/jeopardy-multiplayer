@@ -28,6 +28,8 @@ export interface Game {
   phase: GamePhase
   buzz_window_open: boolean
   buzz_window_start: string | null
+  /** Duration of the CURRENT buzz window. Reopened windows are shorter. Null = use settings. */
+  buzz_window_ms?: number | null
   settings: GameSettings
   created_at: string
   updated_at: string

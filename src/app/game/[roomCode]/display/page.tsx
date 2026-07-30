@@ -191,7 +191,9 @@ export default function DisplayPage() {
       return
     }
 
-    const totalMs = game.settings?.buzz_window_ms ?? 15000
+    // Per-window duration wins over the game-wide setting: a REOPENED buzz
+    // window after a wrong answer is deliberately shorter than the first one.
+    const totalMs = game.buzz_window_ms ?? game.settings?.buzz_window_ms ?? 15000
     // buzz_window_start is a scheduled-future timestamp (writer added ~700ms lead).
     // Wait for that moment locally so all clients open together. Clamp the delay
     // to [0, 1200ms] so a badly-skewed device clock still opens promptly.
