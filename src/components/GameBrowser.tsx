@@ -659,7 +659,7 @@ export function GameBrowser({ compact = false }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') runSearch(false, 0) }}
-            placeholder="Search 9,300 Jeopardy Games"
+            placeholder="Search by title, name, date"
             className="flex-1 bg-transparent border-none outline-none text-white font-bold text-lg placeholder:text-ink-stage-3 placeholder:italic placeholder:font-normal"
           />
         </label>
