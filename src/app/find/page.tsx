@@ -26,7 +26,7 @@ export default function FindPage() {
                 ← Home
               </a>
               <div className="text-copper uppercase tracking-[0.24em] text-[11px] md:text-xs" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
-                Search 9,300 Jeopardy Games
+                Jeopardy Archive + More
               </div>
               <span aria-hidden="true" className="w-[52px]" />
             </div>
