@@ -241,6 +241,17 @@ body {
       inset 0 -1px 0 rgba(0,0,0,0.35);
   }
 
+  /* Deep variant of the stage — the dark plate colour taken full-bleed, so
+     the page reads as one continuous surface rather than a bright gradient
+     with a dark box floating on it. */
+  .stage-page-deep {
+    @apply min-h-screen text-ink-stage;
+    background:
+      radial-gradient(1200px 700px at 50% -220px, rgba(80, 120, 230, 0.20) 0%, transparent 60%),
+      linear-gradient(180deg, #08155A 0%, #061040 55%, #050C3E 100%);
+    background-attachment: fixed;
+  }
+
   /* Landing tiles.
      The pair sits inside a walnut panel with the same black-gridline
      construction as the real board (.board-wrapper): black gutter between

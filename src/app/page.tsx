@@ -6,6 +6,7 @@ import { deleteCustomBoard } from '@/lib/game-api'
 import { useUser } from '@/lib/auth'
 import { getMyBoards, type BoardSummary } from '@/lib/profile-api'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
+import { TypingClue } from '@/components/TypingClue'
 
 /**
  * LANDING PAGE
@@ -53,10 +54,8 @@ export default function Home() {
   }
 
   return (
-    <main className="stage-page flat-stage p-4 md:p-8 pb-24">
-      {/* Same deep-blue plate /find sits its content on, so the two screens
-          read as one surface instead of two different blues. */}
-      <div className="frame-inner mx-auto w-full max-w-5xl px-5 pb-14 pt-10 md:px-10 md:pt-14">
+    <main className="stage-page-deep flat-stage px-4 pb-24 md:px-8">
+      <div className="mx-auto w-full max-w-5xl px-1 pb-14 pt-10 md:pt-16">
 
         {/* Wordmark — carries the identity on its own, no tagline needed */}
         <header className="text-center">
@@ -83,7 +82,14 @@ export default function Home() {
             </a>
 
             <a href="/create" className="tile">
-              <span className="tile-art tile-art-glyph" aria-hidden="true">&#9997;</span>
+              {/* A clue being written, live — the authoring loop, shown. */}
+              <TypingClue />
+              <span
+                className="pointer-events-none absolute right-4 top-4 text-3xl opacity-70"
+                aria-hidden="true"
+              >
+                &#9997;
+              </span>
               <div className="tile-body">
                 <h2 className="tile-title text-3xl md:text-4xl">Create a Board</h2>
                 <p className="mt-2 text-sm text-blue-100/75">
