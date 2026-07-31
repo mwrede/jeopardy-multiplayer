@@ -24,6 +24,21 @@ const cases: [string,string,boolean][] = [
   ['France','Germany',false],
   ['graduation','commencement',false],
   ['car','automobile',false],
+  ['RFK','Robert F. Kennedy',true],
+  ['RFK','Robert Francis Kennedy',true],
+  ['RFK','(Robert F.) Kennedy',true],
+  ['JFK','John Fitzgerald Kennedy',true],
+  ['FDR','Franklin Delano Roosevelt',true],
+  ['MLK','Martin Luther King',true],
+  ['Kennedy','(Robert F.) Kennedy',true],
+  ['Robert F. Kennedy','(Robert F.) Kennedy',true],
+  ['canines','dogs/canines',true],
+  // initialism must not fire on unrelated short answers
+  ['cat','Martin Luther King',false],
+  ['abc','Alabama',false],
+  ['USA','Robert F. Kennedy',false],
+  ['MLK','Robert F. Kennedy',false],
+  ['Ohio','Iowa',false],
 ]
 let pass=0,fail=0
 for (const [p,a,want] of cases) {

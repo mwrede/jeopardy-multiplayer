@@ -177,10 +177,64 @@ function containsAllWords(shorter: string, longer: string): boolean {
   return sw.every((s) => lw.some((l) => wordMatches(s, l)))
 }
 
+/**
+ * First letters of the significant words — "robert f kennedy" → "rfk".
+ * Returns '' when there aren't enough words to form a real initialism.
+ */
+export function initials(s: string): string {
+  const w = words(s).filter((x) => !STOPWORDS.has(x))
+  if (w.length < 2) return ''
+  return w.map((x) => x[0]).join('')
+}
+
+/**
+ * True when one side is the other's initialism: RFK / Robert F. Kennedy,
+ * JFK, FDR, MLK, and so on. Kept tight — the abbreviation side must be a
+ * short single all-letter token — so it can't fire on ordinary answers.
+ */
+function initialismMatches(a: string, b: string): boolean {
+  const tryOne = (abbr: string, full: string) => {
+    if (!abbr || abbr.includes(' ')) return false
+    if (abbr.length < 2 || abbr.length > 5) return false
+    if (!/^[a-z]+$/.test(abbr)) return false
+    return initials(full) === abbr
+  }
+  return tryOne(a, b) || tryOne(b, a)
+}
+
+/**
+ * Every acceptable spelling of a stored answer.
+ *
+ * J-Archive wraps OPTIONAL parts in parentheses — "(Robert F.) Kennedy" means
+ * both "Kennedy" and "Robert F. Kennedy" count. Stripping the parenthetical
+ * (what we used to do) only ever kept one of those readings. It also splits
+ * "/", "&" and " or " alternatives into their own variants.
+ */
+export function answerVariants(raw: string): string[] {
+  const out = new Set<string>()
+
+  const add = (s: string) => {
+    const n = normalize(s)
+    if (n) out.add(n)
+  }
+
+  const push = (s: string) => {
+    add(s)                                  // parens dropped by normalize()
+    add(s.replace(/[()]/g, ' '))            // parenthetical kept as text
+  }
+
+  push(raw)
+  for (const piece of raw.split(/\s*\/\s*|\s*&\s*|\s+or\s+/i)) {
+    if (piece.trim()) push(piece)
+  }
+
+  return [...out]
+}
+
 export type CheckResult = {
   correct: boolean
   /** How the verdict was reached — useful for logging and for the AI judge. */
-  method: 'exact' | 'alias' | 'contains' | 'fuzzy' | 'phonetic' | 'none'
+  method: 'exact' | 'alias' | 'initialism' | 'contains' | 'fuzzy' | 'phonetic' | 'none'
   /** True when the strings are close enough that a human might disagree. */
   borderline: boolean
 }
@@ -195,6 +249,22 @@ export function checkAnswerDetailed(playerAnswer: string, correctAnswer: string)
   const correct = normalize(correctAnswer)
 
   if (!player) return { correct: false, method: 'none', borderline: false }
+  if (!player) return { correct: false, method: 'none', borderline: false }
+
+  // Check the player's answer against EVERY acceptable spelling of the stored
+  // answer, not just the one normalize() happens to produce.
+  let best: CheckResult = { correct: false, method: 'none', borderline: false }
+  for (const variant of answerVariants(correctAnswer)) {
+    const r = matchOne(player, variant)
+    if (r.correct && !r.borderline) return r
+    if (r.correct) best = r
+  }
+  return best
+}
+
+/** One player answer vs one acceptable spelling. */
+function matchOne(player: string, correct: string): CheckResult {
+  if (!correct) return { correct: false, method: 'none', borderline: false }
   if (player === correct) return { correct: true, method: 'exact', borderline: false }
 
   const playerExp = expandAbbreviations(player)
@@ -205,13 +275,9 @@ export function checkAnswerDetailed(playerAnswer: string, correctAnswer: string)
     return { correct: true, method: 'alias', borderline: false }
   }
 
-  // Slash / ampersand alternatives: "dogs/canines"
-  const alternatives = correctAnswer
-    .split(/[\/&]|\bor\b/)
-    .map((a) => normalize(a.trim()))
-    .filter((a) => a.length >= 2)
-  if (alternatives.some((alt) => alt === player)) {
-    return { correct: true, method: 'alias', borderline: false }
+  // Initialisms: RFK / Robert F. Kennedy, JFK, FDR, MLK
+  if (initialismMatches(player, correct)) {
+    return { correct: true, method: 'initialism', borderline: false }
   }
 
   // Word-aware containment, both directions (and on the expanded forms)
@@ -219,8 +285,7 @@ export function checkAnswerDetailed(playerAnswer: string, correctAnswer: string)
     containsAllWords(player, correct) ||
     containsAllWords(correct, player) ||
     containsAllWords(playerExp, correctExp) ||
-    containsAllWords(correctExp, playerExp) ||
-    alternatives.some((alt) => containsAllWords(player, alt) || containsAllWords(alt, player))
+    containsAllWords(correctExp, playerExp)
   ) {
     return { correct: true, method: 'contains', borderline: false }
   }
