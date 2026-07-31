@@ -241,65 +241,96 @@ body {
       inset 0 -1px 0 rgba(0,0,0,0.35);
   }
 
-  /* Landing tiles — the podium read from the reference photo: a dark blue
-     face, a warm wood hairline along the bottom, and a chrome rail on top.
-     No outer frame and no heavy border; the material does the work. */
+  /* Landing tiles.
+     The pair sits inside a walnut panel with the same black-gridline
+     construction as the real board (.board-wrapper): black gutter between
+     cells, layered navy rings, deep drop. Each tile is a clue cell —
+     #0A14C8 face, 2px black edge, the same inset bevel .board-cell uses —
+     so the landing page is literally built out of the board it opens.
+     Wood is back, but as the panel the board is mounted in, not a frame
+     around the whole page. */
+  .board-panel {
+    padding: 10px;
+    border-radius: 12px;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 5px),
+      linear-gradient(180deg, rgba(255,210,160,0.16), transparent 8%, transparent 92%, rgba(0,0,0,0.3) 100%),
+      linear-gradient(90deg, #3D1B0E 0%, #6A3218 22%, #8B4A28 50%, #6A3218 78%, #3D1B0E 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,210,160,0.3),
+      inset 0 -2px 0 rgba(0,0,0,0.42),
+      0 14px 40px -18px rgba(0,0,0,0.75);
+  }
+  .board-panel-inner {
+    display: grid;
+    gap: 4px;                 /* the black gridline between cells */
+    padding: 4px;
+    background: #000;
+    border-radius: 5px;
+    box-shadow:
+      0 0 0 2px #1a1a3a,
+      inset 0 0 24px rgba(0,0,0,0.9);
+  }
+  @media (min-width: 768px) {
+    .board-panel-inner { grid-template-columns: 1fr 1fr; }
+  }
+
   .tile {
     position: relative;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    min-height: 260px;
-    padding: 0 0 22px;
-    border-radius: 10px;
+    min-height: 268px;
+    padding: 0 0 20px;
     overflow: hidden;
-    background: linear-gradient(180deg, #12246E 0%, #0A1546 62%, #070F35 100%);
-    border-top: 2px solid rgba(203, 213, 232, 0.65);   /* chrome rail */
-    border-bottom: 3px solid #6A3A1E;                   /* wood, as trim only */
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+    background: linear-gradient(180deg, #0A14C8 0%, #070E9A 100%);
+    border: 2px solid #000;
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,255,0.12),
+      inset 0 -2px 4px rgba(0,0,0,0.35);
     text-decoration: none;
-    transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    transition: filter 130ms ease, box-shadow 130ms ease;
   }
   .tile:hover {
-    transform: translateY(-2px);
-    border-top-color: #EAF0FB;
+    filter: brightness(1.22);
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.2),
-      0 10px 28px -14px rgba(0,0,0,0.75);
+      inset 0 2px 4px rgba(255,255,255,0.2),
+      inset 0 -2px 4px rgba(0,0,0,0.3);
   }
-  .tile:focus-visible {
-    outline: 2px solid #FFD59A;
-    outline-offset: 3px;
-  }
+  .tile:active { filter: brightness(1.08); }
+  .tile:focus-visible { outline: 2px solid #FFD59A; outline-offset: -6px; }
 
-  /* Artwork sits behind the label, bled to the tile's edges. */
+  /* Artwork bleeds to the cell edges, behind the label. */
   .tile-art {
     position: absolute;
     inset: 0 0 auto;
     width: 100%;
-    height: 62%;
+    height: 60%;
     object-fit: contain;
     object-position: center bottom;
-    opacity: 0.96;
     pointer-events: none;
   }
   .tile-art-glyph {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 88px;
+    font-size: 92px;
     line-height: 1;
-    opacity: 0.9;
-    filter: drop-shadow(0 6px 18px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 8px 20px rgba(0,0,0,0.55));
   }
-  .tile-body {
-    position: relative;
-    padding: 0 22px;
-    text-align: center;
+  .tile-body { position: relative; padding: 0 22px; text-align: center; }
+  /* Gold, shadowed, Impact — the clue-value treatment from .board-cell. */
+  .tile-title {
+    font-family: Impact, "Haettenschweiler", "Arial Narrow Bold", "Arial Black", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: #E8A832;
+    text-shadow: 1px 2px 3px rgba(0,0,0,0.6);
+    line-height: 0.95;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .tile, .tile:hover { transition: none; transform: none; }
+    .tile, .tile:hover, .tile:active { transition: none; filter: none; }
   }
 
   /* Buttons — condensed uppercase, beveled fills. */

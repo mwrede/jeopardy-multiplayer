@@ -61,32 +61,35 @@ export default function Home() {
           <ChromeWordmark className="mx-auto h-auto w-full max-w-[300px] md:max-w-[420px]" />
         </header>
 
-        {/* The two things you can do */}
-        <div className="mt-10 grid gap-5 md:mt-14 md:grid-cols-2">
-          <a href="/find" className="tile group">
-            <img
-              src="/contestants.png"
-              alt=""
-              aria-hidden="true"
-              className="tile-art"
-            />
-            <div className="tile-body">
-              <h2 className="display-chrome text-3xl leading-none md:text-4xl">Play Jeopardy!</h2>
-              <p className="mt-2 text-sm text-ink-stage">
-                Forty-two seasons, themed boards, and community games.
-              </p>
-            </div>
-          </a>
+        {/* The two things you can do — built as two cells of a real board,
+            mounted in a walnut panel. */}
+        <div className="board-panel mt-10 md:mt-14">
+          <div className="board-panel-inner">
+            <a href="/find" className="tile">
+              <img
+                src="/contestants.png"
+                alt=""
+                aria-hidden="true"
+                className="tile-art"
+              />
+              <div className="tile-body">
+                <h2 className="tile-title text-3xl md:text-4xl">Play Jeopardy!</h2>
+                <p className="mt-2 text-sm text-blue-100/75">
+                  Forty-two seasons, themed boards, and community games.
+                </p>
+              </div>
+            </a>
 
-          <a href="/create" className="tile group">
-            <span className="tile-art tile-art-glyph" aria-hidden="true">&#9997;</span>
-            <div className="tile-body">
-              <h2 className="display-chrome text-3xl leading-none md:text-4xl">Create a Board</h2>
-              <p className="mt-2 text-sm text-ink-stage">
-                Write your own categories and clues, then host the game.
-              </p>
-            </div>
-          </a>
+            <a href="/create" className="tile">
+              <span className="tile-art tile-art-glyph" aria-hidden="true">&#9997;</span>
+              <div className="tile-body">
+                <h2 className="tile-title text-3xl md:text-4xl">Create a Board</h2>
+                <p className="mt-2 text-sm text-blue-100/75">
+                  Write your own categories and clues, then host the game.
+                </p>
+              </div>
+            </a>
+          </div>
         </div>
 
         {/* Saved boards */}
