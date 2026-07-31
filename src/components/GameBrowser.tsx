@@ -641,7 +641,7 @@ export function GameBrowser({ compact = false }: Props) {
       {/* Hero prompt */}
       <div className="text-center mb-6">
         <h2 className="display-chrome text-3xl md:text-4xl leading-none">
-          Type Anything <span className="text-copper" style={{ textShadow: '0 0 18px rgba(255,155,68,0.55)' }}>—</span> Title · Player · Topic
+          Search 9,300 Jeopardy Games
         </h2>
       </div>
 
