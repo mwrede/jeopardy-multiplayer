@@ -84,12 +84,6 @@ export default function Home() {
             <a href="/create" className="tile">
               {/* A clue being written, live — the authoring loop, shown. */}
               <TypingClue />
-              <span
-                className="pointer-events-none absolute right-4 top-4 text-3xl opacity-70"
-                aria-hidden="true"
-              >
-                &#9997;
-              </span>
               <div className="tile-body">
                 <h2 className="tile-title text-3xl md:text-4xl">Create a Board</h2>
                 <p className="mt-2 text-sm text-blue-100/75">

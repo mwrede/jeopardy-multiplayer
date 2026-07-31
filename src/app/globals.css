@@ -241,6 +241,18 @@ body {
       inset 0 -1px 0 rgba(0,0,0,0.35);
   }
 
+  /* The hand nib bobs as it writes — small, so it reads as pen pressure
+     rather than a bouncing emoji. */
+  @keyframes write-nib {
+    0%, 100% { transform: translateY(0.2em) rotate(0deg); }
+    25%      { transform: translateY(0.28em) rotate(-6deg); }
+    75%      { transform: translateY(0.14em) rotate(5deg); }
+  }
+  .writing-hand { animation: write-nib 420ms ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .writing-hand { animation: none; }
+  }
+
   /* Deep variant of the stage — the dark plate colour taken full-bleed, so
      the page reads as one continuous surface rather than a bright gradient
      with a dark box floating on it. */
