@@ -85,6 +85,22 @@ export function headerFor(topic: BoardTopic, occurrence: number): string {
  * Fetch a de-duplicated pool of clues for one topic in one round.
  * Themes filter on category_type; terms search category + question + answer.
  */
+/**
+ * Turn a raw Postgres error into something a player can act on. Statement
+ * timeouts here mean a missing index, not a bad topic — saying so saves a
+ * pointless round of "try a broader term".
+ */
+function describeQueryError(message: string, label: string): string {
+  if (/statement timeout/i.test(message)) {
+    return (
+      `Search for "${label}" timed out. The clue database is missing its ` +
+      `search indexes — run supabase-migration-category-type-index.sql ` +
+      `(and supabase-migration-clue-text-trigram.sql for typed categories).`
+    )
+  }
+  return `Clue search failed for "${label}": ${message}`
+}
+
 /** De-dupe rows by question text (the same clue recurs across airings). */
 function dedupe(rows: any[]): PoolClue[] {
   const seen = new Set<string>()
@@ -116,7 +132,7 @@ export async function fetchTopicPool(
       .limit(limit)
     if (error) {
       console.warn(`[topic-board] theme fetch failed for "${topic.label}":`, error.message)
-      return []
+      throw new Error(describeQueryError(error.message, topic.label))
     }
     return dedupe(data ?? [])
   }
