@@ -53,8 +53,10 @@ export default function Home() {
   }
 
   return (
-    <main className="stage-page flat-stage">
-      <div className="mx-auto w-full max-w-5xl px-5 pb-24 pt-10 md:pt-14">
+    <main className="stage-page flat-stage p-4 md:p-8 pb-24">
+      {/* Same deep-blue plate /find sits its content on, so the two screens
+          read as one surface instead of two different blues. */}
+      <div className="frame-inner mx-auto w-full max-w-5xl px-5 pb-14 pt-10 md:px-10 md:pt-14">
 
         {/* Wordmark — carries the identity on its own, no tagline needed */}
         <header className="text-center">
