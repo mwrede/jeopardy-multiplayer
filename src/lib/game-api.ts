@@ -2181,6 +2181,30 @@ export async function rematchGame(gameId: string) {
  * Adds a dummy "Presenter" player so startCustomGame can activate the game.
  * Returns the room code for the /present route.
  */
+/**
+ * Create a PLAYABLE lobby from a board that only exists in the editor.
+ *
+ * Unlike createPresentationGame this does NOT seed the board or start the
+ * game — it stops at the lobby so buzzer players can join first. The board
+ * rides along in settings.customBoard, which the lobby's Start Game path
+ * hands to startCustomGame.
+ *
+ * mode 'party'       → one shared screen, players buzz on phones
+ * mode 'multiplayer' → everyone on their own device
+ */
+export async function createGameFromCustomBoard(
+  board: CustomBoard,
+  mode: 'party' | 'multiplayer',
+) {
+  const settings: any = {
+    ...DEFAULT_CASUAL_SETTINGS,
+    gameMode: mode,
+    customBoard: board,
+  }
+  const { game } = await createGame(settings, false)
+  return game.room_code
+}
+
 export async function createPresentationGame(board: CustomBoard) {
   const settings: GameSettings = {
     ...DEFAULT_CASUAL_SETTINGS,

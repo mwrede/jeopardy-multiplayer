@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, Fragment, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { saveCustomBoard, updateCustomBoard, loadCustomBoard, createPresentationGame } from '@/lib/game-api'
+import { saveCustomBoard, updateCustomBoard, loadCustomBoard, createPresentationGame, createGameFromCustomBoard } from '@/lib/game-api'
 import { useUser } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { ClueText } from '@/components/ClueText'
@@ -81,6 +81,7 @@ function CreateBoardContent() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [shareCopied, setShareCopied] = useState(false)
+  const [showPlayModal, setShowPlayModal] = useState(false)
   const [showInstructions, setShowInstructions] = useState(true)
   const [activeRound, setActiveRound] = useState<1 | 2 | 'fj'>(1)
   const [editingValue, setEditingValue] = useState<{ round: 1 | 2; row: number } | null>(null)
@@ -531,14 +532,28 @@ function CreateBoardContent() {
     }
   }
 
-  async function handlePresent() {
+  /**
+   * Launch the board one of three ways:
+   *   'present'     — no buzzers, host clicks through the board themselves
+   *   'party'       — one shared screen, players buzz in on their phones
+   *   'multiplayer' — everyone on their own device
+   * The last two stop at a lobby so people can join before the board starts.
+   */
+  async function handleLaunch(mode: 'present' | 'party' | 'multiplayer') {
     setSaving(true)
     setError('')
+    setShowPlayModal(false)
     try {
-      const roomCode = await createPresentationGame(buildCustomBoard())
-      router.push(`/game/${roomCode}/present`)
+      const built = buildCustomBoard()
+      if (mode === 'present') {
+        const roomCode = await createPresentationGame(built)
+        router.push(`/game/${roomCode}/present`)
+        return
+      }
+      const roomCode = await createGameFromCustomBoard(built, mode)
+      router.push(`/game/${roomCode}/${mode === 'multiplayer' ? 'play' : 'display'}`)
     } catch (e: any) {
-      setError(e.message || 'Failed to start presentation')
+      setError(e.message || 'Failed to start the game')
     } finally {
       setSaving(false)
     }
@@ -583,9 +598,9 @@ function CreateBoardContent() {
           Full Game (J! + DJ! + FJ!)
         </label>
         <div className="flex-1" />
-        <button onClick={handlePresent} disabled={saving}
+        <button onClick={() => setShowPlayModal(true)} disabled={saving}
           className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 text-sm rounded-lg transition-colors">
-          {saving ? '...' : '▶ Present'}
+          {saving ? '...' : '▶ Play'}
         </button>
         <button onClick={handleShare} disabled={saving}
           className="btn-secondary px-5 py-2 text-sm whitespace-nowrap"
@@ -835,6 +850,65 @@ function CreateBoardContent() {
                   })}
                 </Fragment>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* How do you want to play this board? */}
+      {showPlayModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowPlayModal(false)}
+        >
+          <div
+            className="plate w-full max-w-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="plate-surface p-6">
+              <h3 className="text-white font-bold text-xl mb-1">Play this board</h3>
+              <p className="text-ink-stage text-sm mb-5">
+                Buzzer modes open a lobby first so people can join.
+              </p>
+
+              <div className="space-y-2.5">
+                <button
+                  onClick={() => handleLaunch('party')}
+                  className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                >
+                  <span className="block text-white font-bold">📺 Party Mode</span>
+                  <span className="block text-gray-400 text-xs mt-0.5">
+                    Board on one shared screen, everyone buzzes in on their phones.
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => handleLaunch('multiplayer')}
+                  className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                >
+                  <span className="block text-white font-bold">🎮 Multiplayer</span>
+                  <span className="block text-gray-400 text-xs mt-0.5">
+                    Everyone plays on their own device, board and all.
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => handleLaunch('present')}
+                  className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                >
+                  <span className="block text-white font-bold">🖥️ Present — no buzzers</span>
+                  <span className="block text-gray-400 text-xs mt-0.5">
+                    Just you clicking through the board. No lobby, starts now.
+                  </span>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowPlayModal(false)}
+                className="mt-5 w-full btn-secondary py-2.5 text-sm"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
