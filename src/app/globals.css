@@ -251,82 +251,14 @@ body {
     letter-spacing: -0.005em;
   }
 
-  /* Hover props on the landing tiles: a buzzer on Play, a pen on Create.
-     The whole tile stays a link — these are an invitation, not a gate — so
-     keyboard and touch users are never stranded. On touch (no hover) they
-     show by default, since there is no hover state to discover them with. */
-  .tile-prop {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    background: radial-gradient(60% 60% at 50% 45%, rgba(3,8,48,0.82) 0%, rgba(3,8,48,0.55) 100%);
-    opacity: 0;
-    transform: scale(0.94);
-    transition: opacity 160ms ease, transform 160ms ease;
-    pointer-events: none;
-  }
-  .tile:hover .tile-prop,
-  .tile:focus-visible .tile-prop { opacity: 1; transform: scale(1); }
-  @media (hover: none) {
-    .tile-prop { opacity: 1; transform: scale(1); background: none; }
-    .tile-prop .tile-prop-label { display: none; }
-  }
-  .tile-prop-label {
-    font-family: Impact, "Haettenschweiler", "Arial Narrow Bold", "Arial Black", sans-serif;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    font-size: 11px;
-    color: #EAF0FB;
-  }
-
-  /* Buzzer — red dome in a chrome collar, the thing you slap. */
-  .buzzer {
-    width: 92px;
-    height: 92px;
-    border-radius: 50%;
-    background:
-      radial-gradient(38% 34% at 38% 28%, rgba(255,255,255,0.75) 0%, transparent 60%),
-      radial-gradient(circle at 50% 55%, #F2453D 0%, #C41B14 62%, #7E0D08 100%);
-    border: 4px solid #C9D2E2;
-    box-shadow:
-      0 0 0 3px rgba(0,0,0,0.55),
-      0 10px 22px -6px rgba(0,0,0,0.7),
-      inset 0 -6px 12px rgba(0,0,0,0.4);
-    transition: transform 90ms ease, box-shadow 90ms ease;
-  }
-  .tile:hover .buzzer { animation: buzzer-ready 1.6s ease-in-out infinite; }
-  .tile:active .buzzer {
-    transform: translateY(3px) scale(0.96);
-    box-shadow:
-      0 0 0 3px rgba(0,0,0,0.55),
-      0 3px 8px -4px rgba(0,0,0,0.7),
-      inset 0 -3px 10px rgba(0,0,0,0.5);
-    animation: none;
-  }
-  @keyframes buzzer-ready {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(0,0,0,0.55), 0 10px 22px -6px rgba(0,0,0,0.7), inset 0 -6px 12px rgba(0,0,0,0.4); }
-    50%      { box-shadow: 0 0 0 3px rgba(0,0,0,0.55), 0 0 26px 4px rgba(242,69,61,0.55), 0 10px 22px -6px rgba(0,0,0,0.7), inset 0 -6px 12px rgba(0,0,0,0.4); }
-  }
-
-  /* Pen — tilts up as if being picked off the desk. */
-  .pen {
-    font-size: 62px;
-    line-height: 1;
-    transform: rotate(-18deg);
-    filter: drop-shadow(0 8px 16px rgba(0,0,0,0.6));
-    transition: transform 160ms ease;
-  }
-  .tile:hover .pen { transform: rotate(-4deg) translateY(-4px); }
-  .tile:active .pen { transform: rotate(2deg) translateY(2px); }
-
-  @media (prefers-reduced-motion: reduce) {
-    .tile-prop { transition: none; }
-    .tile:hover .buzzer { animation: none; }
-    .pen, .tile:hover .pen, .tile:active .pen { transition: none; transform: rotate(-12deg); }
+  /* Clue typography, shared. The display, the phone controller and the
+     landing tile all render clue text through this, so the thing you write
+     on the home page looks like the thing that gets read out. Size is set
+     per-surface; family and rhythm live here. */
+  .clue-type {
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    line-height: 1.45;
+    letter-spacing: -0.005em;
   }
 
   /* The hand nib bobs as it writes — small, so it reads as pen pressure
@@ -361,7 +293,7 @@ body {
      Wood is back, but as the panel the board is mounted in, not a frame
      around the whole page. */
   .board-panel {
-    padding: 10px;
+    padding: 9px;
     border-radius: 12px;
     background:
       repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 5px),
@@ -371,19 +303,24 @@ body {
       inset 0 1px 0 rgba(255,210,160,0.3),
       inset 0 -2px 0 rgba(0,0,0,0.42),
       0 14px 40px -18px rgba(0,0,0,0.75);
+    transition: box-shadow 150ms ease, transform 150ms ease;
+  }
+  /* Each tile is its own framed button, so the pair reads as two controls
+     rather than one board split down the middle. */
+  .board-panel:has(.tile:hover) {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,210,160,0.42),
+      inset 0 -2px 0 rgba(0,0,0,0.42),
+      0 18px 44px -16px rgba(0,0,0,0.8);
   }
   .board-panel-inner {
-    display: grid;
-    gap: 4px;                 /* the black gridline between cells */
     padding: 4px;
     background: #000;
     border-radius: 5px;
     box-shadow:
       0 0 0 2px #1a1a3a,
       inset 0 0 24px rgba(0,0,0,0.9);
-  }
-  @media (min-width: 768px) {
-    .board-panel-inner { grid-template-columns: 1fr 1fr; }
   }
 
   .tile {

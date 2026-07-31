@@ -62,44 +62,41 @@ export default function Home() {
           <ChromeWordmark className="mx-auto h-auto w-full max-w-[300px] md:max-w-[420px]" />
         </header>
 
-        {/* The two things you can do — built as two cells of a real board,
-            mounted in a walnut panel. */}
-        <div className="board-panel mt-10 md:mt-14">
-          <div className="board-panel-inner">
-            <a href="/find" className="tile">
-              <img
-                src="/contestants.png"
-                alt=""
-                aria-hidden="true"
-                className="tile-art"
-              />
-              {/* Hover reveals the buzzer; the whole tile stays clickable. */}
-              <span className="tile-prop" aria-hidden="true">
-                <span className="buzzer" />
-                <span className="tile-prop-label">Buzz in to play</span>
-              </span>
-              <div className="tile-body">
-                <h2 className="tile-title text-3xl md:text-4xl">Play Jeopardy!</h2>
-                <p className="mt-2 text-sm text-blue-100/75">
-                  Forty-two seasons, themed boards, and community games.
-                </p>
-              </div>
-            </a>
+        {/* Two separately framed buttons — each a board cell in its own
+            walnut panel, rather than one board split down the middle. */}
+        <div className="mt-10 grid gap-5 md:mt-14 md:grid-cols-2">
+          <div className="board-panel">
+            <div className="board-panel-inner">
+              <a href="/find" className="tile">
+                <img
+                  src="/contestants.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="tile-art"
+                />
+                <div className="tile-body">
+                  <h2 className="tile-title text-3xl md:text-4xl">Play Jeopardy!</h2>
+                  <p className="mt-2 text-sm text-blue-100/75">
+                    Forty-two seasons, themed boards, and community games.
+                  </p>
+                </div>
+              </a>
+            </div>
+          </div>
 
-            <a href="/create" className="tile">
-              {/* A clue being written, live — the authoring loop, shown. */}
-              <TypingClue />
-              <span className="tile-prop" aria-hidden="true">
-                <span className="pen">&#128394;&#65039;</span>
-                <span className="tile-prop-label">Grab a pen</span>
-              </span>
-              <div className="tile-body">
-                <h2 className="tile-title text-3xl md:text-4xl">Create a Board</h2>
-                <p className="mt-2 text-sm text-blue-100/75">
-                  Write your own categories and clues, then host the game.
-                </p>
-              </div>
-            </a>
+          <div className="board-panel">
+            <div className="board-panel-inner">
+              <a href="/create" className="tile">
+                {/* A clue being written, live — the authoring loop, shown. */}
+                <TypingClue />
+                <div className="tile-body">
+                  <h2 className="tile-title text-3xl md:text-4xl">Create a Board</h2>
+                  <p className="mt-2 text-sm text-blue-100/75">
+                    Write your own categories and clues, then host the game.
+                  </p>
+                </div>
+              </a>
+            </div>
           </div>
         </div>
 
