@@ -80,6 +80,7 @@ function CreateBoardContent() {
   const [future, setFuture] = useState<BoardState[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [shareCopied, setShareCopied] = useState(false)
   const [showInstructions, setShowInstructions] = useState(true)
   const [activeRound, setActiveRound] = useState<1 | 2 | 'fj'>(1)
   const [editingValue, setEditingValue] = useState<{ round: 1 | 2; row: number } | null>(null)
@@ -460,26 +461,71 @@ function CreateBoardContent() {
     return customBoard
   }
 
+  /**
+   * Persist the board and return its id. No sign-in required — anonymous
+   * boards are remembered in localStorage so the author can get back to them.
+   * Used by both Save and Share.
+   */
+  async function persistBoard(): Promise<string> {
+    if (!board.title.trim()) throw new Error('Please enter a title for your board')
+
+    if (editBoardId) {
+      await updateCustomBoard(editBoardId, board.title.trim(), buildCustomBoard(), board.isPublic)
+      return editBoardId
+    }
+    const saved = await saveCustomBoard(
+      board.title.trim(), buildCustomBoard(), board.isPublic, user?.id,
+    )
+    const id = (saved as any)?.id as string
+    if (!id) throw new Error('Save succeeded but no board id came back')
+
+    // Anonymous authors have no creator_user_id to look themselves up by, so
+    // keep a local breadcrumb list of boards made on this device.
+    if (!user) {
+      try {
+        const key = 'myBoardIds'
+        const prev = JSON.parse(localStorage.getItem(key) || '[]') as string[]
+        if (!prev.includes(id)) localStorage.setItem(key, JSON.stringify([...prev, id]))
+      } catch {}
+    }
+    return id
+  }
+
   async function handleSave() {
-    if (!board.title.trim()) {
-      setError('Please enter a title for your board')
-      return
-    }
-    if (!user && !userLoading) {
-      setError('Sign in to save boards so you can edit them later.')
-      return
-    }
     setSaving(true)
     setError('')
     try {
-      if (editBoardId) {
-        await updateCustomBoard(editBoardId, board.title.trim(), buildCustomBoard(), board.isPublic)
-      } else {
-        await saveCustomBoard(board.title.trim(), buildCustomBoard(), board.isPublic, user?.id)
-      }
+      await persistBoard()
       router.push('/?saved=1')
     } catch (e: any) {
       setError(e.message || 'Failed to save board')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /**
+   * Share at any point in editing. Saves first when the board is new (a link
+   * needs an id) and stays on the page so editing isn't interrupted.
+   */
+  async function handleShare() {
+    setSaving(true)
+    setError('')
+    try {
+      const id = await persistBoard()
+      const url = `${window.location.origin}/find?board=${id}`
+      try {
+        await navigator.clipboard.writeText(url)
+      } catch {
+        window.prompt('Copy this link:', url)
+      }
+      // Keep editing in place, but move to the saved-board URL so further
+      // edits update this board rather than creating duplicates.
+      if (!editBoardId) router.replace(`/create?boardId=${id}`)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2500)
+    } catch (e: any) {
+      setError(e.message || 'Failed to share board')
     } finally {
       setSaving(false)
     }
@@ -541,20 +587,15 @@ function CreateBoardContent() {
           className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 text-sm rounded-lg transition-colors">
           {saving ? '...' : '▶ Present'}
         </button>
-        {user || userLoading ? (
-          <button onClick={handleSave} disabled={saving}
-            className="btn-primary px-5 py-2 text-sm">
-            {saving ? 'Saving...' : editBoardId ? 'Update Board' : 'Save & Finish'}
-          </button>
-        ) : (
-          <a
-            href={`/login?next=${encodeURIComponent('/create')}`}
-            className="btn-primary px-5 py-2 text-sm whitespace-nowrap"
-            title="Sign in so you can come back and edit this board later"
-          >
-            Sign in to save
-          </a>
-        )}
+        <button onClick={handleShare} disabled={saving}
+          className="btn-secondary px-5 py-2 text-sm whitespace-nowrap"
+          title="Copy a shareable link — saves the board first if it's new">
+          {shareCopied ? '✓ Link copied' : '🔗 Share'}
+        </button>
+        <button onClick={handleSave} disabled={saving}
+          className="btn-primary px-5 py-2 text-sm">
+          {saving ? 'Saving...' : editBoardId ? 'Update Board' : 'Save & Finish'}
+        </button>
       </div>
 
       {error && <p className="text-red-400 text-center text-sm py-2">{error}</p>}
@@ -607,7 +648,7 @@ function CreateBoardContent() {
         /* Board grid */
         <div className="flex-1 px-4 pb-4 overflow-auto">
           <div className="board-wrapper max-w-6xl mx-auto">
-            <div className="grid gap-[2px]" style={{ gridTemplateColumns: `60px repeat(${cols}, 1fr)` }}>
+            <div className="grid gap-[3px] md:gap-1" style={{ gridTemplateColumns: `44px repeat(${cols}, 1fr)` }}>
               {/* Header row: empty corner + category names */}
               <div /> {/* empty corner */}
               {currentCategories.map((cat, ci) => {
@@ -757,7 +798,7 @@ function CreateBoardContent() {
                         }}
                         onDragEnd={() => { setDragging(null); setDropTarget(null) }}
                         className={`board-cell aspect-[4/3] relative overflow-hidden transition-all ${
-                          filled ? 'ring-2 ring-green-500/40 cursor-grab active:cursor-grabbing' : 'text-lg md:text-xl'
+                          filled ? 'ring-2 ring-green-500/40 cursor-grab active:cursor-grabbing' : ''
                         } ${cell?.isDailyDouble ? 'ring-2 ring-jeopardy-gold' : ''} ${
                           isDropCell ? 'ring-4 ring-jeopardy-gold scale-[1.04]' : ''
                         } ${isDragSource ? 'opacity-40' : ''}`}
@@ -768,24 +809,27 @@ function CreateBoardContent() {
                             DD
                           </span>
                         )}
-                        {filled ? (
-                          <div className="absolute inset-0 flex flex-col items-stretch justify-between px-1.5 py-1.5 gap-1 text-left" style={{ textShadow: 'none' }}>
-                            {cell?.question ? (
-                              <span className="text-[10px] md:text-xs text-white leading-tight line-clamp-4 font-semibold">
-                                <ClueText text={cell.question} />
-                              </span>
-                            ) : (
-                              <span className="text-[10px] md:text-xs text-white/50 italic">(no question yet)</span>
-                            )}
-                            {cell?.answer && (
-                              <span className="text-[9px] md:text-[10px] text-jeopardy-gold-light/90 leading-tight line-clamp-2 mt-auto border-t border-white/15 pt-1">
-                                <span className="opacity-70">A: </span>{cell.answer}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          val
-                        )}
+                        {/* Reads like the real board: the dollar value is the
+                            hero in gold Swiss911, exactly as players see it.
+                            The clue preview sits underneath as editor detail. */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center px-1.5 py-1.5">
+                          <span
+                            className="text-lg md:text-3xl font-bold leading-none"
+                            style={{ fontFamily: 'Swiss911, Impact, Arial Black, sans-serif' }}
+                          >
+                            ${val}
+                          </span>
+                          {filled && (
+                            <span
+                              className="mt-1 w-full text-[9px] md:text-[10px] text-white/75 leading-tight line-clamp-2 text-center"
+                              style={{ textShadow: 'none' }}
+                            >
+                              {cell?.question
+                                ? <ClueText text={cell.question} />
+                                : <span className="italic text-white/40">(no question yet)</span>}
+                            </span>
+                          )}
+                        </div>
                       </button>
                     )
                   })}
