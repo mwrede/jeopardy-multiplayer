@@ -73,6 +73,11 @@ export default function Home() {
                 aria-hidden="true"
                 className="tile-art"
               />
+              {/* Hover reveals the buzzer; the whole tile stays clickable. */}
+              <span className="tile-prop" aria-hidden="true">
+                <span className="buzzer" />
+                <span className="tile-prop-label">Buzz in to play</span>
+              </span>
               <div className="tile-body">
                 <h2 className="tile-title text-3xl md:text-4xl">Play Jeopardy!</h2>
                 <p className="mt-2 text-sm text-blue-100/75">
@@ -84,6 +89,10 @@ export default function Home() {
             <a href="/create" className="tile">
               {/* A clue being written, live — the authoring loop, shown. */}
               <TypingClue />
+              <span className="tile-prop" aria-hidden="true">
+                <span className="pen">&#128394;&#65039;</span>
+                <span className="tile-prop-label">Grab a pen</span>
+              </span>
               <div className="tile-body">
                 <h2 className="tile-title text-3xl md:text-4xl">Create a Board</h2>
                 <p className="mt-2 text-sm text-blue-100/75">
