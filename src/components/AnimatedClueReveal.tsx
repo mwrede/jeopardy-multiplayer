@@ -83,7 +83,7 @@ export function AnimatedClueReveal({
         ${value.toLocaleString()}
       </p>
       <p
-        className={`text-center leading-relaxed font-serif max-w-5xl ${
+        className={`text-center clue-type max-w-5xl ${
           isTv ? 'text-4xl md:text-6xl' : 'text-xl px-2'
         }`}
       >

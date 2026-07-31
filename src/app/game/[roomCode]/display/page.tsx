@@ -555,7 +555,7 @@ export default function DisplayPage() {
         <p className="text-jeopardy-gold text-2xl font-bold mb-4 uppercase">
           {game.final_category_name}
         </p>
-        <p className="text-4xl md:text-6xl text-white text-center leading-relaxed font-serif max-w-5xl">
+        <p className="text-4xl md:text-6xl text-white text-center clue-type max-w-5xl">
           {game.final_clue_text}
         </p>
         <p className="text-gray-500 text-xl mt-12 animate-pulse">
@@ -573,7 +573,7 @@ export default function DisplayPage() {
         <p className="text-jeopardy-gold text-2xl font-bold mb-4 uppercase">
           {game.final_category_name}
         </p>
-        <p className="text-3xl md:text-5xl text-white text-center leading-relaxed font-serif max-w-5xl mb-12">
+        <p className="text-3xl md:text-5xl text-white text-center clue-type max-w-5xl mb-12">
           {game.final_clue_text}
         </p>
 

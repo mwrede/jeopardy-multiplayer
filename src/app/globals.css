@@ -241,6 +241,16 @@ body {
       inset 0 -1px 0 rgba(0,0,0,0.35);
   }
 
+  /* Clue typography, shared. The display, the phone controller and the
+     landing tile all render clue text through this, so the thing you write
+     on the home page looks like the thing that gets read out. Size is set
+     per-surface; family and rhythm live here. */
+  .clue-type {
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    line-height: 1.45;
+    letter-spacing: -0.005em;
+  }
+
   /* Hover props on the landing tiles: a buzzer on Play, a pen on Create.
      The whole tile stays a link — these are an invitation, not a gate — so
      keyboard and touch users are never stranded. On touch (no hover) they

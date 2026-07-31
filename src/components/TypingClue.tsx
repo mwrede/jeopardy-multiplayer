@@ -70,21 +70,21 @@ export function TypingClue() {
   const writing = !reduced && chars < clue.q.length
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[58%] flex-col justify-center px-6 text-left">
-      <p className="font-serif text-[15px] leading-snug text-white md:text-base">
+    <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[62%] flex-col justify-center px-5 md:px-6 text-left">
+      <p className="clue-type text-lg text-white md:text-2xl">
         {visible}
         {writing && (
           <>
-            <span className="ml-px inline-block h-[1.05em] w-[2px] translate-y-[0.15em] bg-jeopardy-gold-light" />
+            <span className="ml-px inline-block h-[1.05em] w-[3px] translate-y-[0.15em] bg-jeopardy-gold-light" />
             {/* The hand rides the end of the line as it writes. */}
-            <span className="ml-1 inline-block translate-y-[0.2em] text-lg writing-hand" aria-hidden="true">
+            <span className="ml-1 inline-block translate-y-[0.2em] text-xl writing-hand md:text-2xl" aria-hidden="true">
               &#9997;
             </span>
           </>
         )}
       </p>
       <p
-        className={`mt-3 text-[13px] font-semibold text-jeopardy-gold-light transition-opacity duration-300 ${
+        className={`mt-3 text-sm font-semibold text-jeopardy-gold-light md:text-base transition-opacity duration-300 ${
           showAnswer || reduced ? 'opacity-100' : 'opacity-0'
         }`}
       >
