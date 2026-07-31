@@ -1420,7 +1420,85 @@ const TOURNAMENT_GAME_IDS: Record<string, number[]> = {
  * For text queries, searches notes and game_title separately then merges
  * (faster than a single OR across 5 ilike columns on 558K rows).
  */
+/**
+ * Fast path: query the games_index materialized view (~9,300 rows) instead of
+ * scanning clue_pool (~558,000). Returns null when the view doesn't exist yet
+ * so the caller can fall back to the legacy clue_pool scan.
+ * See supabase-migration-games-index.sql.
+ */
+async function searchGamesIndexed(filters: GameSearchFilters): Promise<GameSearchResult[] | null> {
+  const { query, season, notesFilter, dateFrom, dateTo, page = 0, limit = 50 } = filters
+
+  let qb = supabase
+    .from('games_index')
+    .select('game_id_source, game_title, air_date, player1, player2, player3, season, clue_count')
+
+  if (season) qb = qb.eq('season', season)
+  if (dateFrom) qb = qb.gte('air_date', dateFrom)
+  if (dateTo) qb = qb.lte('air_date', dateTo)
+
+  // Difficulty tiers: prefer the curated id list, fall back to matching notes.
+  if (notesFilter) {
+    const ids = TOURNAMENT_GAME_IDS[notesFilter]
+    if (ids) qb = qb.in('game_id_source', ids)
+    else qb = qb.ilike('notes', `%${notesFilter.replace(/[%_]/g, ' ')}%`)
+  }
+
+  const trimmed = query?.trim()
+  if (trimmed) {
+    const asNum = parseInt(trimmed, 10)
+    if (!isNaN(asNum) && String(asNum) === trimmed) {
+      qb = qb.eq('game_id_source', asNum)
+    } else {
+      // Safe inside .or() — quote the value and use * as the wildcard, since
+      // this string is spliced into the URL rather than encoded.
+      const safe = trimmed.replace(/["(),]/g, ' ').trim()
+      if (!safe) return []
+      qb = qb.or(
+        [
+          `game_title.ilike."%${safe}%"`,
+          `notes.ilike."%${safe}%"`,
+          `player1.ilike."%${safe}%"`,
+          `player2.ilike."%${safe}%"`,
+          `player3.ilike."%${safe}%"`,
+        ].join(','),
+      )
+    }
+  }
+
+  const from = page * limit
+  const { data, error } = await qb
+    .order('air_date', { ascending: false, nullsFirst: false })
+    .range(from, from + limit - 1)
+
+  if (error) {
+    // 42P01 = undefined_table — migration not applied yet.
+    if (/games_index/i.test(error.message) || error.code === '42P01') {
+      console.warn('[searchGames] games_index missing, falling back to clue_pool scan')
+      return null
+    }
+    throw error
+  }
+
+  return (data ?? []).map((r: any) => ({
+    game_id_source: r.game_id_source,
+    game_title: r.game_title || '',
+    air_date: r.air_date,
+    player1: r.player1 || '',
+    player2: r.player2 || '',
+    player3: r.player3 || '',
+    season: r.season || '',
+    clue_count: r.clue_count ?? 0,
+  }))
+}
+
 export async function searchGames(filters: GameSearchFilters = {}): Promise<GameSearchResult[]> {
+  // Try the indexed view first; it handles every filter combination and
+  // returns in milliseconds. Falls through to the legacy scan only when the
+  // migration hasn't been applied.
+  const indexed = await searchGamesIndexed(filters)
+  if (indexed) return indexed
+
   const { query, season, notesFilter, dateFrom, dateTo, page = 0, limit = 50 } = filters
 
   function addDateFilters(qb: any) {
