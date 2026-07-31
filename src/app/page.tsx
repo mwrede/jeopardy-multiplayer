@@ -65,7 +65,7 @@ export default function Home() {
   const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
-    <main className="stage-page p-4 md:p-8 pb-24">
+    <main className="stage-page flat-stage p-4 md:p-8 pb-24">
       <div className="max-w-5xl mx-auto">
         <div className="frame">
           <span className="led-strip led-strip-left" />
