@@ -241,6 +241,67 @@ body {
       inset 0 -1px 0 rgba(0,0,0,0.35);
   }
 
+  /* Landing tiles — the podium read from the reference photo: a dark blue
+     face, a warm wood hairline along the bottom, and a chrome rail on top.
+     No outer frame and no heavy border; the material does the work. */
+  .tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 260px;
+    padding: 0 0 22px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: linear-gradient(180deg, #12246E 0%, #0A1546 62%, #070F35 100%);
+    border-top: 2px solid rgba(203, 213, 232, 0.65);   /* chrome rail */
+    border-bottom: 3px solid #6A3A1E;                   /* wood, as trim only */
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+    text-decoration: none;
+    transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+  }
+  .tile:hover {
+    transform: translateY(-2px);
+    border-top-color: #EAF0FB;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.2),
+      0 10px 28px -14px rgba(0,0,0,0.75);
+  }
+  .tile:focus-visible {
+    outline: 2px solid #FFD59A;
+    outline-offset: 3px;
+  }
+
+  /* Artwork sits behind the label, bled to the tile's edges. */
+  .tile-art {
+    position: absolute;
+    inset: 0 0 auto;
+    width: 100%;
+    height: 62%;
+    object-fit: contain;
+    object-position: center bottom;
+    opacity: 0.96;
+    pointer-events: none;
+  }
+  .tile-art-glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 88px;
+    line-height: 1;
+    opacity: 0.9;
+    filter: drop-shadow(0 6px 18px rgba(0,0,0,0.5));
+  }
+  .tile-body {
+    position: relative;
+    padding: 0 22px;
+    text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tile, .tile:hover { transition: none; transform: none; }
+  }
+
   /* Buttons — condensed uppercase, beveled fills. */
   .btn-stage {
     display: inline-flex;

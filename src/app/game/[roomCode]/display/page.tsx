@@ -25,19 +25,46 @@ import { ClueAttempts } from '@/components/ClueAttempts'
 import type { Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
 
-function QRCode({ roomCode }: { roomCode: string }) {
+/**
+ * How players get in: scan, or take the link. The room code is still shown
+ * beside this, but nobody should have to type it.
+ *
+ * The join URL depends on the mode — party players land on the phone
+ * controller at /game/<code>, multiplayer players get the full board at
+ * /game/<code>/play. Sending everyone to /play was wrong for party games.
+ */
+function JoinPanel({ roomCode, isMultiplayer }: { roomCode: string; isMultiplayer: boolean }) {
   const [origin, setOrigin] = useState('')
+  const [copied, setCopied] = useState(false)
   useEffect(() => { setOrigin(window.location.origin) }, [])
   if (!origin) return null
-  const url = `${origin}/game/${roomCode}/play`
+
+  const url = `${origin}/game/${roomCode}${isMultiplayer ? '/play' : ''}`
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      window.prompt('Copy this link:', url)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center gap-3">
       <img
-        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`}
-        alt="Scan to join"
+        src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`}
+        alt={`Scan to join room ${roomCode}`}
         className="w-48 h-48 rounded-xl bg-white p-2"
       />
-      <p className="text-gray-500 text-sm mt-2">Scan to join</p>
+      <p className="text-gray-400 text-sm">Scan to join</p>
+      <button
+        onClick={copy}
+        className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-semibold transition-colors"
+      >
+        {copied ? '✓ Link copied' : 'Copy invite link'}
+      </button>
     </div>
   )
 }
@@ -406,7 +433,7 @@ export default function DisplayPage() {
               {game.room_code}
             </p>
           </div>
-          <QRCode roomCode={game.room_code} />
+          <JoinPanel roomCode={game.room_code} isMultiplayer={(game.settings as any)?.gameMode === 'multiplayer'} />
         </div>
 
         {/* Players who have joined */}
