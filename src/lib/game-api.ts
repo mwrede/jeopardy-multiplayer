@@ -891,10 +891,21 @@ export async function startFinalReveal(gameId: string) {
 
   if (players) {
     for (const p of players) {
-      const playerAnswer = p.final_answer || ''
+      const playerAnswer = (p.final_answer || '').trim()
       const wager = p.final_wager || 0
-      const correct = checkAnswer(playerAnswer, correctAnswer)
 
+      // Writing nothing costs nothing. Standard rules would dock the wager,
+      // but a party guest who looked away shouldn't be punished for it —
+      // they simply sit the round out.
+      if (!playerAnswer) {
+        await supabase
+          .from('players')
+          .update({ final_correct: false })
+          .eq('id', p.id)
+        continue
+      }
+
+      const correct = checkAnswer(playerAnswer, correctAnswer)
       const scoreChange = correct ? wager : -wager
 
       await supabase

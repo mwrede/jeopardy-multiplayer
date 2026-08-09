@@ -365,6 +365,29 @@ export default function DisplayPage() {
     }
   }, [game?.phase, game?.id])
 
+  // Final Jeopardy backstop. Each phone auto-submits when its own clock runs
+  // out, but a player who closed their tab never will — and the "everyone
+  // answered" check would wait on them forever. The host advances once the
+  // window plus a grace period has passed, no matter who's still missing.
+  const finalAnswerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'final_answering') {
+      if (finalAnswerRef.current) clearTimeout(finalAnswerRef.current)
+      finalAnswerRef.current = null
+      return
+    }
+    const windowMs = game.settings?.final_answer_ms ?? 20000
+    const gameId = game.id
+    finalAnswerRef.current = setTimeout(() => {
+      startFinalReveal(gameId).catch((e) =>
+        console.warn('[display] final reveal backstop failed:', e),
+      )
+    }, windowMs + 2500)
+    return () => {
+      if (finalAnswerRef.current) clearTimeout(finalAnswerRef.current)
+    }
+  }, [game?.phase, game?.id, game?.settings?.final_answer_ms])
+
   // Auto-transition: final_reveal → game_over after showing reveals (8 seconds)
   const revealRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {

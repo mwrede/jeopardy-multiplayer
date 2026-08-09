@@ -70,8 +70,8 @@ export default function PlayerPage() {
     setHasPassed(false)
   }, [game?.current_clue_id])
 
-  // Final Jeopardy countdown (15s default). Auto-submits whatever's typed
-  // when it hits zero.
+  // Final Jeopardy answer clock. Auto-submits whatever's typed when it
+  // hits zero — including nothing, which is a valid outcome.
   const [finalCountdown, setFinalCountdown] = useState<number | null>(null)
   const finalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const finalIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -82,7 +82,7 @@ export default function PlayerPage() {
       game?.phase === 'final_answering' &&
       myPlayer &&
       !finalAnswerLocked &&
-      (myPlayer.final_answer == null || myPlayer.final_answer === '')
+      myPlayer.final_answer == null
     if (!isMyFinal) {
       setFinalCountdown(null)
       if (finalTimerRef.current) clearTimeout(finalTimerRef.current)
@@ -98,7 +98,7 @@ export default function PlayerPage() {
     }, 1000)
     finalTimerRef.current = setTimeout(async () => {
       if (myPlayer) {
-        await submitFinalAnswer(myPlayer.id, finalAnswerInputRef.current.trim() || '(no answer)')
+        await submitFinalAnswer(myPlayer.id, finalAnswerInputRef.current.trim())
         setFinalAnswerLocked(true)
         setFinalAnswerInput('')
       }
@@ -367,7 +367,7 @@ export default function PlayerPage() {
   // Auto-advance: when all answers are in, start reveal
   useEffect(() => {
     if (!game || game.phase !== 'final_answering') return
-    const allAnswered = players.length > 0 && players.every((p) => p.final_answer != null && p.final_answer !== '')
+    const allAnswered = players.length > 0 && players.every((p) => p.final_answer != null)
     if (allAnswered) {
       startFinalReveal(game.id)
     }

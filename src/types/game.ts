@@ -82,7 +82,7 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   buzz_window_ms: 10000,
   answer_time_ms: 15000,
   daily_double_answer_ms: 25000,
-  final_answer_ms: 15000,
+  final_answer_ms: 20000,
 }
 
 // Game search result for browsing J-Archive games
@@ -117,7 +117,7 @@ export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   buzz_window_ms: 10000,
   answer_time_ms: 15000,
   daily_double_answer_ms: 20000,
-  final_answer_ms: 15000,
+  final_answer_ms: 20000,
 }
 
 export interface Player {

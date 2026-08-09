@@ -337,17 +337,18 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!game || game.phase !== 'final_answering') return
-    if (players.length > 0 && players.every((p) => p.final_answer != null && p.final_answer !== '')) startFinalReveal(game.id)
+    if (players.length > 0 && players.every((p) => p.final_answer != null)) startFinalReveal(game.id)
   }, [game?.phase, game?.id, players])
 
-  // Final Jeopardy 15s answer clock. Auto-submits whatever's typed at zero.
+  // Final Jeopardy answer clock. Auto-submits whatever's typed at zero,
+  // including nothing.
   useEffect(() => { finalAnswerInputRef.current = finalAnswerInput }, [finalAnswerInput])
   useEffect(() => {
     const isMyFinal =
       game?.phase === 'final_answering' &&
       myPlayer &&
       !finalAnswerLocked &&
-      (myPlayer.final_answer == null || myPlayer.final_answer === '')
+      myPlayer.final_answer == null
     if (!isMyFinal) {
       setFinalCountdown(null)
       if (finalTimerRef.current) clearTimeout(finalTimerRef.current)
@@ -363,7 +364,7 @@ export default function PlayPage() {
     }, 1000)
     finalTimerRef.current = setTimeout(async () => {
       if (myPlayer) {
-        await submitFinalAnswer(myPlayer.id, finalAnswerInputRef.current.trim() || '(no answer)')
+        await submitFinalAnswer(myPlayer.id, finalAnswerInputRef.current.trim())
         setFinalAnswerLocked(true)
         setFinalAnswerInput('')
       }
