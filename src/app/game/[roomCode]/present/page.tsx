@@ -67,11 +67,18 @@ export default function PresentPage() {
   const [origin, setOrigin] = useState('')
   const [copied, setCopied] = useState(false)
   const [justScored, setJustScored] = useState<string | null>(null)
+  const [showHostLink, setShowHostLink] = useState(false)
+  const [hostCopied, setHostCopied] = useState(false)
 
   useEffect(() => { setOrigin(window.location.origin) }, [])
 
   const usingBuzzers = scoring === 'buzzers'
+  // createPresentationGame seeds a placeholder "Presenter" row so the board
+  // can be built before anyone joins. It isn't a contestant — keep it out of
+  // the scoreboard and the buzz queue.
+  const contestants = players.filter((p) => p.name !== 'Presenter')
   const joinUrl = origin ? `${origin}/game/${roomCode}` : ''
+  const hostUrl = origin ? `${origin}/game/${roomCode}/present` : ''
 
   const roundCategories = categories
     .filter((c) => c.round_number === currentRound)
@@ -202,40 +209,84 @@ export default function PresentPage() {
           </div>
 
           {usingBuzzers ? (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-300">
-                Players join and become the teams. They&apos;ll see a buzzer — and the clue only
-                once you open it.
-              </p>
-              <div className="rounded-lg bg-black/40 p-4 text-center">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-gray-400">Room code</p>
-                <p className="font-mono text-3xl font-bold tracking-[0.3em] text-white">{roomCode}</p>
+            <div className="space-y-5">
+              {/* Two different people need two different links, and only one
+                  of them should ever be on screen in front of the room. */}
+              <div className="rounded-xl border border-white/15 bg-black/30 p-4">
+                <p className="mb-1 text-[10px] uppercase tracking-[0.24em] text-jeopardy-gold-light">
+                  1 · Contestants
+                </p>
+                <p className="mb-3 text-sm text-gray-300">
+                  Show this to the room. Everyone who joins becomes a team.
+                </p>
+                {joinUrl && (
+                  <div className="flex flex-col items-center gap-3">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}`}
+                      alt={`Scan to join room ${roomCode}`}
+                      className="h-40 w-40 rounded-lg bg-white p-2"
+                    />
+                    <p className="font-mono text-2xl font-bold tracking-[0.3em] text-white">{roomCode}</p>
+                    <button
+                      onClick={async () => {
+                        try { await navigator.clipboard.writeText(joinUrl) }
+                        catch { window.prompt('Copy this link:', joinUrl) }
+                        setCopied(true); setTimeout(() => setCopied(false), 2000)
+                      }}
+                      className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+                    >
+                      {copied ? '✓ Copied' : 'Copy contestant link'}
+                    </button>
+                  </div>
+                )}
               </div>
-              {joinUrl && (
-                <div className="flex flex-col items-center gap-3">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}`}
-                    alt={`Scan to join room ${roomCode}`}
-                    className="h-40 w-40 rounded-lg bg-white p-2"
-                  />
+
+              <div className="rounded-xl border border-white/15 bg-black/30 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.24em] text-jeopardy-gold-light">
+                      2 · Presenter — keep private
+                    </p>
+                    <p className="mt-1 text-sm text-gray-300">
+                      This screen. Shows answers and who buzzed first.
+                    </p>
+                  </div>
                   <button
-                    onClick={async () => {
-                      try { await navigator.clipboard.writeText(joinUrl) }
-                      catch { window.prompt('Copy this link:', joinUrl) }
-                      setCopied(true); setTimeout(() => setCopied(false), 2000)
-                    }}
-                    className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+                    onClick={() => setShowHostLink((v) => !v)}
+                    className="shrink-0 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20"
                   >
-                    {copied ? '✓ Link copied' : 'Copy invite link'}
+                    {showHostLink ? 'Hide' : 'Show link'}
                   </button>
                 </div>
-              )}
+                {showHostLink && hostUrl && (
+                  <div className="mt-3 space-y-2">
+                    <p className="break-all rounded bg-black/50 px-3 py-2 font-mono text-xs text-gray-300">
+                      {hostUrl}
+                    </p>
+                    <button
+                      onClick={async () => {
+                        try { await navigator.clipboard.writeText(hostUrl) }
+                        catch { window.prompt('Copy this link:', hostUrl) }
+                        setHostCopied(true); setTimeout(() => setHostCopied(false), 2000)
+                      }}
+                      className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+                    >
+                      {hostCopied ? '✓ Copied' : 'Copy presenter link'}
+                    </button>
+                    <p className="text-xs text-gray-500">
+                      Open it on your own device if you want the board on the TV and
+                      the controls in your hand. Don&apos;t put it on the big screen.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <p className="text-[10px] uppercase tracking-[0.24em] text-gray-400">
-                  Joined ({players.length})
+                  Joined ({contestants.length})
                 </p>
-                {players.length === 0 && <p className="text-sm italic text-gray-500">Waiting for players…</p>}
-                {players.map((p, i) => (
+                {contestants.length === 0 && <p className="text-sm italic text-gray-500">Waiting for players…</p>}
+                {contestants.map((p, i) => (
                   <div key={p.id} className="flex items-center gap-3 rounded bg-white/5 px-3 py-2">
                     <span className="w-5 text-xs tabular-nums text-jeopardy-gold-light">{i + 1}</span>
                     <span className="font-semibold text-white">{p.name}</span>
@@ -287,12 +338,19 @@ export default function PresentPage() {
           <button
             onClick={() => {
               if (!usingBuzzers) setTeams((prev) => prev.slice(0, teamCount))
+              else if (game) {
+                // Phones key off gameMode to decide whether to show the clue
+                // when buzzers open. Without this they'd sit on "Watch the TV".
+                supabase.from('games')
+                  .update({ settings: { ...(game.settings as any), gameMode: 'host' } })
+                  .eq('id', game.id).then(() => {})
+              }
               setPhase('board')
             }}
-            disabled={usingBuzzers && players.length === 0}
+            disabled={usingBuzzers && contestants.length === 0}
             className="btn-primary w-full py-4 text-lg disabled:opacity-40"
           >
-            {usingBuzzers && players.length === 0 ? 'Waiting for players…' : 'Start Presenting'}
+            {usingBuzzers && contestants.length === 0 ? 'Waiting for players…' : 'Start Presenting'}
           </button>
         </div>
       </div>
@@ -362,15 +420,20 @@ export default function PresentPage() {
         </div>
 
         {/* Buzz queue */}
-        {usingBuzzers && untried.length > 0 && (
+        {/* The management strip. Present whenever buzzers are live, even before
+            anyone rings in, so the host knows where verdicts will appear. */}
+        {usingBuzzers && buzzersOpen && (
           <div className="border-t border-white/15 bg-black/30 px-4 py-3">
             <p className="mb-2 text-[10px] uppercase tracking-[0.24em] text-blue-200/60">
-              Buzzed in
-              {untried.length > BUZZ_SHOWN && ` — first ${BUZZ_SHOWN} of ${untried.length}`}
+              {untried.length === 0
+                ? 'Buzzers open — waiting for someone to ring in'
+                : untried.length > BUZZ_SHOWN
+                  ? `Buzzed in — first ${BUZZ_SHOWN} of ${untried.length}`
+                  : 'Buzzed in — ✓ awards, ✗ deducts and passes on'}
             </p>
             <div className="flex flex-wrap gap-2">
               {untried.slice(0, BUZZ_SHOWN).map((b, i) => {
-                const p = players.find((pl) => pl.id === b.player_id)
+                const p = contestants.find((pl) => pl.id === b.player_id)
                 if (!p) return null
                 const isHolder = p.id === game?.current_player_id
                 return (
@@ -393,7 +456,7 @@ export default function PresentPage() {
 
         <ScoreRow
           usingBuzzers={usingBuzzers}
-          players={players}
+          players={contestants}
           teams={teams}
           step={activeClue.value || 100}
           onManual={(i, d) => setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, score: t.score + d } : t)))}
@@ -459,7 +522,7 @@ export default function PresentPage() {
         <ScoreRow
           bare
           usingBuzzers={usingBuzzers}
-          players={players}
+          players={contestants}
           teams={teams}
           step={100}
           onManual={(i, d) => setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, score: t.score + d } : t)))}
