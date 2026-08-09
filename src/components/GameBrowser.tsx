@@ -13,7 +13,7 @@ import type { BoardTopic } from '@/lib/topic-board'
 import { BoardPreview } from './BoardPreview'
 import type { CustomBoard } from '@/types/game'
 
-type PlayMode = 'party' | 'multiplayer'
+type PlayMode = 'party' | 'multiplayer' | 'hosted'
 
 type CustomBoardRow = CustomBoardApiRow
 
@@ -417,6 +417,12 @@ export function GameBrowser({ compact = false }: Props) {
    * a player so they don't see the JoinForm on landing.
    */
   async function routeToGame(roomCode: string, mode: PlayMode) {
+    // Hosted games open the presenter screen — the host runs the board and
+    // judges; contestants join from there by QR.
+    if (mode === 'hosted') {
+      router.push(`/game/${roomCode}/present`)
+      return
+    }
     if (mode === 'multiplayer') {
       const name = profile?.display_name || localStorage.getItem('playerName') || ''
       if (name.trim()) {
@@ -1322,6 +1328,24 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                                 onClick={() => startMode('multiplayer', s.id)}
                                 disabled={creating}
                                 className="btn-stage btn-chrome btn-stage-sm !h-[52px] px-1"
+                              >
+                                <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                            🎤 Hosted
+                            <span className="block text-[10px] font-normal opacity-60">You run it</span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5 flex-1">
+                            {sizes.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => startMode('hosted', s.id)}
+                                disabled={creating}
+                                className="btn-stage btn-stage-ghost btn-stage-sm !h-[52px] px-1"
                               >
                                 <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
                               </button>

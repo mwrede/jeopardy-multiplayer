@@ -82,6 +82,7 @@ function CreateBoardContent() {
   const [error, setError] = useState('')
   const [shareCopied, setShareCopied] = useState(false)
   const [showPlayModal, setShowPlayModal] = useState(false)
+  const [autoSavedAt, setAutoSavedAt] = useState<number | null>(null)
   const [showInstructions, setShowInstructions] = useState(true)
   const [activeRound, setActiveRound] = useState<1 | 2 | 'fj'>(1)
   const [editingValue, setEditingValue] = useState<{ round: 1 | 2; row: number } | null>(null)
@@ -467,15 +468,19 @@ function CreateBoardContent() {
    * boards are remembered in localStorage so the author can get back to them.
    * Used by both Save and Share.
    */
-  async function persistBoard(): Promise<string> {
-    if (!board.title.trim()) throw new Error('Please enter a title for your board')
+  async function persistBoard(opts?: { silent?: boolean }): Promise<string> {
+    const title = board.title.trim()
+    if (!title && !opts?.silent) throw new Error('Please enter a title for your board')
+    // Autosave shouldn't nag about a title — give it a placeholder the author
+    // can rename later.
+    const useTitle = title || 'Untitled board'
 
     if (editBoardId) {
-      await updateCustomBoard(editBoardId, board.title.trim(), buildCustomBoard(), board.isPublic)
+      await updateCustomBoard(editBoardId, useTitle, buildCustomBoard(), board.isPublic)
       return editBoardId
     }
     const saved = await saveCustomBoard(
-      board.title.trim(), buildCustomBoard(), board.isPublic, user?.id,
+      useTitle, buildCustomBoard(), board.isPublic, user?.id,
     )
     const id = (saved as any)?.id as string
     if (!id) throw new Error('Save succeeded but no board id came back')
@@ -491,6 +496,42 @@ function CreateBoardContent() {
     }
     return id
   }
+
+  /**
+   * Auto-save. Boards persist on their own a couple of seconds after you stop
+   * typing, so nobody loses work by closing the tab — the explicit Save button
+   * is now just "save and leave".
+   *
+   * Holds off until the board has something worth keeping (a title or a filled
+   * cell) so an untouched editor doesn't litter the table. Once saved, the URL
+   * carries the id, so every later write updates that same board.
+   */
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savingRef = useRef(false)
+  useEffect(() => {
+    const hasContent =
+      board.title.trim().length > 0 ||
+      board.cells.some((row) => row.some((c) => c?.question?.trim() || c?.answer?.trim()))
+    if (!hasContent) return
+
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
+    autoSaveRef.current = setTimeout(async () => {
+      if (savingRef.current) return
+      savingRef.current = true
+      try {
+        const id = await persistBoard({ silent: true })
+        setAutoSavedAt(Date.now())
+        if (!editBoardId && id) router.replace(`/create?boardId=${id}`)
+      } catch {
+        // Autosave stays quiet — the Save button surfaces real errors.
+      } finally {
+        savingRef.current = false
+      }
+    }, 2000)
+
+    return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board, editBoardId])
 
   async function handleSave() {
     setSaving(true)
@@ -602,6 +643,11 @@ function CreateBoardContent() {
           className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 text-sm rounded-lg transition-colors">
           {saving ? '...' : '▶ Play'}
         </button>
+        {autoSavedAt && (
+          <span className="text-xs text-green-400/80 whitespace-nowrap" title="Your board saves itself as you work">
+            ✓ Saved
+          </span>
+        )}
         <button onClick={handleShare} disabled={saving}
           className="btn-secondary px-5 py-2 text-sm whitespace-nowrap"
           title="Copy a shareable link — saves the board first if it's new">
