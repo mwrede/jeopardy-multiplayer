@@ -39,6 +39,9 @@ interface Team {
 type PresentPhase = 'setup' | 'board' | 'clue' | 'answer' | 'daily_double'
 type Scoring = 'manual' | 'buzzers'
 
+/** In a big room only the front of the queue matters — nobody judges #47. */
+const BUZZ_SHOWN = 8
+
 export default function PresentPage() {
   const { roomCode } = useParams<{ roomCode: string }>()
   const router = useRouter()
@@ -63,6 +66,7 @@ export default function PresentPage() {
   const [buzzersOpen, setBuzzersOpen] = useState(false)
   const [origin, setOrigin] = useState('')
   const [copied, setCopied] = useState(false)
+  const [justScored, setJustScored] = useState<string | null>(null)
 
   useEffect(() => { setOrigin(window.location.origin) }, [])
 
@@ -129,7 +133,12 @@ export default function PresentPage() {
   function judgeBuzzer(playerId: string, correct: boolean) {
     if (!game || !activeClue) return
     hostJudge(game.id, activeClue.id, playerId, correct).catch(() => {})
-    if (correct) setPhase('answer')
+    if (!correct) return
+    // Correct ends the clue. Hold just long enough for the ✓ to register and
+    // the new score to arrive over realtime, then drop back to the board so
+    // the host sees the money land.
+    setJustScored(playerId)
+    setTimeout(() => { setJustScored(null); backToBoard() }, 900)
   }
 
   function backToBoard() {
@@ -355,9 +364,12 @@ export default function PresentPage() {
         {/* Buzz queue */}
         {usingBuzzers && untried.length > 0 && (
           <div className="border-t border-white/15 bg-black/30 px-4 py-3">
-            <p className="mb-2 text-[10px] uppercase tracking-[0.24em] text-blue-200/60">Buzzed in</p>
+            <p className="mb-2 text-[10px] uppercase tracking-[0.24em] text-blue-200/60">
+              Buzzed in
+              {untried.length > BUZZ_SHOWN && ` — first ${BUZZ_SHOWN} of ${untried.length}`}
+            </p>
             <div className="flex flex-wrap gap-2">
-              {untried.map((b, i) => {
+              {untried.slice(0, BUZZ_SHOWN).map((b, i) => {
                 const p = players.find((pl) => pl.id === b.player_id)
                 if (!p) return null
                 const isHolder = p.id === game?.current_player_id
@@ -504,9 +516,18 @@ function ScoreRow({
   onPlayer: (playerId: string, delta: number) => void
   bare?: boolean
 }) {
-  const rows = usingBuzzers
+  const all = usingBuzzers
     ? players.map((p) => ({ key: p.id, name: p.name, score: p.score, bump: (d: number) => onPlayer(p.id, d) }))
     : teams.map((t, i) => ({ key: String(i), name: t.name, score: t.score, bump: (d: number) => onManual(i, d) }))
+
+  // A big room can't show everyone — 150 cards is unreadable and unclickable.
+  // Past ten, show the leaderboard: top ten by score, and say how many are
+  // hidden so nobody thinks they vanished.
+  const LIMIT = 10
+  const overflow = all.length > LIMIT
+  const rows = overflow
+    ? [...all].sort((a, b) => b.score - a.score).slice(0, LIMIT)
+    : all
 
   const cards = (
     <>
@@ -525,6 +546,12 @@ function ScoreRow({
           </div>
         </div>
       ))}
+      {overflow && (
+        <div className="self-center rounded-lg bg-white/10 px-3 py-2 text-center">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-blue-200/70">Top {LIMIT}</p>
+          <p className="text-sm font-bold text-white">+{all.length - LIMIT} more</p>
+        </div>
+      )}
     </>
   )
 
