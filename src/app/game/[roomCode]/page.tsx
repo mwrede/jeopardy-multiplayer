@@ -6,6 +6,7 @@ import { BuzzerButton } from '@/components/BuzzerButton'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import {
+  joinGame,
   removePlayer,
   startGame,
   startGameFromSource,
@@ -38,6 +39,61 @@ import { GAME_LENGTH_CONFIG } from '@/types/game'
  * All actions just write to the DB — the useGameChannel hook
  * picks up changes via postgres_changes + polling and syncs all clients.
  */
+
+
+/**
+ * Onboarding for anyone arriving cold — scanning the host's QR or opening a
+ * shared link. The phone previously assumed you already had a playerId in
+ * localStorage, which was only ever true if you'd come through the old
+ * join-by-code form on the home page. Scanning in left you on a spinner.
+ */
+function JoinForm({ roomCode }: { roomCode: string }) {
+  const [name, setName] = useState('')
+  const [joining, setJoining] = useState(false)
+  const [joinError, setJoinError] = useState('')
+
+  async function handleJoin() {
+    if (!name.trim()) { setJoinError('Enter your name'); return }
+    setJoining(true)
+    setJoinError('')
+    try {
+      const { player } = await joinGame(roomCode, name.trim())
+      localStorage.setItem('playerId', player.id)
+      localStorage.setItem('playerName', player.name)
+      window.location.reload()
+    } catch (e: any) {
+      setJoinError(e.message || 'Failed to join')
+    } finally {
+      setJoining(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-jeopardy-dark">
+      <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-16 w-auto mb-4" />
+      <p className="text-gray-400 text-lg mb-2">
+        Room <span className="text-white font-mono font-bold tracking-widest">{roomCode}</span>
+      </p>
+      <h2 className="text-xl font-bold text-white mb-6">Enter your name to join</h2>
+      <div className="w-full max-w-sm space-y-3">
+        <input
+          type="text"
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleJoin() }}
+          maxLength={15}
+          className="input-base text-lg"
+          autoFocus
+        />
+        <button onClick={handleJoin} disabled={joining} className="btn-primary w-full py-4 text-lg">
+          {joining ? 'Joining…' : 'Join Game'}
+        </button>
+      </div>
+      {joinError && <p className="text-red-400 text-center text-sm mt-4">{joinError}</p>}
+    </div>
+  )
+}
 
 export default function PlayerPage() {
   const params = useParams()
@@ -375,16 +431,20 @@ export default function PlayerPage() {
   }, [game?.phase, game?.id, players])
 
   // No game loaded yet
-  if (!game || !myPlayer) {
+  if (!game) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-jeopardy-dark">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-jeopardy-gold border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Connecting to game...</p>
+          <p className="text-gray-400">Connecting to game…</p>
         </div>
       </div>
     )
   }
+
+  // Game exists but this device isn't a player yet — offer to join rather
+  // than spinning forever.
+  if (!myPlayer) return <JoinForm roomCode={roomCode} />
 
   // Host-run games surface the clue on phones, but only once the host opens
   // the buzzers — so nobody reads ahead of the room.
