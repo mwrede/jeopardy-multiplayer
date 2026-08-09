@@ -59,14 +59,18 @@ export function ProfileMenu() {
   }, [open])
 
   if (loading) {
-    return <div className="fixed top-3 right-3 w-9 h-9 rounded-full bg-white/5" />
+    return <div className="h-9 w-9 rounded-full bg-white/5" />
   }
+
+  // Nothing to offer on the login page itself — the form is right there, and
+  // the link would point at /login?next=/login.
+  if (pathname === '/login') return null
 
   if (!user) {
     return (
       <a
         href={`/login?next=${encodeURIComponent(pathname || '/')}`}
-        className="btn-stage btn-stage-sm btn-copper fixed top-3 right-3 z-50"
+        className="btn-stage btn-stage-sm btn-copper"
       >
         Sign in
       </a>
@@ -82,7 +86,7 @@ export function ProfileMenu() {
     .toUpperCase()
 
   return (
-    <div ref={panelRef} className="fixed top-3 right-3 z-50">
+    <div ref={panelRef} className="relative z-30">
       <button
         onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-2 bg-black/50 hover:bg-black/70 border border-white/20 text-white text-sm font-semibold pl-1 pr-3 py-1 rounded-full transition-colors backdrop-blur-sm"

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { ProfileMenu } from '@/components/ProfileMenu'
 
 export const metadata: Metadata = {
   title: 'Jeopardy!',
@@ -15,7 +14,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen">
-        <ProfileMenu />
         {children}
       </body>
     </html>

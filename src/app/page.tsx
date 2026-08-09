@@ -7,6 +7,7 @@ import { useUser } from '@/lib/auth'
 import { getMyBoards, type BoardSummary } from '@/lib/profile-api'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { TypingClue } from '@/components/TypingClue'
+import { ProfileMenu } from '@/components/ProfileMenu'
 
 /**
  * LANDING PAGE
@@ -56,6 +57,10 @@ export default function Home() {
   return (
     <main className="stage-page-deep flat-stage px-4 pb-24 md:px-8">
       <div className="mx-auto w-full max-w-5xl px-1 pb-14 pt-10 md:pt-16">
+
+        <div className="mb-2 flex justify-end">
+          <ProfileMenu />
+        </div>
 
         {/* Wordmark — carries the identity on its own, no tagline needed */}
         <header className="text-center">

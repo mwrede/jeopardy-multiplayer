@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react'
 import { GameBrowser } from '@/components/GameBrowser'
+import { ProfileMenu } from '@/components/ProfileMenu'
 
 /**
  * FIND A GAME — the archive.
@@ -20,11 +21,14 @@ export default function FindPage() {
           <span className="led-strip led-strip-right" />
 
           <div className="frame-inner p-6 md:p-10">
-            {/* Just the way back — the search heading below names the page. */}
-            <div className="mb-5 border-b border-white/10 pb-5">
+            {/* Way back on the left, account on the right. The account control
+                lives here rather than floating over the page — pinned, it used
+                to cover the search button on a phone. */}
+            <div className="mb-5 flex items-center justify-between gap-4 border-b border-white/10 pb-5">
               <a href="/" className="text-[10px] font-bold uppercase tracking-[0.22em] text-ink-stage-2 transition-colors hover:text-copper">
                 ← Home
               </a>
+              <ProfileMenu />
             </div>
 
             <Suspense fallback={<div className="py-16 text-center text-ink-stage-2">Loading…</div>}>
