@@ -896,9 +896,10 @@ function CreateBoardContent() {
                   onClick={() => handleLaunch('present')}
                   className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
                 >
-                  <span className="block text-white font-bold">🖥️ Present — no buzzers</span>
+                  <span className="block text-white font-bold">🎤 Host It</span>
                   <span className="block text-gray-400 text-xs mt-0.5">
-                    Just you clicking through the board. No lobby, starts now.
+                    You run the board and judge answers. Score teams by hand, or
+                    let players buzz in from their phones — your call at setup.
                   </span>
                 </button>
               </div>

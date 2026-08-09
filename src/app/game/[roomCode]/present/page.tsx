@@ -4,7 +4,32 @@ import { useParams, useRouter } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { ClueText } from '@/components/ClueText'
 import { useState, useEffect, useCallback } from 'react'
+import {
+  hostOpenBuzzers,
+  hostJudge,
+  hostAdjustScore,
+  hostSelectClue,
+  getBuzzOrder,
+  type BuzzOrderRow,
+} from '@/lib/game-api'
+import { supabase } from '@/lib/supabase'
 import type { Category, Clue } from '@/types/game'
+
+/**
+ * PRESENT — the host's screen.
+ *
+ * Two ways to score, chosen at setup:
+ *
+ *   Manual   — the host keeps score for teams in the room. Nothing to join,
+ *              nothing to sync; the whole game lives in this tab.
+ *   Buzzers  — players join on their phones and become the teams. The host
+ *              still drives the board, but decides when buzzers open, sees
+ *              who got in first, and rules on each answer. Players never see
+ *              the clue until the buzzers open, so nobody reads ahead.
+ *
+ * Either way the host owns the board and the scores — the +/- buttons are
+ * always live, because the person running the room gets the last word.
+ */
 
 interface Team {
   name: string
@@ -12,13 +37,14 @@ interface Team {
 }
 
 type PresentPhase = 'setup' | 'board' | 'clue' | 'answer' | 'daily_double'
+type Scoring = 'manual' | 'buzzers'
 
 export default function PresentPage() {
   const { roomCode } = useParams<{ roomCode: string }>()
   const router = useRouter()
-  const { game, categories, clues } = useGameChannel(roomCode)
+  const { game, players, categories, clues } = useGameChannel(roomCode)
 
-  // Team state
+  const [scoring, setScoring] = useState<Scoring>('manual')
   const [teams, setTeams] = useState<Team[]>([
     { name: 'Team 1', score: 0 },
     { name: 'Team 2', score: 0 },
@@ -26,7 +52,6 @@ export default function PresentPage() {
   ])
   const [teamCount, setTeamCount] = useState(3)
 
-  // Presentation state
   const [phase, setPhase] = useState<PresentPhase>('setup')
   const [activeClue, setActiveClue] = useState<Clue | null>(null)
   const [activeCategory, setActiveCategory] = useState<Category | null>(null)
@@ -34,406 +59,479 @@ export default function PresentPage() {
   const [currentRound, setCurrentRound] = useState(1)
   const [showMenu, setShowMenu] = useState(false)
   const [ddWager, setDdWager] = useState('')
+  const [buzzOrder, setBuzzOrder] = useState<BuzzOrderRow[]>([])
+  const [buzzersOpen, setBuzzersOpen] = useState(false)
+  const [origin, setOrigin] = useState('')
+  const [copied, setCopied] = useState(false)
 
-  // Get categories and clues for the current round
+  useEffect(() => { setOrigin(window.location.origin) }, [])
+
+  const usingBuzzers = scoring === 'buzzers'
+  const joinUrl = origin ? `${origin}/game/${roomCode}` : ''
+
   const roundCategories = categories
     .filter((c) => c.round_number === currentRound)
     .sort((a, b) => a.position - b.position)
-  const roundClues = clues.filter((c) =>
-    roundCategories.some((cat) => cat.id === c.category_id)
-  )
-
-  // Check if all clues in current round are answered
+  const roundClues = clues.filter((c) => roundCategories.some((cat) => cat.id === c.category_id))
   const allAnswered = roundClues.length > 0 && roundClues.every((c) => answeredClueIds.has(c.id))
-
-  // Check if there's a round 2
   const hasRound2 = categories.some((c) => c.round_number === 2)
 
-  // Get clues for a category, sorted by value
   const getCluesForCategory = useCallback(
-    (catId: string) =>
-      clues
-        .filter((c) => c.category_id === catId)
-        .sort((a, b) => a.value - b.value),
-    [clues]
+    (catId: string) => clues.filter((c) => c.category_id === catId).sort((a, b) => a.value - b.value),
+    [clues],
   )
 
-  // Click a cell on the board
+  /* ── Buzz queue polling — only while buzzers are actually live ─────────── */
+  useEffect(() => {
+    if (!usingBuzzers || !game?.id || !activeClue || phase === 'board') { setBuzzOrder([]); return }
+    let cancelled = false
+    const load = () => {
+      getBuzzOrder(game.id, activeClue.id)
+        .then((rows) => { if (!cancelled) setBuzzOrder(rows) })
+        .catch(() => {})
+    }
+    load()
+    const t = setInterval(load, 700)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [usingBuzzers, game?.id, activeClue?.id, phase])
+
   function handleCellClick(clue: Clue) {
     if (answeredClueIds.has(clue.id)) return
     const cat = categories.find((c) => c.id === clue.category_id)
     setActiveClue(clue)
     setActiveCategory(cat || null)
-    if (clue.is_daily_double) {
-      setPhase('daily_double')
-      setDdWager('')
-    } else {
-      setPhase('clue')
+    setBuzzersOpen(false)
+    setBuzzOrder([])
+    if (usingBuzzers && game) {
+      // Phones show "get ready" — the clue itself stays hidden until buzzers open.
+      hostSelectClue(game.id, clue.id).catch(() => {})
     }
+    if (clue.is_daily_double) { setPhase('daily_double'); setDdWager('') }
+    else setPhase('clue')
   }
 
-  // Reveal the answer
-  function revealAnswer() {
-    setPhase('answer')
+  function openBuzzers() {
+    if (!game || !activeClue) return
+    setBuzzersOpen(true)
+    hostOpenBuzzers(game.id).catch(() => {})
   }
 
-  // Award points to a team
   function awardPoints(teamIdx: number, correct: boolean) {
     if (!activeClue) return
     const points = activeClue.is_daily_double && ddWager
       ? parseInt(ddWager) || activeClue.value
       : activeClue.value
     setTeams((prev) =>
-      prev.map((t, i) =>
-        i === teamIdx ? { ...t, score: t.score + (correct ? points : -points) } : t
-      )
+      prev.map((t, i) => (i === teamIdx ? { ...t, score: t.score + (correct ? points : -points) } : t)),
     )
   }
 
-  // Return to board, mark clue as answered
+  function judgeBuzzer(playerId: string, correct: boolean) {
+    if (!game || !activeClue) return
+    hostJudge(game.id, activeClue.id, playerId, correct).catch(() => {})
+    if (correct) setPhase('answer')
+  }
+
   function backToBoard() {
-    if (activeClue) {
-      setAnsweredClueIds((prev) => new Set([...prev, activeClue.id]))
+    if (activeClue) setAnsweredClueIds((prev) => new Set([...prev, activeClue.id]))
+    if (usingBuzzers && game) {
+      supabase.from('games')
+        .update({ phase: 'board_selection', current_clue_id: null, buzz_window_open: false, updated_at: new Date().toISOString() })
+        .eq('id', game.id).then(() => {})
     }
-    setActiveClue(null)
-    setActiveCategory(null)
+    setActiveClue(null); setActiveCategory(null); setBuzzersOpen(false); setBuzzOrder([])
     setPhase('board')
   }
 
-  // Next round
-  function advanceRound() {
-    setCurrentRound(2)
-  }
-
-  // Keyboard shortcuts
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (phase === 'setup') return
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
-        if (phase === 'clue') revealAnswer()
-        else if (phase === 'answer') backToBoard()
+        if (phase === 'clue') {
+          if (usingBuzzers && !buzzersOpen) openBuzzers()
+          else setPhase('answer')
+        } else if (phase === 'answer') backToBoard()
       }
-      if (e.key === 'Escape') {
-        if (phase === 'clue' || phase === 'answer' || phase === 'daily_double') backToBoard()
-      }
-      // Number keys 1-6 to award points
+      if (e.key === 'Escape' && phase !== 'board') backToBoard()
       const num = parseInt(e.key)
-      if (phase === 'answer' && num >= 1 && num <= teams.length) {
-        awardPoints(num - 1, true)
-      }
+      if (phase === 'answer' && !usingBuzzers && num >= 1 && num <= teams.length) awardPoints(num - 1, true)
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [phase, activeClue, teams.length, ddWager])
+  }, [phase, activeClue, teams.length, ddWager, usingBuzzers, buzzersOpen])
 
-  // ---- SETUP SCREEN ----
+  /* ── SETUP ────────────────────────────────────────────────────────────── */
   if (phase === 'setup') {
     return (
-      <div className="min-h-screen bg-jeopardy-blue-cell flex items-center justify-center p-6">
-        <div className="bg-jeopardy-dark border border-white/20 rounded-2xl p-8 w-full max-w-md space-y-6">
-          <h1 className="text-3xl font-bold text-jeopardy-gold text-center">Presentation Setup</h1>
+      <div className="flex min-h-screen items-center justify-center bg-[#2E2E96] p-6">
+        <div className="w-full max-w-md space-y-6 rounded-2xl border border-white/20 bg-[#1A1A5C] p-8">
+          <h1 className="text-center text-3xl font-bold text-jeopardy-gold-light">Presentation Setup</h1>
 
           <div>
-            <label className="text-gray-400 text-sm mb-2 block">Number of Teams</label>
-            <div className="flex gap-2">
-              {[2, 3, 4, 5, 6].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => {
-                    setTeamCount(n)
-                    setTeams((prev) => {
-                      const next = Array.from({ length: n }, (_, i) =>
-                        prev[i] || { name: `Team ${i + 1}`, score: 0 }
-                      )
-                      return next
-                    })
-                  }}
-                  className={`flex-1 py-2 rounded-lg font-bold transition-colors ${
-                    teamCount === n
-                      ? 'bg-jeopardy-gold text-black'
-                      : 'bg-white/10 text-white hover:bg-white/20'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
+            <label className="mb-2 block text-sm text-gray-300">Scoring</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setScoring('manual')}
+                className={`rounded-lg px-3 py-3 text-sm font-bold transition-colors ${
+                  scoring === 'manual' ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                Manual teams
+                <span className="mt-0.5 block text-[10px] font-normal opacity-70">You keep score</span>
+              </button>
+              <button
+                onClick={() => setScoring('buzzers')}
+                className={`rounded-lg px-3 py-3 text-sm font-bold transition-colors ${
+                  scoring === 'buzzers' ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                Phone buzzers
+                <span className="mt-0.5 block text-[10px] font-normal opacity-70">Players buzz in</span>
+              </button>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-gray-400 text-sm block">Team Names</label>
-            {teams.slice(0, teamCount).map((team, i) => (
-              <input
-                key={i}
-                type="text"
-                value={team.name}
-                onChange={(e) =>
-                  setTeams((prev) =>
-                    prev.map((t, j) => (j === i ? { ...t, name: e.target.value } : t))
-                  )
-                }
-                className="input-base text-base"
-                placeholder={`Team ${i + 1}`}
-              />
-            ))}
-          </div>
+          {usingBuzzers ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-300">
+                Players join and become the teams. They&apos;ll see a buzzer — and the clue only
+                once you open it.
+              </p>
+              <div className="rounded-lg bg-black/40 p-4 text-center">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-gray-400">Room code</p>
+                <p className="font-mono text-3xl font-bold tracking-[0.3em] text-white">{roomCode}</p>
+              </div>
+              {joinUrl && (
+                <div className="flex flex-col items-center gap-3">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}`}
+                    alt={`Scan to join room ${roomCode}`}
+                    className="h-40 w-40 rounded-lg bg-white p-2"
+                  />
+                  <button
+                    onClick={async () => {
+                      try { await navigator.clipboard.writeText(joinUrl) }
+                      catch { window.prompt('Copy this link:', joinUrl) }
+                      setCopied(true); setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+                  >
+                    {copied ? '✓ Link copied' : 'Copy invite link'}
+                  </button>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-gray-400">
+                  Joined ({players.length})
+                </p>
+                {players.length === 0 && <p className="text-sm italic text-gray-500">Waiting for players…</p>}
+                {players.map((p, i) => (
+                  <div key={p.id} className="flex items-center gap-3 rounded bg-white/5 px-3 py-2">
+                    <span className="w-5 text-xs tabular-nums text-jeopardy-gold-light">{i + 1}</span>
+                    <span className="font-semibold text-white">{p.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="mb-2 block text-sm text-gray-300">Number of Teams</label>
+                <div className="flex gap-2">
+                  {[2, 3, 4, 5, 6].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => {
+                        setTeamCount(n)
+                        setTeams((prev) =>
+                          Array.from({ length: n }, (_, i) => prev[i] || { name: `Team ${i + 1}`, score: 0 }),
+                        )
+                      }}
+                      className={`flex-1 rounded-lg py-2 font-bold transition-colors ${
+                        teamCount === n ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-300">Team Names</label>
+                {teams.slice(0, teamCount).map((team, i) => (
+                  <input
+                    key={i}
+                    type="text"
+                    value={team.name}
+                    onChange={(e) =>
+                      setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, name: e.target.value } : t)))
+                    }
+                    className="input-base text-base"
+                    placeholder={`Team ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
 
           <button
             onClick={() => {
-              setTeams((prev) => prev.slice(0, teamCount))
+              if (!usingBuzzers) setTeams((prev) => prev.slice(0, teamCount))
               setPhase('board')
             }}
-            className="btn-primary w-full py-4 text-lg"
+            disabled={usingBuzzers && players.length === 0}
+            className="btn-primary w-full py-4 text-lg disabled:opacity-40"
           >
-            Start Presenting
+            {usingBuzzers && players.length === 0 ? 'Waiting for players…' : 'Start Presenting'}
           </button>
         </div>
       </div>
     )
   }
 
-  // ---- CLUE / ANSWER OVERLAY ----
+  /* ── CLUE / ANSWER ────────────────────────────────────────────────────── */
   if ((phase === 'clue' || phase === 'answer' || phase === 'daily_double') && activeClue) {
-    return (
-      <div className="min-h-screen bg-jeopardy-blue-cell flex flex-col">
-        {/* Clue display */}
-        <div className="flex-1 flex flex-col items-center justify-center px-8 py-6">
-          {activeCategory && (
-            <p className="text-blue-300 text-lg font-bold uppercase tracking-wide mb-2">
-              {activeCategory.name}
-            </p>
-          )}
-          <p className="text-jeopardy-gold text-2xl font-bold mb-6">
-            ${activeClue.value.toLocaleString()}
-            {activeClue.is_daily_double && (
-              <span className="ml-3 text-yellow-300 animate-pulse">DAILY DOUBLE!</span>
-            )}
-          </p>
+    const waitingToOpen = usingBuzzers && phase === 'clue' && !buzzersOpen
+    const untried = buzzOrder.filter((b) => b.is_correct === null)
 
+    return (
+      <div className="flex min-h-screen flex-col bg-[#2E2E96]">
+        {/* Control bar */}
+        <div className="flex items-center justify-between gap-4 bg-[#1A1A5C] px-4 py-2.5 text-white">
+          <button onClick={backToBoard} className="flex items-center gap-2 text-sm hover:opacity-80">
+            Continue <Kbd>ESC</Kbd>
+          </button>
+          <span className="truncate text-sm font-bold">
+            {activeCategory?.name} for {activeClue.value}
+          </span>
+          {waitingToOpen ? (
+            <button onClick={openBuzzers} className="flex items-center gap-2 text-sm font-bold text-jeopardy-gold-light hover:text-white">
+              Open Buzzers <Kbd>Spacebar</Kbd>
+            </button>
+          ) : (
+            <button onClick={() => setPhase(phase === 'answer' ? 'clue' : 'answer')} className="flex items-center gap-2 text-sm hover:opacity-80">
+              Reveal Correct Response <Kbd>Spacebar</Kbd>
+            </button>
+          )}
+        </div>
+
+        {/* The clue */}
+        <div className="flex flex-1 flex-col items-center justify-center px-10 py-8 text-center">
           {phase === 'daily_double' ? (
-            <div className="text-center space-y-4">
-              <p className="text-white text-3xl font-serif">Enter wager:</p>
+            <div className="space-y-5">
+              <p className="text-5xl font-bold text-jeopardy-gold-light">Daily Double!</p>
               <input
                 type="number"
                 value={ddWager}
                 onChange={(e) => setDdWager(e.target.value)}
-                className="input-base text-3xl text-center w-48 mx-auto"
-                placeholder="$0"
+                className="input-base mx-auto w-56 text-center text-3xl"
+                placeholder="Wager"
                 autoFocus
               />
-              <button
-                onClick={() => setPhase('clue')}
-                className="btn-primary px-8 py-3 text-lg block mx-auto"
-              >
+              <button onClick={() => setPhase('clue')} className="btn-primary mx-auto block px-8 py-3 text-lg">
                 Show Clue
               </button>
             </div>
           ) : (
             <>
-              <p className="text-4xl md:text-6xl text-white text-center leading-relaxed font-serif max-w-5xl">
+              <p className="max-w-6xl text-5xl font-normal leading-tight text-white md:text-7xl">
                 <ClueText text={activeClue.question} />
               </p>
-
-              {phase === 'clue' && (
-                <button
-                  onClick={revealAnswer}
-                  className="mt-8 btn-primary px-8 py-3 text-lg"
-                >
-                  Reveal Answer
-                </button>
-              )}
-
               {phase === 'answer' && (
-                <div className="mt-8 text-center">
-                  <p className="text-gray-400 text-lg mb-2">Answer:</p>
-                  <p className="text-3xl md:text-5xl text-jeopardy-gold font-bold">
-                    {activeClue.answer}
-                  </p>
-                </div>
+                <p className="mt-12 text-4xl font-bold text-jeopardy-gold-light md:text-6xl">
+                  {activeClue.answer}
+                </p>
+              )}
+              {waitingToOpen && (
+                <p className="mt-12 text-xs uppercase tracking-[0.3em] text-blue-200/60">
+                  Buzzers closed · players can&apos;t see this yet
+                </p>
               )}
             </>
           )}
         </div>
 
-        {/* Bottom bar: team scoring + back button */}
-        <div className="bg-black/50 border-t border-white/10 px-4 py-3">
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            {phase === 'answer' &&
-              teams.map((team, i) => (
-                <div key={i} className="flex items-center gap-1 bg-white rounded-lg px-2 py-1">
-                  <span className="text-black font-bold text-sm px-1">{team.name}</span>
-                  <span className="text-black font-bold text-sm border-t border-black px-1">
-                    {team.score.toLocaleString()}
-                  </span>
-                  <button
-                    onClick={() => awardPoints(i, true)}
-                    className="text-green-600 font-bold text-lg px-1 hover:scale-110 transition-transform"
+        {/* Buzz queue */}
+        {usingBuzzers && untried.length > 0 && (
+          <div className="border-t border-white/15 bg-black/30 px-4 py-3">
+            <p className="mb-2 text-[10px] uppercase tracking-[0.24em] text-blue-200/60">Buzzed in</p>
+            <div className="flex flex-wrap gap-2">
+              {untried.map((b, i) => {
+                const p = players.find((pl) => pl.id === b.player_id)
+                if (!p) return null
+                const isHolder = p.id === game?.current_player_id
+                return (
+                  <div
+                    key={b.player_id}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 ${
+                      isHolder ? 'bg-jeopardy-gold/25 ring-2 ring-jeopardy-gold' : 'bg-white/10'
+                    }`}
                   >
-                    +
-                  </button>
-                  <button
-                    onClick={() => awardPoints(i, false)}
-                    className="text-red-600 font-bold text-lg px-1 hover:scale-110 transition-transform"
-                  >
-                    −
-                  </button>
-                </div>
-              ))}
-            <button
-              onClick={backToBoard}
-              className="btn-secondary px-6 py-2 text-sm ml-4"
-            >
-              Back to Board
-            </button>
+                    <span className="text-xs tabular-nums text-blue-200/60">{i + 1}</span>
+                    <span className="font-semibold text-white">{p.name}</span>
+                    <button onClick={() => judgeBuzzer(p.id, true)} className="rounded bg-green-600 px-2 py-1 text-sm font-bold text-white hover:bg-green-500" title="Correct">✓</button>
+                    <button onClick={() => judgeBuzzer(p.id, false)} className="rounded bg-red-600 px-2 py-1 text-sm font-bold text-white hover:bg-red-500" title="Incorrect">✗</button>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
+
+        <ScoreRow
+          usingBuzzers={usingBuzzers}
+          players={players}
+          teams={teams}
+          step={activeClue.value || 100}
+          onManual={(i, d) => setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, score: t.score + d } : t)))}
+          onPlayer={(id, d) => hostAdjustScore(id, d).catch(() => {})}
+        />
       </div>
     )
   }
 
-  // ---- BOARD VIEW ----
+  /* ── BOARD ────────────────────────────────────────────────────────────── */
   const cols = roundCategories.length || 1
+  const rows = Math.max(...roundCategories.map((cat) => getCluesForCategory(cat.id).length), 1)
 
   return (
-    <div className="min-h-screen bg-jeopardy-blue-cell flex flex-col">
-      {/* Board grid */}
-      <div className="flex-1 flex flex-col p-1">
+    <div className="flex min-h-screen flex-col bg-black">
+      <div className="flex flex-1 flex-col p-1.5">
         <div
-          className="flex-1 grid gap-[3px]"
-          style={{
-            gridTemplateColumns: `repeat(${cols}, 1fr)`,
-            gridTemplateRows: `auto repeat(${Math.max(
-              ...roundCategories.map((cat) => getCluesForCategory(cat.id).length),
-              1
-            )}, 1fr)`,
-          }}
+          className="grid flex-1 gap-1.5"
+          style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `auto repeat(${rows}, 1fr)` }}
         >
-          {/* Category headers */}
           {roundCategories.map((cat) => (
             <div
               key={cat.id}
-              className="board-category px-3 py-4 text-white font-bold text-sm md:text-xl lg:text-2xl uppercase tracking-wide"
+              className="flex items-center justify-center bg-[#2E2E96] px-2 py-4 text-center text-sm font-bold uppercase leading-tight tracking-wide text-white md:text-xl"
+              style={{ textShadow: '2px 2px 3px rgba(0,0,0,0.6)' }}
             >
               {cat.name}
             </div>
           ))}
 
-          {/* Clue cells */}
           {roundCategories.length > 0 &&
-            Array.from({
-              length: Math.max(
-                ...roundCategories.map((cat) => getCluesForCategory(cat.id).length),
-                1
-              ),
-            }).map((_, rowIdx) =>
+            Array.from({ length: rows }).map((_, rowIdx) =>
               roundCategories.map((cat) => {
-                const catClues = getCluesForCategory(cat.id)
-                const clue = catClues[rowIdx]
-                if (!clue) return <div key={`empty-${cat.id}-${rowIdx}`} className="board-cell" />
+                const clue = getCluesForCategory(cat.id)[rowIdx]
+                if (!clue) return <div key={`e-${cat.id}-${rowIdx}`} className="bg-[#2E2E96]" />
                 const answered = answeredClueIds.has(clue.id)
                 return (
                   <button
                     key={clue.id}
                     onClick={() => !answered && handleCellClick(clue)}
-                    className={`board-cell text-2xl md:text-4xl lg:text-5xl font-bold ${
-                      answered ? 'board-cell-answered' : ''
+                    disabled={answered}
+                    className={`bg-[#2E2E96] text-4xl font-bold transition-colors md:text-6xl ${
+                      answered ? 'cursor-default text-transparent' : 'text-[#E9B23C] hover:bg-[#3838AE]'
                     }`}
+                    style={answered ? undefined : { textShadow: '3px 3px 4px rgba(0,0,0,0.55)' }}
                   >
-                    {answered ? '' : `$${clue.value.toLocaleString()}`}
+                    ${clue.value.toLocaleString()}
                   </button>
                 )
-              })
+              }),
             )}
         </div>
       </div>
 
-      {/* Team scoreboard + menu */}
-      <div className="bg-black/40 border-t-2 border-black px-4 py-2 flex items-center justify-center gap-3 flex-wrap">
-        {/* Menu button */}
+      <div className="flex flex-wrap items-center justify-center gap-3 bg-black px-4 py-2">
         <button
           onClick={() => setShowMenu(!showMenu)}
-          className="bg-jeopardy-blue-cell border-2 border-white/30 text-white text-xs font-bold px-2 py-3 rounded leading-none tracking-widest"
+          className="rounded border-2 border-white/30 bg-[#2E2E96] px-2 py-3 text-xs font-bold leading-none tracking-widest text-white"
           style={{ writingMode: 'vertical-lr' }}
         >
           MENU
         </button>
-
-        {/* Team scores */}
-        {teams.map((team, i) => (
-          <div key={i} className="bg-white rounded-lg overflow-hidden text-center min-w-[100px] md:min-w-[140px]">
-            <div className="bg-white border-b-2 border-jeopardy-blue-cell px-3 py-1">
-              <p className="text-black font-bold text-sm md:text-base italic">{team.name}</p>
-            </div>
-            <div className="bg-white px-3 py-1 border-b border-gray-300">
-              <p className="text-black font-bold text-lg md:text-xl">
-                {team.score < 0 ? `-$${Math.abs(team.score).toLocaleString()}` : `$${team.score.toLocaleString()}`}
-              </p>
-            </div>
-            <div className="flex">
-              <button
-                onClick={() => setTeams((prev) => prev.map((t, j) => j === i ? { ...t, score: t.score + 100 } : t))}
-                className="flex-1 text-green-600 font-bold text-lg py-0.5 hover:bg-green-50 transition-colors"
-              >
-                +
-              </button>
-              <button
-                onClick={() => setTeams((prev) => prev.map((t, j) => j === i ? { ...t, score: t.score - 100 } : t))}
-                className="flex-1 text-red-600 font-bold text-lg py-0.5 hover:bg-red-50 transition-colors"
-              >
-                −
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {/* Round advance / end */}
+        <ScoreRow
+          bare
+          usingBuzzers={usingBuzzers}
+          players={players}
+          teams={teams}
+          step={100}
+          onManual={(i, d) => setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, score: t.score + d } : t)))}
+          onPlayer={(id, d) => hostAdjustScore(id, d).catch(() => {})}
+        />
         {allAnswered && hasRound2 && currentRound === 1 && (
-          <button onClick={advanceRound} className="btn-primary px-4 py-2 text-sm ml-2">
+          <button onClick={() => setCurrentRound(2)} className="btn-primary ml-2 px-4 py-2 text-sm">
             Double Jeopardy! →
           </button>
         )}
       </div>
 
-      {/* Menu overlay */}
       {showMenu && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-          onClick={() => setShowMenu(false)}>
-          <div className="bg-jeopardy-dark border border-white/20 rounded-2xl p-6 w-full max-w-xs space-y-3"
-            onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white text-center">Menu</h3>
-            <button
-              onClick={() => { setPhase('setup'); setShowMenu(false) }}
-              className="btn-secondary w-full py-2 text-sm"
-            >
-              Edit Teams
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowMenu(false)}>
+          <div className="w-full max-w-xs space-y-3 rounded-2xl border border-white/20 bg-[#1A1A5C] p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-center text-lg font-bold text-white">Menu</h3>
+            <button onClick={() => { setPhase('setup'); setShowMenu(false) }} className="btn-secondary w-full py-2 text-sm">
+              {usingBuzzers ? 'Scoring & players' : 'Edit teams'}
             </button>
             <button
               onClick={() => {
-                setAnsweredClueIds(new Set())
-                setCurrentRound(1)
+                setAnsweredClueIds(new Set()); setCurrentRound(1)
                 setTeams((prev) => prev.map((t) => ({ ...t, score: 0 })))
                 setShowMenu(false)
               }}
               className="btn-secondary w-full py-2 text-sm"
             >
-              Reset Board
+              Reset board
             </button>
-            <button
-              onClick={() => router.push('/')}
-              className="btn-secondary w-full py-2 text-sm text-red-400"
-            >
-              Exit to Home
+            <button onClick={() => router.push('/')} className="btn-secondary w-full py-2 text-sm text-red-400">
+              Exit to home
             </button>
-            <button
-              onClick={() => setShowMenu(false)}
-              className="btn-secondary w-full py-2 text-sm"
-            >
-              Close
-            </button>
+            <button onClick={() => setShowMenu(false)} className="btn-secondary w-full py-2 text-sm">Close</button>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded bg-white px-2 py-0.5 text-xs font-semibold text-black">{children}</kbd>
+}
+
+/** Team cards. Buzzer games score the real players; manual games score local teams. */
+function ScoreRow({
+  usingBuzzers, players, teams, step, onManual, onPlayer, bare,
+}: {
+  usingBuzzers: boolean
+  players: { id: string; name: string; score: number }[]
+  teams: Team[]
+  step: number
+  onManual: (index: number, delta: number) => void
+  onPlayer: (playerId: string, delta: number) => void
+  bare?: boolean
+}) {
+  const rows = usingBuzzers
+    ? players.map((p) => ({ key: p.id, name: p.name, score: p.score, bump: (d: number) => onPlayer(p.id, d) }))
+    : teams.map((t, i) => ({ key: String(i), name: t.name, score: t.score, bump: (d: number) => onManual(i, d) }))
+
+  const cards = (
+    <>
+      {rows.length === 0 && <p className="text-sm text-gray-500">No players yet</p>}
+      {rows.map((r) => (
+        <div key={r.key} className="min-w-[110px] overflow-hidden rounded-lg bg-white text-center md:min-w-[140px]">
+          <p className="border-b-2 border-[#2E2E96] px-3 py-1 text-sm font-bold italic text-black md:text-base">
+            {r.name}
+          </p>
+          <p className="border-b border-gray-300 px-3 py-1 text-lg font-bold tabular-nums text-black md:text-xl">
+            {r.score < 0 ? `-$${Math.abs(r.score).toLocaleString()}` : `$${r.score.toLocaleString()}`}
+          </p>
+          <div className="flex">
+            <button onClick={() => r.bump(step)} className="flex-1 py-0.5 text-lg font-bold text-green-600 transition-colors hover:bg-green-50">+</button>
+            <button onClick={() => r.bump(-step)} className="flex-1 py-0.5 text-lg font-bold text-red-600 transition-colors hover:bg-red-50">−</button>
+          </div>
+        </div>
+      ))}
+    </>
+  )
+
+  if (bare) return <>{cards}</>
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-3 border-t-2 border-black bg-black/60 px-4 py-2">
+      {cards}
     </div>
   )
 }

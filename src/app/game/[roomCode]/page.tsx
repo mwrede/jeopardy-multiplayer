@@ -27,6 +27,7 @@ import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { computeClueReadingDelay } from '@/lib/clue-timing'
 import { ClueAttempts } from '@/components/ClueAttempts'
+import { ClueText } from '@/components/ClueText'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
@@ -385,6 +386,9 @@ export default function PlayerPage() {
     )
   }
 
+  // Host-run games surface the clue on phones, but only once the host opens
+  // the buzzers — so nobody reads ahead of the room.
+  const isHostRun = (game.settings as any)?.gameMode === 'host'
   const currentClue = game.current_clue_id
     ? clues.find((c) => c.id === game.current_clue_id)
     : null
@@ -800,10 +804,24 @@ export default function PlayerPage() {
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
-          {/* Clue text lives on the TV — the phone stays focused on buzzing. */}
-          <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
-            Watch the TV
-          </p>
+          {/* Host-run games put the clue on the phone, but only once the host
+              opens the buzzers, so nobody reads ahead of the room. Party games
+              keep phones clue-free — the clue is on the TV. */}
+          {isHostRun ? (
+            game.phase === 'buzz_window' ? (
+              <p className="clue-type max-w-md text-center text-xl text-white">
+                <ClueText text={currentClue.question} />
+              </p>
+            ) : (
+              <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
+                Get ready…
+              </p>
+            )
+          ) : (
+            <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
+              Watch the TV
+            </p>
+          )}
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
             <p className={`text-7xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'

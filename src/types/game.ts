@@ -44,7 +44,13 @@ export interface Game {
 
 export type GameLength = 'full' | 'half' | 'rapid'
 
-export type GameMode = 'party' | 'multiplayer'
+/**
+ * party       — board on a shared screen, players buzz on phones
+ * multiplayer — everyone on their own device, board and all
+ * host        — a human host runs the board and judges; players see only a
+ *               buzzer, and the clue only once the host opens it
+ */
+export type GameMode = 'party' | 'multiplayer' | 'host'
 
 export interface GameSettings {
   mode: 'casual' | 'strict'

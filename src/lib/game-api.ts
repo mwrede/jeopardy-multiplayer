@@ -1303,6 +1303,99 @@ export async function advanceFromClueResult(gameId: string) {
   // If roundComplete, checkRoundComplete already set the phase to round_end or final_category
 }
 
+/* ─── Host mode ───────────────────────────────────────────────────────────
+   A human runs the board: they pick the clue, decide when buzzers open, and
+   judge each answer by ear. Players never type an answer — their phone is a
+   buzzer that also shows the clue once the host opens it. */
+
+/** Put a clue on screen with buzzers still closed. */
+export async function hostSelectClue(gameId: string, clueId: string) {
+  const { error } = await supabase
+    .from('games')
+    .update({
+      current_clue_id: clueId,
+      phase: 'clue_reading',
+      buzz_window_open: false,
+      buzz_window_ms: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+  if (error) throw error
+}
+
+/** Open the buzzers. Players' phones reveal the clue at the same moment. */
+export async function hostOpenBuzzers(gameId: string, windowMs?: number) {
+  const update: any = {
+    phase: 'buzz_window',
+    buzz_window_open: true,
+    buzz_window_start: new Date(Date.now() + 700).toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+  if (windowMs) update.buzz_window_ms = windowMs
+  const { error } = await supabase.from('games').update(update).eq('id', gameId)
+  if (error) throw error
+}
+
+/**
+ * Host's verdict on whoever is holding the buzz.
+ * Correct closes the clue and hands them the board. Wrong deducts and passes
+ * to the next player in the buzz queue, or reopens the buzzers if none remain.
+ */
+export async function hostJudge(
+  gameId: string,
+  clueId: string,
+  playerId: string,
+  correct: boolean,
+) {
+  const [{ data: clue }, { data: player }] = await Promise.all([
+    supabase.from('clues').select('value').eq('id', clueId).single(),
+    supabase.from('players').select('score').eq('id', playerId).single(),
+  ])
+  const value = clue?.value ?? 0
+
+  if (player) {
+    await supabase
+      .from('players')
+      .update({ score: player.score + (correct ? value : -value) })
+      .eq('id', playerId)
+  }
+
+  await supabase
+    .from('buzzes')
+    .update({ is_correct: correct })
+    .eq('game_id', gameId).eq('clue_id', clueId).eq('player_id', playerId)
+
+  if (correct) {
+    await supabase.from('clues')
+      .update({ is_answered: true, answered_by: playerId, answered_correct: true })
+      .eq('id', clueId)
+    await supabase.from('games')
+      .update({ phase: 'clue_result', current_player_id: playerId, updated_at: new Date().toISOString() })
+      .eq('id', gameId)
+    return
+  }
+
+  await advanceAfterFailedAnswer(gameId, clueId, playerId)
+}
+
+/** Manual score nudge — the host always gets the last word. */
+export async function hostAdjustScore(playerId: string, delta: number) {
+  const { data: player } = await supabase
+    .from('players').select('score').eq('id', playerId).single()
+  if (!player) return
+  await supabase.from('players')
+    .update({ score: player.score + delta }).eq('id', playerId)
+}
+
+/** Nobody got it — close the clue out and return to the board. */
+export async function hostCloseClue(gameId: string, clueId: string) {
+  await supabase.from('clues')
+    .update({ is_answered: true, answered_by: null }).eq('id', clueId)
+  await supabase.from('games')
+    .update({ phase: 'clue_result', updated_at: new Date().toISOString() })
+    .eq('id', gameId)
+}
+
 /**
  * Submit a Daily Double wager.
  * Server clamps to Jeopardy! rules: minimum $5, maximum is max(player.score, round max clue).
