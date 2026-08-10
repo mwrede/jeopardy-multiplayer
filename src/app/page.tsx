@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { deleteCustomBoard } from '@/lib/game-api'
+import { deleteCustomBoard, createGameFromCustomBoard, loadCustomBoard } from '@/lib/game-api'
 import { useUser } from '@/lib/auth'
-import { getMyBoards, type BoardSummary } from '@/lib/profile-api'
+import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { TypingClue } from '@/components/TypingClue'
 import { ProfileMenu } from '@/components/ProfileMenu'
@@ -21,24 +21,45 @@ export default function Home() {
   const router = useRouter()
   const { user, profile } = useUser()
   const [error, setError] = useState('')
-  const [myBoards, setMyBoards] = useState<BoardSummary[]>([])
+  const [myBoards, setMyBoards] = useState<LibraryBoard[]>([])
+  const [busyBoard, setBusyBoard] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  // The library is per-device plus, when signed in, everything you authored.
+  // Runs for signed-out visitors too — boards can be made without an account.
   useEffect(() => {
-    if (!user) {
-      setMyBoards([])
-      return
-    }
-    getMyBoards(user.id).then(setMyBoards).catch(() => setMyBoards([]))
+    getLibrary(user?.id).then(setMyBoards).catch(() => setMyBoards([]))
   }, [user])
 
+  /** Delete a board you made — gone for everyone, so confirm first. */
   async function handleDeleteBoard(boardId: string, title: string) {
-    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return
+    if (!confirm(`Delete "${title}"? This deletes it for everyone and can't be undone.`)) return
     try {
       await deleteCustomBoard(boardId)
+      forgetBoard(boardId)
       setMyBoards((prev) => prev.filter((b) => b.id !== boardId))
     } catch (e: any) {
       setError(e.message || 'Failed to delete board')
+    }
+  }
+
+  /** Drop someone else's board from your list. Their board is untouched. */
+  function handleRemoveBoard(boardId: string) {
+    forgetBoard(boardId)
+    setMyBoards((prev) => prev.filter((b) => b.id !== boardId))
+  }
+
+  /** Start a game on a board straight from the list. */
+  async function handlePlayBoard(boardId: string) {
+    setBusyBoard(boardId)
+    setError('')
+    try {
+      const board = await loadCustomBoard(boardId)
+      const roomCode = await createGameFromCustomBoard(board.board_data, 'party')
+      router.push(`/game/${roomCode}/display`)
+    } catch (e: any) {
+      setError(e.message || 'Could not start that board')
+      setBusyBoard(null)
     }
   }
 
@@ -111,25 +132,48 @@ export default function Home() {
                   {myBoards.slice(0, 4).map((b) => (
                     <div
                       key={b.id}
-                      className="flex items-center gap-2 border-b border-black/40 px-3 py-2 last:border-b-0"
+                      className="flex items-center gap-1.5 border-b border-black/40 px-3 py-2 last:border-b-0"
                     >
-                      <a
-                        href={`/create?boardId=${b.id}`}
-                        className="flex-1 truncate text-sm font-semibold text-white hover:text-jeopardy-gold-light"
-                        title={b.title}
-                      >
+                      <span className="flex-1 truncate text-sm font-semibold text-white" title={b.title}>
                         {b.title}
-                      </a>
+                        {!b.mine && (
+                          <span className="ml-1.5 text-[9px] uppercase tracking-wider text-blue-100/50">
+                            Saved
+                          </span>
+                        )}
+                      </span>
+
+                      <button
+                        onClick={() => handlePlayBoard(b.id)}
+                        disabled={busyBoard === b.id}
+                        className="shrink-0 rounded bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-green-300 hover:bg-white/20 disabled:opacity-50"
+                      >
+                        {busyBoard === b.id ? '…' : 'Play'}
+                      </button>
+
+                      {/* Only what you authored can be edited. */}
+                      {b.mine && (
+                        <a
+                          href={`/create?boardId=${b.id}`}
+                          className="shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
+                        >
+                          Edit
+                        </a>
+                      )}
+
                       <button
                         onClick={() => handleShareBoard(b.id)}
                         className="shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
                       >
                         {copiedId === b.id ? 'Copied' : 'Share'}
                       </button>
+
+                      {/* Deleting your own removes it for everyone; removing
+                          someone else's just takes it off your list. */}
                       <button
-                        onClick={() => handleDeleteBoard(b.id, b.title)}
+                        onClick={() => (b.mine ? handleDeleteBoard(b.id, b.title) : handleRemoveBoard(b.id))}
                         className="shrink-0 rounded px-2 py-1 text-[10px] font-bold text-blue-100/50 hover:bg-white/10 hover:text-red-300"
-                        title="Delete this board"
+                        title={b.mine ? 'Delete this board' : 'Remove from your list'}
                       >
                         ✕
                       </button>

@@ -7,6 +7,7 @@ import { useUser } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { ClueText } from '@/components/ClueText'
 import type { CustomBoard } from '@/types/game'
+import { markAuthored } from '@/lib/board-library'
 
 interface CellData {
   question: string
@@ -486,15 +487,9 @@ function CreateBoardContent() {
     const id = (saved as any)?.id as string
     if (!id) throw new Error('Save succeeded but no board id came back')
 
-    // Anonymous authors have no creator_user_id to look themselves up by, so
-    // keep a local breadcrumb list of boards made on this device.
-    if (!user) {
-      try {
-        const key = 'myBoardIds'
-        const prev = JSON.parse(localStorage.getItem(key) || '[]') as string[]
-        if (!prev.includes(id)) localStorage.setItem(key, JSON.stringify([...prev, id]))
-      } catch {}
-    }
+    // Into this device's library, and flagged as authored here so it stays
+    // editable even without an account.
+    markAuthored(id)
     return id
   }
 

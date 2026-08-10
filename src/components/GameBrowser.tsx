@@ -12,6 +12,7 @@ import { TopicBoardBuilder } from './TopicBoardBuilder'
 import type { BoardTopic } from '@/lib/topic-board'
 import { BoardPreview } from './BoardPreview'
 import { PlayModePicker, type PlayMode } from './PlayModePicker'
+import { rememberBoard, forgetBoard, isRemembered } from '@/lib/board-library'
 import type { CustomBoard } from '@/types/game'
 
 
@@ -171,6 +172,10 @@ export function GameBrowser({ compact = false }: Props) {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
   const [previewMode, setPreviewMode] = useState<'idle' | 'choose-mode' | 'copied'>('idle')
+  const [savedBoard, setSavedBoard] = useState(false)
+  useEffect(() => {
+    setSavedBoard(previewBoard?.kind === 'custom' ? isRemembered(previewBoard.id) : false)
+  }, [previewBoard?.id, previewBoard?.kind])
 
   const [mashupCounts, setMashupCounts] = useState<Map<string, number>>(new Map())
   const [gameCounts, setGameCounts] = useState<Map<string, number>>(new Map())
@@ -1200,6 +1205,21 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                         title={user ? 'Fork this game into a custom board you can edit' : 'Sign in to fork and edit this game'}
                       >
                         ✏️ Edit
+                      </button>
+                    )}
+                    {/* Save someone else's board to your own list on the
+                        home page. Your library is per-device; theirs is
+                        untouched either way. */}
+                    {!isGame && (
+                      <button
+                        onClick={() => {
+                          if (savedBoard) { forgetBoard(pb.id); setSavedBoard(false) }
+                          else { rememberBoard(pb.id); setSavedBoard(true) }
+                        }}
+                        className="btn-stage btn-chrome btn-stage-sm"
+                        title={savedBoard ? 'Remove from your boards' : 'Save to your boards'}
+                      >
+                        {savedBoard ? '★ Saved' : '☆ Save'}
                       </button>
                     )}
                     <button
