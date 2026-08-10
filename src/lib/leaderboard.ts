@@ -40,9 +40,10 @@ export type LeaderboardRow = {
 /**
  * Standings across finished Community Play games.
  *
- * Players are grouped by name, since community play needs no account. Two
- * people using the same name share a row — the honest trade for not making
- * anyone sign up.
+ * Grouped by account, not by name: community play requires signing in, so two
+ * people typing "Mike" keep separate records, and changing your display name
+ * carries your history with it. Rows with no account are ignored — they'd be
+ * unattributable.
  */
 export async function getCommunityLeaderboard(limit = 25): Promise<LeaderboardRow[]> {
   const { data: games, error } = await supabase
@@ -60,7 +61,7 @@ export async function getCommunityLeaderboard(limit = 25): Promise<LeaderboardRo
 
   const { data: players } = await supabase
     .from('players')
-    .select('game_id, name, score')
+    .select('game_id, name, score, user_id, join_order')
     .in('game_id', communityIds)
   if (!players?.length) return []
 
@@ -71,20 +72,23 @@ export async function getCommunityLeaderboard(limit = 25): Promise<LeaderboardRo
     if (cur === undefined || p.score > cur) best.set(p.game_id, p.score)
   }
 
-  const agg = new Map<string, { games: number; wins: number; total: number }>()
+  const agg = new Map<string, { name: string; games: number; wins: number; total: number }>()
   for (const p of players as any[]) {
-    const key = (p.name ?? '').trim() || 'Player'
-    const row = agg.get(key) ?? { games: 0, wins: 0, total: 0 }
+    // No account, no ranking — there'd be no way to tell two players apart.
+    if (!p.user_id) continue
+    const row = agg.get(p.user_id) ?? { name: '', games: 0, wins: 0, total: 0 }
+    // Whatever they called themselves most recently is the name shown.
+    row.name = (p.name ?? '').trim() || row.name || 'Player'
     row.games += 1
     row.total += p.score ?? 0
     // A tie at the top counts as a win for everyone tied — nobody lost it.
     if (p.score === best.get(p.game_id)) row.wins += 1
-    agg.set(key, row)
+    agg.set(p.user_id, row)
   }
 
-  return [...agg.entries()]
-    .map(([name, r]) => ({
-      name,
+  return [...agg.values()]
+    .map((r) => ({
+      name: r.name,
       games: r.games,
       wins: r.wins,
       winRate: r.games ? r.wins / r.games : 0,

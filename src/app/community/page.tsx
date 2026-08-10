@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useUser } from '@/lib/auth'
+import { useUser, signInWithGoogle } from '@/lib/auth'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { getCommunityLeaderboard, MIN_GAMES, type LeaderboardRow } from '@/lib/leaderboard'
 import {
@@ -22,7 +22,7 @@ import {
  */
 export default function CommunityPage() {
   const router = useRouter()
-  const { user } = useUser()
+  const { user, loading: userLoading } = useUser()
 
   const [name, setName] = useState('')
   const [lobbies, setLobbies] = useState<CommunityLobby[]>([])
@@ -34,6 +34,12 @@ export default function CommunityPage() {
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
   }, [])
+
+  // Nudge people toward a name, but never impose their real one — this is
+  // what the other two players see.
+  useEffect(() => {
+    if (user && !name) setName('')
+  }, [user, name])
 
   useEffect(() => {
     getCommunityLeaderboard().then(setBoard).catch(() => setBoard([]))
@@ -82,8 +88,26 @@ export default function CommunityPage() {
           then it plays like any other multiplayer game.
         </p>
 
+        {/* Community is the one place an account is required — results are
+            ranked, and a leaderboard keyed to typed names isn't a leaderboard. */}
+        {!userLoading && !user && (
+          <div className="mt-6 rounded-xl border border-white/15 bg-black/30 p-5 text-center">
+            <p className="font-semibold text-white">Sign in to play</p>
+            <p className="mx-auto mt-1 max-w-[38ch] text-sm text-ink-stage-2">
+              Community games are ranked, so wins need an account to belong to.
+              Everything else on the site works without one.
+            </p>
+            <button
+              onClick={() => signInWithGoogle('/community')}
+              className="btn-stage btn-copper btn-stage-lg mt-4 w-full"
+            >
+              Continue with Google
+            </button>
+          </div>
+        )}
+
         {/* Your name — the one other players see. */}
-        <div className="mt-6">
+        <div className={`mt-6 ${!user ? 'pointer-events-none opacity-40' : ''}`}>
           <label className="mb-1.5 block text-[10px] uppercase tracking-[0.22em] text-copper" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
             Your name
           </label>
@@ -98,8 +122,8 @@ export default function CommunityPage() {
         </div>
 
         <button
-          onClick={() => go(() => findOrCreateGame(name.trim(), user?.id))}
-          disabled={joining}
+          onClick={() => go(() => findOrCreateGame(name.trim(), user!.id))}
+          disabled={joining || !user}
           className="btn-stage btn-copper btn-stage-lg mt-4 w-full"
         >
           {joining ? 'Finding a game…' : 'Play now'}
@@ -148,8 +172,8 @@ export default function CommunityPage() {
                 </span>
 
                 <button
-                  onClick={() => go(() => joinCommunityLobby(l.roomCode, name.trim(), user?.id))}
-                  disabled={joining}
+                  onClick={() => go(() => joinCommunityLobby(l.roomCode, name.trim(), user!.id))}
+                  disabled={joining || !user}
                   className="btn-stage btn-stage-sm btn-chrome"
                 >
                   Join

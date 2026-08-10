@@ -95,8 +95,13 @@ async function createCommunityLobby(): Promise<string> {
 export async function joinCommunityLobby(
   roomCode: string,
   playerName: string,
-  userId?: string,
+  userId: string,
 ): Promise<{ roomCode: string; started: boolean }> {
+  // An account is required here, unlike everywhere else in the app: results
+  // are ranked, and without one there's no way to tell two players apart or
+  // to credit a win to anyone.
+  if (!userId) throw new Error('Sign in to play Community games.')
+
   const { player, game } = await joinGame(roomCode, playerName, userId)
 
   localStorage.setItem('playerId', player.id)
@@ -127,8 +132,9 @@ export async function joinCommunityLobby(
  */
 export async function findOrCreateGame(
   playerName: string,
-  userId?: string,
+  userId: string,
 ): Promise<{ roomCode: string; started: boolean }> {
+  if (!userId) throw new Error('Sign in to play Community games.')
   const open = await listCommunityLobbies()
 
   for (const lobby of open) {
