@@ -117,7 +117,7 @@ type Props = {
 export function GameBrowser({ compact = false }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, profile } = useUser()
+  const { user } = useUser()
   const [creating, setCreating] = useState(false)
 
   const [query, setQuery] = useState('')
@@ -429,7 +429,10 @@ export function GameBrowser({ compact = false }: Props) {
       return
     }
     if (mode === 'multiplayer') {
-      const name = profile?.display_name || localStorage.getItem('playerName') || ''
+      // Only a name the player chose for themselves — never the Google
+      // account name, which is their real name and would be shown to the
+      // whole room. With none set, the play page asks for one.
+      const name = localStorage.getItem('playerName') || ''
       if (name.trim()) {
         try {
           const { player } = await joinGame(roomCode, name.trim(), user?.id)
