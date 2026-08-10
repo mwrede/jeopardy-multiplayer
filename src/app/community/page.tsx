@@ -9,6 +9,8 @@ import {
   listCommunityLobbies,
   findOrCreateGame,
   joinCommunityLobby,
+  leaveCommunityLobby,
+  getLobbyState,
   LOBBY_SEATS,
   type CommunityLobby,
 } from '@/lib/community'
@@ -30,6 +32,10 @@ export default function CommunityPage() {
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState('')
   const [board, setBoard] = useState<LeaderboardRow[]>([])
+  // Where you're sitting, if anywhere. Joining keeps you on this page so you
+  // can watch the seats fill instead of staring at an empty game screen.
+  const [seat, setSeat] = useState<{ roomCode: string; playerId: string } | null>(null)
+  const [seatMates, setSeatMates] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
@@ -58,19 +64,49 @@ export default function CommunityPage() {
     return () => { cancelled = true; clearInterval(t) }
   }, [])
 
-  async function go(fn: () => Promise<{ roomCode: string; started: boolean }>) {
+  async function go(fn: () => Promise<{ roomCode: string; started: boolean; playerId: string }>) {
     const trimmed = name.trim()
     if (!trimmed) { setError('Pick a name first'); return }
     setJoining(true)
     setError('')
     try {
-      const { roomCode } = await fn()
-      router.push(`/game/${roomCode}/play`)
+      const { roomCode, playerId } = await fn()
+      localStorage.setItem('playerName', trimmed)
+      // Stay put — the watcher below moves everyone on together once the
+      // third player sits down.
+      setSeat({ roomCode, playerId })
     } catch (e: any) {
       setError(e?.message || 'Could not get you into a game')
+    } finally {
       setJoining(false)
     }
   }
+
+  async function leave() {
+    if (!seat) return
+    const { playerId } = seat
+    setSeat(null)
+    setSeatMates([])
+    try { await leaveCommunityLobby(playerId) } catch { /* seat frees on its own */ }
+  }
+
+  // Watch your own lobby. When it reaches three the game flips to voting, and
+  // everyone still sitting there goes through at the same moment.
+  useEffect(() => {
+    if (!seat) return
+    let cancelled = false
+    const tick = async () => {
+      const state = await getLobbyState(seat.roomCode).catch(() => null)
+      if (cancelled || !state) return
+      setSeatMates(state.players)
+      if (state.phase === 'game_voting' || state.players.length >= LOBBY_SEATS) {
+        router.push(`/game/${seat.roomCode}/play`)
+      }
+    }
+    tick()
+    const t = setInterval(tick, 1500)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [seat, router])
 
   return (
     <main className="stage-page-deep px-4 pb-24 md:px-8">
@@ -121,16 +157,53 @@ export default function CommunityPage() {
           />
         </div>
 
-        <button
-          onClick={() => go(() => findOrCreateGame(name.trim(), user!.id))}
-          disabled={joining || !user}
-          className="btn-stage btn-copper btn-stage-lg mt-4 w-full"
-        >
-          {joining ? 'Finding a game…' : 'Play now'}
-        </button>
-        <p className="mt-2 text-center text-xs text-ink-stage-2">
-          Sits you down wherever there&apos;s room, or opens a new game if every table is full.
-        </p>
+        {seat ? (
+          /* You're in. Watch it fill, or get up. */
+          <div className="mt-4 rounded-xl border-2 border-jeopardy-gold bg-jeopardy-gold/10 p-5 text-center">
+            <p className="text-[10px] uppercase tracking-[0.28em] text-jeopardy-gold-light">
+              You&apos;re in · {seat.roomCode}
+            </p>
+
+            <div className="mt-3 flex justify-center gap-2">
+              {Array.from({ length: LOBBY_SEATS }, (_, i) => (
+                <span
+                  key={i}
+                  className={`h-3.5 w-3.5 rounded-full ${
+                    i < seatMates.length ? 'bg-jeopardy-gold-light' : 'bg-white/20'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <p className="mt-3 text-sm text-white">
+              {seatMates.length === LOBBY_SEATS
+                ? 'Starting…'
+                : `Waiting for ${LOBBY_SEATS - seatMates.length} more`}
+            </p>
+            {seatMates.length > 0 && (
+              <p className="mt-1 text-xs text-ink-stage-2">
+                {seatMates.map((p) => p.name).join(' · ')}
+              </p>
+            )}
+
+            <button onClick={leave} className="btn-stage btn-stage-sm btn-stage-ghost mt-4">
+              Leave this game
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={() => go(() => findOrCreateGame(name.trim(), user!.id))}
+              disabled={joining || !user}
+              className="btn-stage btn-copper btn-stage-lg mt-4 w-full"
+            >
+              {joining ? 'Finding a game…' : 'Play now'}
+            </button>
+            <p className="mt-2 text-center text-xs text-ink-stage-2">
+              Sits you down wherever there&apos;s room, or opens a new game if every table is full.
+            </p>
+          </>
+        )}
 
         {error && <p className="mt-4 text-center text-sm text-copper-glow">{error}</p>}
 
@@ -173,10 +246,11 @@ export default function CommunityPage() {
 
                 <button
                   onClick={() => go(() => joinCommunityLobby(l.roomCode, name.trim(), user!.id))}
-                  disabled={joining || !user}
+                  disabled={joining || !user || !!seat}
                   className="btn-stage btn-stage-sm btn-chrome"
+                  title={seat ? 'Leave your current game first' : undefined}
                 >
-                  Join
+                  {seat?.roomCode === l.roomCode ? 'Seated' : 'Join'}
                 </button>
               </div>
             ))}

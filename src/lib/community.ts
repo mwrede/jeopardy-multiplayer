@@ -96,7 +96,7 @@ export async function joinCommunityLobby(
   roomCode: string,
   playerName: string,
   userId: string,
-): Promise<{ roomCode: string; started: boolean }> {
+): Promise<{ roomCode: string; started: boolean; playerId: string }> {
   // An account is required here, unlike everywhere else in the app: results
   // are ranked, and without one there's no way to tell two players apart or
   // to credit a win to anyone.
@@ -120,10 +120,31 @@ export async function joinCommunityLobby(
       .update({ phase: 'game_voting', updated_at: new Date().toISOString() })
       .eq('id', game.id)
       .eq('phase', 'lobby')
-    return { roomCode, started: true }
+    return { roomCode, started: true, playerId: player.id }
   }
 
-  return { roomCode, started: false }
+  return { roomCode, started: false, playerId: player.id }
+}
+
+/** Get up from a lobby. The seat frees immediately for whoever's next. */
+export async function leaveCommunityLobby(playerId: string): Promise<void> {
+  await supabase.from('players').delete().eq('id', playerId)
+}
+
+/** Current state of one lobby — used to watch a seat fill in real time. */
+export async function getLobbyState(roomCode: string): Promise<{
+  gameId: string
+  phase: string
+  players: { id: string; name: string }[]
+} | null> {
+  const { data: game } = await supabase
+    .from('games').select('id, phase').eq('room_code', roomCode).maybeSingle()
+  if (!game) return null
+
+  const { data: players } = await supabase
+    .from('players').select('id, name').eq('game_id', game.id).order('join_order')
+
+  return { gameId: game.id, phase: (game as any).phase, players: (players ?? []) as any }
 }
 
 /**
@@ -133,7 +154,7 @@ export async function joinCommunityLobby(
 export async function findOrCreateGame(
   playerName: string,
   userId: string,
-): Promise<{ roomCode: string; started: boolean }> {
+): Promise<{ roomCode: string; started: boolean; playerId: string }> {
   if (!userId) throw new Error('Sign in to play Community games.')
   const open = await listCommunityLobbies()
 
