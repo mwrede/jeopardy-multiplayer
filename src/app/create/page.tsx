@@ -82,7 +82,7 @@ function CreateBoardContent() {
   const [error, setError] = useState('')
   const [shareCopied, setShareCopied] = useState(false)
   const [showPlayModal, setShowPlayModal] = useState(false)
-  const [playStep, setPlayStep] = useState<'mode' | 'screen'>('mode')
+  const [playStep, setPlayStep] = useState<'done' | 'mode' | 'screen'>('done')
   const [autoSavedAt, setAutoSavedAt] = useState<number | null>(null)
   const [showInstructions, setShowInstructions] = useState(true)
   const [activeRound, setActiveRound] = useState<1 | 2 | 'fj'>(1)
@@ -538,8 +538,12 @@ function CreateBoardContent() {
     setSaving(true)
     setError('')
     try {
-      await persistBoard()
-      router.push('/?saved=1')
+      const id = await persistBoard()
+      if (!editBoardId && id) router.replace(`/create?boardId=${id}`)
+      // Saving isn't the end of the job — it's the point where you decide what
+      // the board is for. Ask, rather than dumping the author on the home page.
+      setPlayStep('done')
+      setShowPlayModal(true)
     } catch (e: any) {
       setError(e.message || 'Failed to save board')
     } finally {
@@ -585,7 +589,7 @@ function CreateBoardContent() {
     setSaving(true)
     setError('')
     setShowPlayModal(false)
-    setPlayStep('mode')
+    setPlayStep('done')
     try {
       const built = buildCustomBoard()
       if (mode === 'present') {
@@ -641,23 +645,14 @@ function CreateBoardContent() {
           Full Game (J! + DJ! + FJ!)
         </label>
         <div className="flex-1" />
-        <button onClick={() => { setPlayStep('mode'); setShowPlayModal(true) }} disabled={saving}
-          className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 text-sm rounded-lg transition-colors">
-          {saving ? '...' : '▶ Play'}
-        </button>
         {autoSavedAt && (
           <span className="text-xs text-green-400/80 whitespace-nowrap" title="Your board saves itself as you work">
             ✓ Saved
           </span>
         )}
-        <button onClick={handleShare} disabled={saving}
-          className="btn-secondary px-5 py-2 text-sm whitespace-nowrap"
-          title="Copy a shareable link — saves the board first if it's new">
-          {shareCopied ? '✓ Link copied' : '🔗 Share'}
-        </button>
         <button onClick={handleSave} disabled={saving}
-          className="btn-primary px-5 py-2 text-sm">
-          {saving ? 'Saving...' : editBoardId ? 'Update Board' : 'Save & Finish'}
+          className="btn-primary px-6 py-2 text-sm">
+          {saving ? 'Saving…' : 'Save & Finish'}
         </button>
       </div>
 
@@ -914,13 +909,47 @@ function CreateBoardContent() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="plate-surface p-6">
-              <h3 className="text-white font-bold text-xl mb-1">Play this board</h3>
+              <h3 className="text-white font-bold text-xl mb-1">
+                {playStep === 'done' ? 'Board saved' : 'Play this board'}
+              </h3>
               <p className="text-ink-stage text-sm mb-5">
-                Buzzer modes open a lobby first so people can join.
+                {playStep === 'done'
+                  ? 'What now?'
+                  : 'Buzzer modes open a lobby first so people can join.'}
               </p>
 
               <div className="space-y-2.5">
-                {playStep === 'screen' ? (
+                {playStep === 'done' ? (
+                  <>
+                    <button
+                      onClick={() => setPlayStep('mode')}
+                      className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                    >
+                      <span className="block text-white font-bold">▶ Play it</span>
+                      <span className="block text-gray-400 text-xs mt-0.5">Start a game on this board now.</span>
+                    </button>
+                    <button
+                      onClick={handleShare}
+                      className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                    >
+                      <span className="block text-white font-bold">
+                        {shareCopied ? '✓ Link copied' : '🔗 Share it'}
+                      </span>
+                      <span className="block text-gray-400 text-xs mt-0.5">
+                        Copy a link so someone else can play or fork it.
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setShowPlayModal(false)}
+                      className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                    >
+                      <span className="block text-white font-bold">✏️ Keep editing</span>
+                      <span className="block text-gray-400 text-xs mt-0.5">
+                        It&apos;s saved — changes keep saving as you work.
+                      </span>
+                    </button>
+                  </>
+                ) : playStep === 'screen' ? (
                   <>
                     <p className="text-gray-400 text-xs mb-1">How are you playing?</p>
                     <button
@@ -975,10 +1004,10 @@ function CreateBoardContent() {
               </div>
 
               <button
-                onClick={() => setShowPlayModal(false)}
+                onClick={() => (playStep === 'mode' ? setPlayStep('done') : setShowPlayModal(false))}
                 className="mt-5 w-full btn-secondary py-2.5 text-sm"
               >
-                Cancel
+                {playStep === 'mode' ? 'Back' : 'Close'}
               </button>
             </div>
           </div>
