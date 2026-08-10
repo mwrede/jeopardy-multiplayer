@@ -770,6 +770,21 @@ export default function PlayerPage() {
     )
   }
 
+  // ===== BOARD SELECTION =====
+  // In host-run games the host owns the board. Players never pick, whether or
+  // not the server happens to have them marked as the current player.
+  if (game.phase === 'board_selection' && isHostRun) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em] mt-8">
+          Get ready
+        </p>
+        <p className="text-gray-400 text-lg mt-3">The host is picking a clue…</p>
+      </div>
+    )
+  }
+
   // ===== BOARD SELECTION (active player picks) =====
   if (game.phase === 'board_selection' && isMyTurn) {
     const lc = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']

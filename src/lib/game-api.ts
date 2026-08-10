@@ -946,12 +946,16 @@ export async function advanceToGameOver(gameId: string) {
  * Updates the game to show the selected clue and changes phase.
  */
 export async function selectClue(gameId: string, clueId: string, playerId: string) {
-  // Get the clue to check if it's a daily double
-  const { data: clue, error: clueError } = await supabase
-    .from('clues')
-    .select('*')
-    .eq('id', clueId)
-    .single()
+  const [{ data: clue, error: clueError }, { data: gameRow }] = await Promise.all([
+    supabase.from('clues').select('*').eq('id', clueId).single(),
+    supabase.from('games').select('settings').eq('id', gameId).single(),
+  ])
+
+  // Host-run games: only the host picks. Refuse here as well as hiding the
+  // board on phones, so a stale tab or a crafted request can't take the board.
+  if ((gameRow?.settings as any)?.gameMode === 'host') {
+    throw new Error('The host picks the clues in this game.')
+  }
 
   if (clueError || !clue) throw clueError || new Error('Clue not found')
 
