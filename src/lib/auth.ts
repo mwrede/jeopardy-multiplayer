@@ -68,6 +68,9 @@ export function useUser() {
   useEffect(() => {
     let cancelled = false
 
+    // .catch is essential: without it a rejected getSession leaves `loading`
+    // true forever, and the profile menu renders as a dead grey circle with no
+    // way to sign in or out.
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return
       const u = data.session?.user ?? null
@@ -91,11 +94,15 @@ export function useUser() {
         })
       }
       setLoading(false)
+    }).catch((e) => {
+      console.warn('[useUser] getSession failed:', e)
+      if (!cancelled) { setUser(null); setLoading(false) }
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null
       setUser(u)
+      setLoading(false)
       if (u) {
         const p = await getProfile(u.id)
         setProfile(p)

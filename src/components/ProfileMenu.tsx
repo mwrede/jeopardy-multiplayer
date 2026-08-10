@@ -60,7 +60,7 @@ export function ProfileMenu() {
   }, [open])
 
   if (loading) {
-    return <div className="h-9 w-9 rounded-full bg-white/5" />
+    return <div className="h-9 w-9 animate-pulse rounded-full bg-white/10" aria-label="Loading account" />
   }
 
   if (!user) {
@@ -107,9 +107,10 @@ export function ProfileMenu() {
         >
           {initials || 'P'}
         </span>
-        <span className="hidden sm:inline max-w-[120px] truncate">
-          {profile?.display_name || user.email}
+        <span className="max-w-[140px] truncate">
+          {profile?.display_name || user.email?.split('@')[0] || 'Account'}
         </span>
+        <span aria-hidden="true" className="text-[10px] opacity-60">▾</span>
       </button>
 
       {open && (
@@ -123,9 +124,13 @@ export function ProfileMenu() {
                 <p className="text-ink-stage-3 text-xs truncate">{user.email}</p>
               </div>
               <button
-                onClick={async () => { await signOut(); setOpen(false); router.refresh() }}
-                className="text-ink-stage-2 hover:text-copper text-xs px-2 py-1 transition-colors uppercase tracking-widest"
-                style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
+                onClick={async () => {
+                  await signOut()
+                  setOpen(false)
+                  // Full reload so every cached user-scoped list clears out.
+                  window.location.href = '/'
+                }}
+                className="btn-stage btn-stage-sm btn-stage-ghost shrink-0"
               >
                 Sign out
               </button>
