@@ -106,25 +106,39 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
   const isActive = game.status !== 'lobby'
   const isFirstPlayer = (count ?? 0) === 0
 
-  const { data: player, error: playerError } = await supabase
+  const basePlayer = {
+    game_id: game.id,
+    name: playerName,
+    join_order: (count ?? 0) + 1,
+    // Party mode has no ready-up step (auto-ready). Multiplayer keeps the
+    // ready toggle — everyone confirms they're on their own device first.
+    is_ready: isActive || isCommunity || !isMultiplayerMode,
+    is_creator: isFirstPlayer, // first player to join is the creator
+  }
+
+  // user_id goes in on the INSERT, not a follow-up update. Setting it
+  // afterwards meant a failed update left the row anonymous, and reconnect
+  // matching has nothing to match on — every rejoin looked like a new player,
+  // or worse, collided by name with someone else.
+  let { data: player, error: playerError } = await supabase
     .from('players')
-    .insert({
-      game_id: game.id,
-      name: playerName,
-      join_order: (count ?? 0) + 1,
-      // Party mode has no ready-up step (auto-ready). Multiplayer keeps the
-      // ready toggle — everyone confirms they're on their own device first.
-      is_ready: isActive || isCommunity || !isMultiplayerMode,
-      is_creator: isFirstPlayer, // first player to join is the creator
-    })
+    .insert(userId ? { ...basePlayer, user_id: userId } : basePlayer)
     .select()
     .single()
 
+  // Retry without the column if this database predates the identity migration.
+  if (playerError && /user_id/.test(playerError.message || '')) {
+    console.warn('[joinGame] user_id column missing; joining without ownership')
+    const retry = await supabase.from('players').insert(basePlayer).select().single()
+    player = retry.data
+    playerError = retry.error
+  }
+
   if (playerError) throw playerError
 
-  // Best-effort: tag ownership if signed in. Done as a separate update so the
-  // join still succeeds when the user-identity migration hasn't been applied.
-  if (userId && player?.id) {
+  // Only needed when the insert above had to drop the column; harmless
+  // otherwise since the value already matches.
+  if (userId && player?.id && !(player as any).user_id) {
     await tryClaimPlayerOwnership(player.id, userId)
   }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useUser, signInWithGoogle, signInAsGuest } from '@/lib/auth'
+import { useUser, signInWithGoogle } from '@/lib/auth'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { getCommunityLeaderboard, MIN_GAMES, type LeaderboardRow } from '@/lib/leaderboard'
 import {
@@ -157,19 +157,6 @@ export default function CommunityPage() {
               Continue with Google
             </button>
 
-            <button
-              onClick={async () => {
-                setError('')
-                try { await signInAsGuest() } catch (e: any) { setError(e?.message || 'Guest sign-in failed') }
-              }}
-              className="btn-stage btn-chrome btn-stage-sm mt-2 w-full"
-            >
-              Play as guest
-            </button>
-            <p className="mt-2 text-[11px] text-ink-stage-2">
-              A guest account lives in this browser only — clear your data and its
-              record goes with it.
-            </p>
           </div>
         )}
 
