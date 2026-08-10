@@ -90,7 +90,7 @@ export default function Home() {
 
         {/* Two separately framed buttons — each a board cell in its own
             walnut panel, rather than one board split down the middle. */}
-        <div className="mt-10 grid gap-5 md:mt-14 md:grid-cols-2">
+        <div className="mt-10 grid gap-5 md:mt-14 md:grid-cols-3">
           <div className="board-panel">
             <div className="board-panel-inner">
               <a href="/find" className="tile">
@@ -104,6 +104,20 @@ export default function Home() {
                   <h2 className="tile-title text-3xl md:text-4xl">Play Jeopardy!</h2>
                   <p className="mt-2 text-sm text-blue-100/75">
                     Forty-two seasons, themed boards, and community games.
+                  </p>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div className="board-panel">
+            <div className="board-panel-inner">
+              <a href="/community" className="tile">
+                <span className="tile-art tile-art-glyph" aria-hidden="true">&#127918;</span>
+                <div className="tile-body">
+                  <h2 className="tile-title text-3xl md:text-4xl">Community Play</h2>
+                  <p className="mt-2 text-sm text-blue-100/75">
+                    Drop into a game with strangers. Three players, starts when it fills.
                   </p>
                 </div>
               </a>
