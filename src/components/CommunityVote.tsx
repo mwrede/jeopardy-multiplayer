@@ -29,6 +29,7 @@ export function CommunityVote({
   const [decade, setDecade] = useState<DecadeVote>('any')
   const [locked, setLocked] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [error, setError] = useState('')
 
   const votesIn = players.filter((p) => (p as any).vote_size).length
   const everyoneVoted = players.length > 0 && votesIn >= players.length
@@ -48,10 +49,19 @@ export function CommunityVote({
   async function lockIn() {
     if (!myPlayerId) return
     setLocked(true)
+    setError('')
     try {
       await castVote(myPlayerId, { size, difficulty, decade })
-    } catch {
+    } catch (e: any) {
       setLocked(false)
+      // Swallowing this made the button look broken. The usual cause is the
+      // vote columns not existing yet, so name that directly.
+      const msg = String(e?.message || e)
+      setError(
+        /column|schema|vote_/i.test(msg)
+          ? 'Voting isn\'t set up on the database yet — run supabase-migration-community-votes.sql.'
+          : msg || 'Could not save your vote.',
+      )
     }
   }
 
@@ -106,6 +116,12 @@ export function CommunityVote({
             ))}
           </Group>
         </fieldset>
+
+        {error && (
+          <p className="mt-4 rounded-lg border border-red-500/40 bg-red-950/40 px-4 py-3 text-center text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
         {!locked ? (
           <button onClick={lockIn} className="btn-primary mt-6 w-full py-4 text-lg">
