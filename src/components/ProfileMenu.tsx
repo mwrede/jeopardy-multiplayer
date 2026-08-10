@@ -125,10 +125,10 @@ export function ProfileMenu() {
               </div>
               <button
                 onClick={async () => {
-                  await signOut()
                   setOpen(false)
-                  // Full reload so every cached user-scoped list clears out.
-                  window.location.href = '/'
+                  // signOut never throws, but redirect regardless — being
+                  // stuck signed in is not an acceptable outcome here.
+                  try { await signOut() } finally { window.location.href = '/' }
                 }}
                 className="btn-stage btn-stage-sm btn-stage-ghost shrink-0"
               >

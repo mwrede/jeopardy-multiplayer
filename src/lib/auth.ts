@@ -59,9 +59,39 @@ export async function signInAsGuest() {
   return data
 }
 
+/**
+ * Sign out, and mean it.
+ *
+ * The default is a global sign-out, which calls the server — and that fails
+ * whenever the session it's revoking has already expired or the network is
+ * down. Throwing there left people stuck signed in with a button that did
+ * nothing, which is the worst outcome: the one moment a user needs to be
+ * obeyed without argument.
+ *
+ * So: try the server, fall back to clearing this device, and if even that
+ * fails, wipe Supabase's own storage keys by hand. Never throws.
+ */
 export async function signOut() {
-  const { error } = await supabase.auth.signOut()
-  if (error) throw error
+  try {
+    const { error } = await supabase.auth.signOut()
+    if (!error) return
+    console.warn('[signOut] global sign-out failed, clearing locally:', error.message)
+  } catch (e) {
+    console.warn('[signOut] global sign-out threw, clearing locally:', e)
+  }
+
+  try {
+    await supabase.auth.signOut({ scope: 'local' })
+    return
+  } catch (e) {
+    console.warn('[signOut] local sign-out threw, clearing storage:', e)
+  }
+
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('sb-') || key.includes('supabase.auth')) localStorage.removeItem(key)
+    }
+  } catch {}
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
