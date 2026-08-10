@@ -357,9 +357,9 @@ export default function PresentPage() {
     const untried = buzzOrder.filter((b) => b.is_correct === null)
 
     return (
-      <div className="flex min-h-screen flex-col bg-jeopardy-blue-cell">
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-jeopardy-blue-cell">
         {/* Control bar */}
-        <div className="flex items-center justify-between gap-4 bg-jeopardy-dark px-4 py-2.5 text-white">
+        <div className="flex shrink-0 items-center justify-between gap-4 bg-jeopardy-dark px-4 py-2.5 text-white">
           <button onClick={backToBoard} className="flex items-center gap-2 text-sm hover:opacity-80">
             Continue <Kbd>ESC</Kbd>
           </button>
@@ -378,7 +378,7 @@ export default function PresentPage() {
         </div>
 
         {/* The clue */}
-        <div className="flex flex-1 flex-col items-center justify-center px-10 py-8 text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-10 py-6 text-center">
           {phase === 'daily_double' ? (
             <div className="space-y-5">
               <p className="text-5xl font-bold text-jeopardy-gold-light">Daily Double!</p>
@@ -432,10 +432,11 @@ export default function PresentPage() {
   const rows = Math.max(...roundCategories.map((cat) => getCluesForCategory(cat.id).length), 1)
 
   return (
-    <div className="flex min-h-screen flex-col bg-jeopardy-dark">
-      {/* Same construction as GameBoard: .board-wrapper, .board-category and
-          .board-cell, so hosting looks like the game it's hosting. */}
-      <div className="flex-1 px-1.5 pb-3 pt-1 md:px-3">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-jeopardy-dark">
+      {/* h-[100dvh] + overflow-hidden rather than min-h-screen: the board has
+          to shrink to fit, not grow and push the scores off the bottom.
+          Same construction as GameBoard so hosting looks like the game. */}
+      <div className="min-h-0 flex-1 px-1.5 pb-2 pt-1 md:px-3">
         <div className="board-wrapper h-full">
           <div
             className="grid h-full gap-[3px] md:gap-1"
@@ -478,7 +479,7 @@ export default function PresentPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-3 border-t-2 border-black bg-black/50 px-4 py-2">
+      <div className="flex shrink-0 items-center justify-center gap-3 overflow-x-auto border-t-2 border-black bg-black/50 px-4 py-2">
         <button
           onClick={() => setShowMenu(!showMenu)}
           className="rounded border-2 border-white/30 bg-jeopardy-blue-cell px-2 py-3 text-xs font-bold leading-none tracking-widest text-white"
@@ -565,7 +566,7 @@ function ScoreRow({
     <>
       {rows.length === 0 && <p className="text-sm text-gray-500">No players yet</p>}
       {rows.map((r) => (
-        <div key={r.key} className="min-w-[110px] overflow-hidden rounded-lg bg-white text-center md:min-w-[140px]">
+        <div key={r.key} className="w-[110px] shrink-0 overflow-hidden rounded-lg bg-white text-center md:w-[140px]">
           <p className="border-b-2 border-jeopardy-blue-cell px-3 py-1 text-sm font-bold italic text-black md:text-base">
             {r.name}
           </p>
@@ -587,9 +588,11 @@ function ScoreRow({
     </>
   )
 
+  // One row, scrolled sideways if it has to be — wrapping would make the
+  // footer taller and steal height from the board above it.
   if (bare) return <>{cards}</>
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3 border-t-2 border-black bg-black/60 px-4 py-2">
+    <div className="flex shrink-0 items-center justify-center gap-3 overflow-x-auto border-t-2 border-black bg-black/60 px-4 py-2">
       {cards}
     </div>
   )
