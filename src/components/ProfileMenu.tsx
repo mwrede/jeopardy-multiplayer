@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { signOut, useUser } from '@/lib/auth'
+import { signOut, signInWithGoogle, useUser } from '@/lib/auth'
 import {
   getProfileStats,
   getOpponentsPlayed,
@@ -14,7 +14,7 @@ import {
 
 /**
  * Top-right profile button + dropdown panel. Shows stats, opponents faced,
- * and boards the signed-in user has authored. Renders a "Sign in" link
+ * and boards the signed-in user has authored. Renders a "Sign in" button
  * when no one is logged in.
  */
 export function ProfileMenu() {
@@ -22,6 +22,7 @@ export function ProfileMenu() {
   const pathname = usePathname()
   const { user, profile, loading } = useUser()
   const [open, setOpen] = useState(false)
+  const [signingIn, setSigningIn] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
 
   const [stats, setStats] = useState<ProfileStats | null>(null)
@@ -62,18 +63,26 @@ export function ProfileMenu() {
     return <div className="h-9 w-9 rounded-full bg-white/5" />
   }
 
-  // Nothing to offer on the login page itself — the form is right there, and
-  // the link would point at /login?next=/login.
-  if (pathname === '/login') return null
-
   if (!user) {
     return (
-      <a
-        href={`/login?next=${encodeURIComponent(pathname || '/')}`}
-        className="btn-stage btn-stage-sm btn-copper"
+      <button
+        onClick={async () => {
+          setSigningIn(true)
+          try {
+            // Straight to Google from wherever you are. Bouncing through a
+            // /login page first added a hop and a second redirect target for
+            // no benefit — the flow returns you to this page either way.
+            await signInWithGoogle(pathname || '/')
+          } catch (e) {
+            console.warn('[ProfileMenu] Google sign-in failed:', e)
+            setSigningIn(false)
+          }
+        }}
+        disabled={signingIn}
+        className="btn-stage btn-stage-sm btn-copper disabled:opacity-60"
       >
-        Sign in
-      </a>
+        {signingIn ? 'Opening…' : 'Sign in'}
+      </button>
     )
   }
 
