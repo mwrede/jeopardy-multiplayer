@@ -201,6 +201,44 @@ export async function getLobbyState(roomCode: string): Promise<{
 }
 
 /**
+ * The community game this account is already sitting in, if any.
+ *
+ * Without this, "Play now" looks broken: joinGame correctly recognises you as
+ * already present and reconnects you, so the seat count doesn't move and
+ * nothing appears to happen. You can also end up listed in two games at once.
+ * Checking first means the button returns you to your table instead.
+ */
+export async function findMySeat(userId: string): Promise<{
+  roomCode: string
+  playerId: string
+  gameId: string
+} | null> {
+  if (!userId) return null
+
+  const { data: rows } = await supabase
+    .from('players')
+    .select('id, game_id, games!inner(room_code, status, phase, settings)')
+    .eq('user_id', userId)
+    .limit(20)
+
+  for (const r of (rows ?? []) as any[]) {
+    const g = Array.isArray(r.games) ? r.games[0] : r.games
+    if (!g) continue
+    const settings = typeof g.settings === 'string' ? JSON.parse(g.settings) : g.settings
+    if (settings?.community !== true) continue
+    if (g.status === 'finished' || g.phase === 'game_over') continue
+    return { roomCode: g.room_code, playerId: r.id, gameId: r.game_id }
+  }
+  return null
+}
+
+/** Get up from every community table this account is sitting at. */
+export async function leaveAllSeats(userId: string): Promise<void> {
+  const seat = await findMySeat(userId)
+  if (seat) await leaveCommunityLobby(seat.playerId, seat.gameId)
+}
+
+/**
  * One button: sit down wherever there's room, opening a lobby only if every
  * existing one is full or stale. Tries the fullest first so games start soon.
  */
@@ -216,6 +254,13 @@ async function findOrCreateGameInner(
   playerName: string,
   userId: string,
 ): Promise<{ roomCode: string; started: boolean; playerId: string }> {
+  // Already seated somewhere? Go back there. Joining a second table would
+  // reconnect you to the first anyway, which is what made this look broken.
+  const seat = await findMySeat(userId).catch(() => null)
+  if (seat) {
+    return { roomCode: seat.roomCode, started: false, playerId: seat.playerId }
+  }
+
   const open = await listCommunityLobbies().catch(() => [])
 
   for (const lobby of open) {

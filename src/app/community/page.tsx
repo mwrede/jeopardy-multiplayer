@@ -8,6 +8,7 @@ import { getCommunityLeaderboard, MIN_GAMES, type LeaderboardRow } from '@/lib/l
 import {
   listCommunityLobbies,
   findOrCreateGame,
+  findMySeat,
   joinCommunityLobby,
   leaveCommunityLobby,
   getLobbyState,
@@ -46,6 +47,16 @@ export default function CommunityPage() {
       if (saved) setSeat(JSON.parse(saved))
     } catch {}
   }, [])
+
+  // localStorage only knows about this browser. Ask the database where this
+  // account is actually sitting, so a second device shows the same table
+  // rather than offering to find a new one.
+  useEffect(() => {
+    if (!user) return
+    findMySeat(user.id)
+      .then((s) => { if (s) setSeat({ roomCode: s.roomCode, playerId: s.playerId }) })
+      .catch(() => {})
+  }, [user])
 
   useEffect(() => {
     if (seat) localStorage.setItem('communitySeat', JSON.stringify(seat))
