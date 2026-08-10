@@ -506,10 +506,48 @@ export default function PlayPage() {
   const currentPlayer = players.find((p) => p.id === game.current_player_id)
 
   // === LOBBY ===
+  const isCommunityGame = (game.settings as any)?.community === true
+
   // Community Play: three strangers agree on the format before any board
   // exists. Only community games ever reach this phase.
   if (game.phase === 'game_voting') {
     return <CommunityVote gameId={game.id} players={players} myPlayerId={myPlayerId} />
+  }
+
+  // A community game still filling up. Handled here as well as on /community
+  // so it never matters which page a player is sitting on — whoever lands here
+  // early waits with everyone else and moves through on the same phase flip.
+  if (isCommunityGame && (game.phase === 'lobby' || game.status === 'lobby')) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-jeopardy-dark px-6">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-jeopardy-gold-light">
+          Community Play
+        </p>
+        <p className="mt-2 font-mono text-2xl tracking-[0.25em] text-white">{game.room_code}</p>
+
+        <div className="mt-5 flex gap-2">
+          {Array.from({ length: 3 }, (_, i) => (
+            <span
+              key={i}
+              className={`h-3.5 w-3.5 rounded-full ${
+                i < players.length ? 'bg-jeopardy-gold-light' : 'bg-white/20'
+              }`}
+            />
+          ))}
+        </div>
+
+        <p className="mt-4 text-white">
+          {players.length >= 3 ? 'Starting…' : `Waiting for ${3 - players.length} more`}
+        </p>
+        {players.length > 0 && (
+          <p className="mt-1 text-sm text-gray-400">{players.map((p) => p.name).join(' · ')}</p>
+        )}
+
+        <a href="/community" className="btn-stage btn-stage-sm btn-stage-ghost mt-6">
+          Leave this game
+        </a>
+      </div>
+    )
   }
 
   if (game.phase === 'lobby') {

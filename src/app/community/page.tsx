@@ -39,7 +39,18 @@ export default function CommunityPage() {
 
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
+    // Seats survive a reload — losing this in React state left players sitting
+    // on the page while everyone else moved on to the vote.
+    try {
+      const saved = localStorage.getItem('communitySeat')
+      if (saved) setSeat(JSON.parse(saved))
+    } catch {}
   }, [])
+
+  useEffect(() => {
+    if (seat) localStorage.setItem('communitySeat', JSON.stringify(seat))
+    else localStorage.removeItem('communitySeat')
+  }, [seat])
 
   // Nudge people toward a name, but never impose their real one — this is
   // what the other two players see.
@@ -87,10 +98,13 @@ export default function CommunityPage() {
 
   async function leave() {
     if (!seat) return
-    const { playerId } = seat
+    const { playerId, roomCode } = seat
     setSeat(null)
     setSeatMates([])
-    try { await leaveCommunityLobby(playerId) } catch { /* seat frees on its own */ }
+    try {
+      const state = await getLobbyState(roomCode).catch(() => null)
+      await leaveCommunityLobby(playerId, state?.gameId)
+    } catch { /* the seat frees regardless */ }
   }
 
   // Watch your own lobby. When it reaches three the game flips to voting, and

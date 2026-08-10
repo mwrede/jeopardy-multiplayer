@@ -53,13 +53,26 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
     throw new Error('Game not found or already finished')
   }
 
-  // Check if player with this name already exists (reconnect)
-  const { data: existing } = await supabase
+  // Reconnect detection.
+  //
+  // Matching on name alone is wrong once accounts exist: two different people
+  // called "mike" would collapse into one player row, so the second person to
+  // join silently became the first. In Community Play — where everyone signs
+  // in and three seats have to fill — that meant the table never filled and
+  // only one screen ever advanced.
+  //
+  // With an account, identity is the account. Without one, fall back to name,
+  // which is all a party guest has.
+  //
+  // maybeSingle, not single: a first-time join legitimately matches no row,
+  // and single() answers that with a 406.
+  const reconnectQuery = supabase
     .from('players')
     .select('*')
     .eq('game_id', game.id)
-    .eq('name', playerName)
-    .single()
+  const { data: existing } = userId
+    ? await reconnectQuery.eq('user_id', userId).maybeSingle()
+    : await reconnectQuery.eq('name', playerName).maybeSingle()
 
   if (existing) {
     // Reconnect: update connection status, then best-effort claim ownership.

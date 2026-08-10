@@ -142,9 +142,46 @@ export async function joinCommunityLobby(
   return { roomCode, started: false, playerId: player.id }
 }
 
-/** Get up from a lobby. The seat frees immediately for whoever's next. */
-export async function leaveCommunityLobby(playerId: string): Promise<void> {
+/**
+ * Get up from a table, from the waiting page or mid-vote or mid-game.
+ *
+ * Three-handed is the format, so losing a player means the others can't carry
+ * on — the game rewinds to waiting and everyone left keeps their seat while a
+ * replacement is found. Votes are cleared so the next round starts clean.
+ */
+export async function leaveCommunityLobby(playerId: string, gameId?: string): Promise<void> {
   await supabase.from('players').delete().eq('id', playerId)
+  if (!gameId) return
+
+  const { data: game } = await supabase
+    .from('games').select('phase, status, settings').eq('id', gameId).maybeSingle()
+  if (!game || (game.settings as any)?.community !== true) return
+  // A finished game keeps its result — the leaderboard needs it.
+  if (game.status === 'finished') return
+
+  const { count } = await supabase
+    .from('players').select('id', { count: 'exact', head: true }).eq('game_id', gameId)
+
+  if ((count ?? 0) < LOBBY_SEATS) {
+    // Clear votes so the next full table decides fresh, and drop any board
+    // that was already dealt.
+    await supabase
+      .from('players')
+      .update({ vote_size: null, vote_difficulty: null, vote_decade: null, score: 0 })
+      .eq('game_id', gameId)
+
+    await supabase
+      .from('games')
+      .update({
+        phase: 'lobby',
+        status: 'lobby',
+        current_clue_id: null,
+        current_player_id: null,
+        buzz_window_open: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+  }
 }
 
 /** Current state of one lobby — used to watch a seat fill in real time. */
