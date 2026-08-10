@@ -68,7 +68,9 @@ export default function PresentPage() {
   const [showMenu, setShowMenu] = useState(false)
   const [ddWager, setDdWager] = useState('')
   const [buzzOrder, setBuzzOrder] = useState<BuzzOrderRow[]>([])
-  const [buzzersOpen, setBuzzersOpen] = useState(false)
+  // NOT local state: with the board on a laptop and the buzzer controls on a
+  // phone, whichever device acted last is the truth, and that's the game row.
+  const buzzersOpen = game?.phase === 'buzz_window'
   const [origin, setOrigin] = useState('')
   const [copied, setCopied] = useState(false)
   const [justScored, setJustScored] = useState<string | null>(null)
@@ -114,12 +116,28 @@ export default function PresentPage() {
     return () => { cancelled = true; clearInterval(t) }
   }, [usingBuzzers, game?.id, activeClue?.id, phase])
 
+  /**
+   * Follow the phone. When the presenter rules on an answer from their own
+   * device the clue resolves server-side, and this screen — which may be the
+   * one projected — has to come back to the board on its own. Without this the
+   * laptop sits on a finished clue until someone hits Continue.
+   */
+  useEffect(() => {
+    if (!usingBuzzers || !activeClue) return
+    if (game?.phase === 'clue_result' || game?.phase === 'board_selection') {
+      setAnsweredClueIds((prev) => new Set([...prev, activeClue.id]))
+      setActiveClue(null)
+      setActiveCategory(null)
+      setBuzzOrder([])
+      setPhase('board')
+    }
+  }, [game?.phase, usingBuzzers, activeClue])
+
   function handleCellClick(clue: Clue) {
     if (answeredClueIds.has(clue.id)) return
     const cat = categories.find((c) => c.id === clue.category_id)
     setActiveClue(clue)
     setActiveCategory(cat || null)
-    setBuzzersOpen(false)
     setBuzzOrder([])
     if (usingBuzzers && game) {
       // Phones show "get ready" — the clue itself stays hidden until buzzers open.
@@ -131,7 +149,6 @@ export default function PresentPage() {
 
   function openBuzzers() {
     if (!game || !activeClue) return
-    setBuzzersOpen(true)
     hostOpenBuzzers(game.id).catch(() => {})
   }
 
@@ -163,7 +180,7 @@ export default function PresentPage() {
         .update({ phase: 'board_selection', current_clue_id: null, buzz_window_open: false, updated_at: new Date().toISOString() })
         .eq('id', game.id).then(() => {})
     }
-    setActiveClue(null); setActiveCategory(null); setBuzzersOpen(false); setBuzzOrder([])
+    setActiveClue(null); setActiveCategory(null); setBuzzOrder([])
     setPhase('board')
   }
 
