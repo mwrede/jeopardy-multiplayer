@@ -6,44 +6,28 @@ import { supabase } from './supabase'
 
 export type Profile = { user_id: string; display_name: string }
 
-export async function signUp(email: string, password: string, displayName: string) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
+/**
+ * Google is the only way in. Email/password was a second identity to remember
+ * for an app that otherwise needs no account at all — signing in exists here
+ * only so your boards follow you between devices.
+ *
+ * Requires the Google provider to be enabled in Supabase
+ * (Authentication → Providers → Google) with a Google Cloud OAuth client.
+ */
+export async function signInWithGoogle(next?: string) {
+  const redirectTo =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}${next && next.startsWith('/') ? next : '/'}`
+      : undefined
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
     options: {
-      data: { display_name: displayName },
-      emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+      redirectTo,
+      queryParams: { prompt: 'select_account' },
     },
   })
   if (error) throw error
-
-  // Only insert the profile row when we actually have a session. The
-  // profiles RLS policy requires auth.uid() = user_id, so this upsert
-  // fails if email confirmation is on (no session yet). In that case the
-  // row gets created on first sign-in by useUser() instead.
-  //
-  // CRUCIAL: this insert is non-fatal — if it fails for any reason, we
-  // still return success because the auth user is what matters. Otherwise
-  // a bad RLS / missing-table state would block all signups.
-  if (data.user && data.session) {
-    const { error: profileErr } = await supabase
-      .from('profiles')
-      .upsert({ user_id: data.user.id, display_name: displayName })
-    if (profileErr) console.warn('[signUp] profile upsert failed (non-fatal):', profileErr.message)
-  }
-  return data
-}
-
-export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) {
-    // Surface a clearer hint for the common cases.
-    if (/email not confirmed/i.test(error.message)) {
-      throw new Error('Your email isn\'t confirmed yet. Check your inbox for the confirmation link, then sign in.')
-    }
-    throw error
-  }
-  return data
 }
 
 export async function signOut() {
@@ -93,7 +77,13 @@ export function useUser() {
           if (cancelled) return
           // If profile row is missing (e.g. created before profiles table), seed it from auth metadata.
           if (!p) {
-            const name = (u.user_metadata?.display_name as string) || u.email?.split('@')[0] || 'Player'
+            const meta = u.user_metadata ?? {}
+            const name =
+              (meta.display_name as string) ||
+              (meta.full_name as string) ||
+              (meta.name as string) ||
+              u.email?.split('@')[0] ||
+              'Player'
             upsertProfile(u.id, name).then(() => getProfile(u.id).then(setProfile)).catch(() => {})
           } else {
             setProfile(p)
