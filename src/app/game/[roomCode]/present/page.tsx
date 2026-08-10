@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { ClueText } from '@/components/ClueText'
 import { useState, useEffect, useCallback } from 'react'
@@ -14,6 +14,7 @@ import {
 } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import type { Category, Clue } from '@/types/game'
+import { PresenterControl } from '@/components/PresenterControl'
 
 /**
  * PRESENT — the host's screen.
@@ -45,6 +46,10 @@ const BUZZ_SHOWN = 8
 export default function PresentPage() {
   const { roomCode } = useParams<{ roomCode: string }>()
   const router = useRouter()
+  const search = useSearchParams()
+  // ?control=1 is the presenter's own device: the answer, the buzzer lock,
+  // the buzz order and the scores. Everything the room must not see.
+  const isControl = search.get('control') === '1'
   const { game, players, categories, clues } = useGameChannel(roomCode)
 
   const [scoring, setScoring] = useState<Scoring>('manual')
@@ -72,13 +77,16 @@ export default function PresentPage() {
 
   useEffect(() => { setOrigin(window.location.origin) }, [])
 
+  // Hooks above run unconditionally; the control screen owns its own state.
+  if (isControl) return <PresenterControl roomCode={roomCode} />
+
   const usingBuzzers = scoring === 'buzzers'
   // createPresentationGame seeds a placeholder "Presenter" row so the board
   // can be built before anyone joins. It isn't a contestant — keep it out of
   // the scoreboard and the buzz queue.
   const contestants = players.filter((p) => p.name !== 'Presenter')
   const joinUrl = origin ? `${origin}/game/${roomCode}` : ''
-  const hostUrl = origin ? `${origin}/game/${roomCode}/present` : ''
+  const hostUrl = origin ? `${origin}/game/${roomCode}/present?control=1` : ''
 
   const roundCategories = categories
     .filter((c) => c.round_number === currentRound)
@@ -248,7 +256,7 @@ export default function PresentPage() {
                       2 · Presenter — keep private
                     </p>
                     <p className="mt-1 text-sm text-gray-300">
-                      This screen. Shows answers and who buzzed first.
+                      Answers, the buzzer lock, and who buzzed in what order.
                     </p>
                   </div>
                   <button
@@ -274,8 +282,8 @@ export default function PresentPage() {
                       {hostCopied ? '✓ Copied' : 'Copy presenter link'}
                     </button>
                     <p className="text-xs text-gray-500">
-                      Open it on your own device if you want the board on the TV and
-                      the controls in your hand. Don&apos;t put it on the big screen.
+                      Open on your phone or laptop and leave the board on the TV.
+                      Never put this one on the big screen.
                     </p>
                   </div>
                 )}
