@@ -203,8 +203,8 @@ export default function PresentPage() {
   /* ── SETUP ────────────────────────────────────────────────────────────── */
   if (phase === 'setup') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#2E2E96] p-6">
-        <div className="w-full max-w-md space-y-6 rounded-2xl border border-white/20 bg-[#1A1A5C] p-8">
+      <div className="flex min-h-screen items-center justify-center bg-jeopardy-blue-cell p-6">
+        <div className="w-full max-w-md space-y-6 rounded-2xl border border-white/20 bg-jeopardy-dark p-8">
           <h1 className="text-center text-3xl font-bold text-jeopardy-gold-light">Presentation Setup</h1>
 
           <div>
@@ -357,9 +357,9 @@ export default function PresentPage() {
     const untried = buzzOrder.filter((b) => b.is_correct === null)
 
     return (
-      <div className="flex min-h-screen flex-col bg-[#2E2E96]">
+      <div className="flex min-h-screen flex-col bg-jeopardy-blue-cell">
         {/* Control bar */}
-        <div className="flex items-center justify-between gap-4 bg-[#1A1A5C] px-4 py-2.5 text-white">
+        <div className="flex items-center justify-between gap-4 bg-jeopardy-dark px-4 py-2.5 text-white">
           <button onClick={backToBoard} className="flex items-center gap-2 text-sm hover:opacity-80">
             Continue <Kbd>ESC</Kbd>
           </button>
@@ -396,7 +396,7 @@ export default function PresentPage() {
             </div>
           ) : (
             <>
-              <p className="max-w-6xl text-5xl font-normal leading-tight text-white md:text-7xl">
+              <p className="clue-type max-w-6xl text-4xl text-white md:text-6xl">
                 <ClueText text={activeClue.question} />
               </p>
               {phase === 'answer' && (
@@ -432,50 +432,56 @@ export default function PresentPage() {
   const rows = Math.max(...roundCategories.map((cat) => getCluesForCategory(cat.id).length), 1)
 
   return (
-    <div className="flex min-h-screen flex-col bg-black">
-      <div className="flex flex-1 flex-col p-1.5">
-        <div
-          className="grid flex-1 gap-1.5"
-          style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `auto repeat(${rows}, 1fr)` }}
-        >
-          {roundCategories.map((cat) => (
-            <div
-              key={cat.id}
-              className="flex items-center justify-center bg-[#2E2E96] px-2 py-4 text-center text-sm font-bold uppercase leading-tight tracking-wide text-white md:text-xl"
-              style={{ textShadow: '2px 2px 3px rgba(0,0,0,0.6)' }}
-            >
-              {cat.name}
-            </div>
-          ))}
+    <div className="flex min-h-screen flex-col bg-jeopardy-dark">
+      {/* Same construction as GameBoard: .board-wrapper, .board-category and
+          .board-cell, so hosting looks like the game it's hosting. */}
+      <div className="flex-1 px-1.5 pb-3 pt-1 md:px-3">
+        <div className="board-wrapper h-full">
+          <div
+            className="grid h-full gap-[3px] md:gap-1"
+            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `auto repeat(${rows}, 1fr)` }}
+          >
+            {roundCategories.map((cat) => (
+              <div key={cat.id} className="board-category min-h-[44px] p-1.5 md:min-h-[60px] md:p-3">
+                <span className="line-clamp-3 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-white md:text-sm">
+                  {cat.name}
+                </span>
+              </div>
+            ))}
 
-          {roundCategories.length > 0 &&
-            Array.from({ length: rows }).map((_, rowIdx) =>
-              roundCategories.map((cat) => {
-                const clue = getCluesForCategory(cat.id)[rowIdx]
-                if (!clue) return <div key={`e-${cat.id}-${rowIdx}`} className="bg-[#2E2E96]" />
-                const answered = answeredClueIds.has(clue.id)
-                return (
-                  <button
-                    key={clue.id}
-                    onClick={() => !answered && handleCellClick(clue)}
-                    disabled={answered}
-                    className={`bg-[#2E2E96] text-4xl font-bold transition-colors md:text-6xl ${
-                      answered ? 'cursor-default text-transparent' : 'text-[#E9B23C] hover:bg-[#3838AE]'
-                    }`}
-                    style={answered ? undefined : { textShadow: '3px 3px 4px rgba(0,0,0,0.55)' }}
-                  >
-                    ${clue.value.toLocaleString()}
-                  </button>
-                )
-              }),
-            )}
+            {roundCategories.length > 0 &&
+              Array.from({ length: rows }).map((_, rowIdx) =>
+                roundCategories.map((cat) => {
+                  const clue = getCluesForCategory(cat.id)[rowIdx]
+                  if (!clue) return <div key={`e-${cat.id}-${rowIdx}`} className="board-cell board-cell-answered" />
+                  const answered = answeredClueIds.has(clue.id)
+                  return (
+                    <button
+                      key={clue.id}
+                      onClick={() => !answered && handleCellClick(clue)}
+                      disabled={answered}
+                      className={`board-cell min-h-[44px] py-3 md:py-5 ${answered ? 'board-cell-answered' : ''}`}
+                    >
+                      {!answered && (
+                        <span
+                          className="text-sm font-bold md:text-2xl"
+                          style={{ fontFamily: 'Swiss911, Impact, Arial Black, sans-serif' }}
+                        >
+                          ${clue.value.toLocaleString()}
+                        </span>
+                      )}
+                    </button>
+                  )
+                }),
+              )}
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-3 bg-black px-4 py-2">
+      <div className="flex flex-wrap items-center justify-center gap-3 border-t-2 border-black bg-black/50 px-4 py-2">
         <button
           onClick={() => setShowMenu(!showMenu)}
-          className="rounded border-2 border-white/30 bg-[#2E2E96] px-2 py-3 text-xs font-bold leading-none tracking-widest text-white"
+          className="rounded border-2 border-white/30 bg-jeopardy-blue-cell px-2 py-3 text-xs font-bold leading-none tracking-widest text-white"
           style={{ writingMode: 'vertical-lr' }}
         >
           MENU
@@ -500,7 +506,7 @@ export default function PresentPage() {
 
       {showMenu && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowMenu(false)}>
-          <div className="w-full max-w-xs space-y-3 rounded-2xl border border-white/20 bg-[#1A1A5C] p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-xs space-y-3 rounded-2xl border border-white/20 bg-jeopardy-dark p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-center text-lg font-bold text-white">Menu</h3>
             <button onClick={() => { setPhase('setup'); setShowMenu(false) }} className="btn-secondary w-full py-2 text-sm">
               {usingBuzzers ? 'Scoring & players' : 'Edit teams'}
@@ -560,7 +566,7 @@ function ScoreRow({
       {rows.length === 0 && <p className="text-sm text-gray-500">No players yet</p>}
       {rows.map((r) => (
         <div key={r.key} className="min-w-[110px] overflow-hidden rounded-lg bg-white text-center md:min-w-[140px]">
-          <p className="border-b-2 border-[#2E2E96] px-3 py-1 text-sm font-bold italic text-black md:text-base">
+          <p className="border-b-2 border-jeopardy-blue-cell px-3 py-1 text-sm font-bold italic text-black md:text-base">
             {r.name}
           </p>
           <p className="border-b border-gray-300 px-3 py-1 text-lg font-bold tabular-nums text-black md:text-xl">
