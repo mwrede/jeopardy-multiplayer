@@ -30,6 +30,35 @@ export async function signInWithGoogle(next?: string) {
   if (error) throw error
 }
 
+/**
+ * Guest sign-in. Creates a real Supabase user with its own id — no email, no
+ * password — so a guest can be ranked and told apart from other players like
+ * anyone else.
+ *
+ * Each browser gets a distinct guest, which makes it the practical way to test
+ * a three-player game without three Google accounts: one normal window plus
+ * two private ones.
+ *
+ * The account lives in that browser only. Clear site data and it's gone,
+ * along with anything it won — that's the trade for not signing up.
+ *
+ * Requires Anonymous sign-ins to be enabled in Supabase
+ * (Authentication → Providers → Anonymous sign-ins).
+ */
+export async function signInAsGuest() {
+  const { data, error } = await supabase.auth.signInAnonymously()
+  if (error) {
+    if (/disabled|not enabled/i.test(error.message)) {
+      throw new Error(
+        'Guest play is off. Enable Anonymous sign-ins in Supabase under ' +
+        'Authentication → Providers.',
+      )
+    }
+    throw error
+  }
+  return data
+}
+
 export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
