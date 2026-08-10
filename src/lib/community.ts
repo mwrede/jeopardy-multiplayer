@@ -21,6 +21,22 @@ import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 
 export const LOBBY_SEATS = 3
 
+/**
+ * A hung Supabase call leaves the UI spinning with nothing to show for it —
+ * no result, no error. Everything here races a timeout so a stall surfaces as
+ * a message instead of a button stuck on "Finding a game…".
+ */
+const TIMEOUT_MS = 12_000
+
+function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out. Check your connection and try again.`)), TIMEOUT_MS),
+    ),
+  ])
+}
+
 /** Ignore lobbies left sitting this long — the people in them are long gone. */
 const STALE_MINUTES = 45
 
@@ -156,7 +172,14 @@ export async function findOrCreateGame(
   userId: string,
 ): Promise<{ roomCode: string; started: boolean; playerId: string }> {
   if (!userId) throw new Error('Sign in to play Community games.')
-  const open = await listCommunityLobbies()
+  return withTimeout(findOrCreateGameInner(playerName, userId), 'Finding a game')
+}
+
+async function findOrCreateGameInner(
+  playerName: string,
+  userId: string,
+): Promise<{ roomCode: string; started: boolean; playerId: string }> {
+  const open = await listCommunityLobbies().catch(() => [])
 
   for (const lobby of open) {
     try {

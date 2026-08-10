@@ -57,7 +57,10 @@ export default function CommunityPage() {
     const load = () => {
       listCommunityLobbies()
         .then((l) => { if (!cancelled) { setLobbies(l); setLoading(false) } })
-        .catch(() => { if (!cancelled) setLoading(false) })
+        .catch((e) => {
+          console.warn('[community] lobby list failed:', e)
+          if (!cancelled) setLoading(false)
+        })
     }
     load()
     const t = setInterval(load, 4000)
