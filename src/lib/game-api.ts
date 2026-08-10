@@ -1989,28 +1989,42 @@ export async function saveCustomBoard(
 ) {
   // First try with creator_user_id (post user-identity migration). If the
   // column doesn't exist yet, retry without it so saving still works.
+  // Generate the id here rather than reading it back. The SELECT policy used
+  // to hide private boards, so `.select().single()` after inserting one
+  // returned zero rows and threw "Cannot coerce the result to a single JSON
+  // object" — the row was written, we just couldn't see it. Supplying the id
+  // means the insert never has to read anything.
+  const id =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : undefined
+
   const fullPayload: any = {
+    ...(id ? { id } : {}),
     title,
     board_data: boardData,
     is_public: isPublic,
     creator_user_id: creatorUserId || null,
   }
-  let { data, error } = await supabase
-    .from('custom_boards')
-    .insert(fullPayload)
-    .select('id, title')
-    .single()
+
+  let { error } = await supabase.from('custom_boards').insert(fullPayload)
   if (error && /creator_user_id/.test(error.message || '')) {
     console.warn('[saveCustomBoard] creator_user_id column missing; saving without ownership')
-    const fallback = await supabase
-      .from('custom_boards')
-      .insert({ title, board_data: boardData, is_public: isPublic })
-      .select('id, title')
-      .single()
-    data = fallback.data
-    error = fallback.error
+    const { creator_user_id: _drop, ...rest } = fullPayload
+    error = (await supabase.from('custom_boards').insert(rest)).error
   }
   if (error) throw error
+
+  if (id) return { id, title }
+
+  // No crypto.randomUUID (very old browser) — fall back to looking it up.
+  const { data } = await supabase
+    .from('custom_boards')
+    .select('id, title')
+    .eq('title', title)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
   return data
 }
 
@@ -2052,14 +2066,14 @@ export async function listCustomBoards(search?: string): Promise<CustomBoardRow[
  * Update an existing custom board.
  */
 export async function updateCustomBoard(boardId: string, title: string, boardData: CustomBoard, isPublic: boolean = true) {
-  const { data, error } = await supabase
+  // No .single() here either: a private board's row is invisible to the SELECT
+  // policy on older databases, and the update itself is what matters.
+  const { error } = await supabase
     .from('custom_boards')
     .update({ title, board_data: boardData, is_public: isPublic })
     .eq('id', boardId)
-    .select('id, title')
-    .single()
   if (error) throw error
-  return data
+  return { id: boardId, title }
 }
 
 /**
