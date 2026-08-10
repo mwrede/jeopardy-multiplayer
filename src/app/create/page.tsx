@@ -478,11 +478,11 @@ function CreateBoardContent() {
     const useTitle = title || 'Untitled board'
 
     if (editBoardId) {
-      await updateCustomBoard(editBoardId, useTitle, buildCustomBoard(), board.isPublic)
+      await updateCustomBoard(editBoardId, useTitle, buildCustomBoard())
       return editBoardId
     }
     const saved = await saveCustomBoard(
-      useTitle, buildCustomBoard(), board.isPublic, user?.id,
+      useTitle, buildCustomBoard(), user?.id,
     )
     const id = (saved as any)?.id as string
     if (!id) throw new Error('Save succeeded but no board id came back')
@@ -629,9 +629,7 @@ function CreateBoardContent() {
         <button onClick={addRow} className="btn-secondary px-3 py-1.5 text-xs">+ Add Row</button>
         <button onClick={addColumn} className="btn-secondary px-3 py-1.5 text-xs">+ Add Column</button>
         <div className="w-px h-6 bg-white/20 mx-1" />
-        <span className="text-gray-400 text-xs">Visibility:</span>
-        <button onClick={() => { pushHistory(); setBoard((b) => ({ ...b, isPublic: !b.isPublic })) }}
-          className="text-blue-400 text-xs underline">{board.isPublic ? 'Public' : 'Private'}</button>
+
         <div className="w-px h-6 bg-white/20 mx-1" />
         <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
           <input type="checkbox" checked={board.isFullGame}

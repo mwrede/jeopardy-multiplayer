@@ -1988,9 +1988,12 @@ export async function startCustomGame(gameId: string, board: CustomBoard) {
 export async function saveCustomBoard(
   title: string,
   boardData: CustomBoard,
-  isPublic: boolean = true,
   creatorUserId?: string,
 ) {
+  // Every board is public. "Private" only ever hid boards from their own
+  // author — updates and deletes were open to anyone regardless — so it was
+  // a lock with no door.
+  const isPublic = true
   // First try with creator_user_id (post user-identity migration). If the
   // column doesn't exist yet, retry without it so saving still works.
   // Generate the id here rather than reading it back. The SELECT policy used
@@ -2069,7 +2072,8 @@ export async function listCustomBoards(search?: string): Promise<CustomBoardRow[
 /**
  * Update an existing custom board.
  */
-export async function updateCustomBoard(boardId: string, title: string, boardData: CustomBoard, isPublic: boolean = true) {
+export async function updateCustomBoard(boardId: string, title: string, boardData: CustomBoard) {
+  const isPublic = true
   // No .single() here either: a private board's row is invisible to the SELECT
   // policy on older databases, and the update itself is what matters.
   const { error } = await supabase
@@ -2185,7 +2189,6 @@ export async function forkGameToCustomBoard(sourceGameId: number, creatorUserId:
   const data = await saveCustomBoard(
     `Forked: ${preview.title}`,
     preview.board,
-    false /* save as private by default — owner can publish from /create */,
     creatorUserId,
   )
   if (!data?.id) throw new Error('Fork failed — no board id returned')

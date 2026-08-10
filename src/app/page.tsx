@@ -127,6 +127,11 @@ export default function Home() {
 
               {/* Your boards sit with the tile that made them. Separate links,
                   not nested inside the tile's anchor. */}
+              {myBoards.length === 0 && (
+                <p className="mt-1 border-t-2 border-black bg-[#070E9A] px-3 py-3 text-center text-[11px] text-blue-100/60">
+                  Boards you make or save will show up here.
+                </p>
+              )}
               {myBoards.length > 0 && (
                 <div className="mt-1 border-t-2 border-black bg-[#070E9A]">
                   {myBoards.slice(0, 4).map((b) => (

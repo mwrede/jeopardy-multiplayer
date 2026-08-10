@@ -14,18 +14,43 @@ import { supabase } from './supabase'
 import type { BoardSummary } from './profile-api'
 
 const KEY = 'boardLibrary'
+const AUTHORED_KEY = 'authoredBoards'
 
 export type LibraryBoard = BoardSummary & {
   /** True when this device authored it — only those can be edited. */
   mine: boolean
 }
 
+/** The key this list used before it grew Save support. */
+const LEGACY_KEY = 'myBoardIds'
+
 function readIds(): string[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = localStorage.getItem(KEY)
-    const ids = raw ? JSON.parse(raw) : []
-    return Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : []
+    const ids: string[] = raw ? JSON.parse(raw) : []
+    const current = Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : []
+
+    // Adopt anything the old key was holding, so boards made before this
+    // existed don't vanish from the list.
+    const legacyRaw = localStorage.getItem(LEGACY_KEY)
+    if (legacyRaw) {
+      const legacy: string[] = JSON.parse(legacyRaw)
+      if (Array.isArray(legacy) && legacy.length) {
+        const merged = [...new Set([...current, ...legacy.filter((x) => typeof x === 'string')])]
+        localStorage.setItem(KEY, JSON.stringify(merged))
+        // These were authored on this device, so they stay editable.
+        const aRaw = localStorage.getItem(AUTHORED_KEY)
+        const authored: string[] = aRaw ? JSON.parse(aRaw) : []
+        localStorage.setItem(
+          AUTHORED_KEY,
+          JSON.stringify([...new Set([...authored, ...legacy])]),
+        )
+        localStorage.removeItem(LEGACY_KEY)
+        return merged
+      }
+    }
+    return current
   } catch {
     return []
   }
@@ -49,8 +74,7 @@ export function isRemembered(id: string): boolean {
   return readIds().includes(id)
 }
 
-/** Board ids this device authored, tracked separately so Edit can be gated. */
-const AUTHORED_KEY = 'authoredBoards'
+/* Board ids this device authored are tracked separately, so Edit can be gated. */
 
 export function markAuthored(id: string) {
   try {
