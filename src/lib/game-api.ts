@@ -80,10 +80,11 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
     .select('*', { count: 'exact', head: true })
     .eq('game_id', game.id)
 
-  // Party mode allows up to 15 buzzers; multiplayer (everyone on their own
-  // device) still caps at 8 so the UI scoreboards stay readable.
+  // Community Play is deliberately three-handed — that's the format. Every
+  // other mode takes as many as will fit on a scoreboard.
+  const isCommunity = (game.settings as any)?.community === true
   const isMultiplayerMode = (game.settings as any)?.gameMode === 'multiplayer'
-  const maxPlayers = isMultiplayerMode ? 8 : 15
+  const maxPlayers = isCommunity ? 3 : 15
   if ((count ?? 0) >= maxPlayers) {
     throw new Error(`Game is full (max ${maxPlayers} players)`)
   }
@@ -100,7 +101,7 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
       join_order: (count ?? 0) + 1,
       // Party mode has no ready-up step (auto-ready). Multiplayer keeps the
       // ready toggle — everyone confirms they're on their own device first.
-      is_ready: isActive || !isMultiplayerMode,
+      is_ready: isActive || isCommunity || !isMultiplayerMode,
       is_creator: isFirstPlayer, // first player to join is the creator
     })
     .select()

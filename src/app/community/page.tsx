@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/auth'
 import { ProfileMenu } from '@/components/ProfileMenu'
+import { getCommunityLeaderboard, MIN_GAMES, type LeaderboardRow } from '@/lib/leaderboard'
 import {
   listCommunityLobbies,
   findOrCreateGame,
@@ -28,9 +29,14 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState('')
+  const [board, setBoard] = useState<LeaderboardRow[]>([])
 
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
+  }, [])
+
+  useEffect(() => {
+    getCommunityLeaderboard().then(setBoard).catch(() => setBoard([]))
   }, [])
 
   // Poll so a lobby filling up is visible without a refresh.
@@ -151,6 +157,46 @@ export default function CommunityPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Standings */}
+        <div className="mt-10">
+          <div className="eyebrow-copper mb-1">Leaderboard</div>
+          <p className="mb-3 text-xs text-ink-stage-2">
+            Ranked by win rate adjusted for how much you&apos;ve played, so a single
+            lucky game doesn&apos;t outrank a long record. {MIN_GAMES}+ games to appear.
+          </p>
+
+          {board.length === 0 ? (
+            <p className="rounded-lg border border-white/10 bg-black/30 px-4 py-6 text-center text-sm text-ink-stage-2">
+              Nobody has played {MIN_GAMES} games yet. Be the first.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left text-[10px] uppercase tracking-[0.18em] text-ink-stage-2">
+                    <th className="py-2 pr-2 font-normal">#</th>
+                    <th className="py-2 pr-2 font-normal">Player</th>
+                    <th className="py-2 pr-2 text-right font-normal">W</th>
+                    <th className="py-2 pr-2 text-right font-normal">GP</th>
+                    <th className="py-2 text-right font-normal">Win %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {board.map((r, i) => (
+                    <tr key={r.name} className="border-b border-white/5">
+                      <td className="py-2 pr-2 tabular-nums text-ink-stage-2">{i + 1}</td>
+                      <td className="py-2 pr-2 font-semibold text-white">{r.name}</td>
+                      <td className="py-2 pr-2 text-right font-bold tabular-nums text-jeopardy-gold-light">{r.wins}</td>
+                      <td className="py-2 pr-2 text-right tabular-nums text-ink-stage-2">{r.games}</td>
+                      <td className="py-2 text-right tabular-nums text-ink-stage">{Math.round(r.winRate * 100)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </main>

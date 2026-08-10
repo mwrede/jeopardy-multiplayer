@@ -16,7 +16,7 @@
  */
 
 import { supabase } from './supabase'
-import { createGame, joinGame, startGame } from './game-api'
+import { createGame, joinGame } from './game-api'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 
 export const LOBBY_SEATS = 3
@@ -108,12 +108,13 @@ export async function joinCommunityLobby(
     .eq('game_id', game.id)
 
   if ((count ?? 0) >= LOBBY_SEATS) {
-    try {
-      await startGame(game.id)
-    } catch (e) {
-      // claimGameSeed makes starting idempotent, so losing this race is fine.
-      console.warn('[community] start failed (likely already starting):', e)
-    }
+    // Full: open the vote rather than starting. Three strangers should agree
+    // on what they're playing before a board appears.
+    await supabase
+      .from('games')
+      .update({ phase: 'game_voting', updated_at: new Date().toISOString() })
+      .eq('id', game.id)
+      .eq('phase', 'lobby')
     return { roomCode, started: true }
   }
 

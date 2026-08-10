@@ -8,6 +8,7 @@ import { BuzzerButton } from '@/components/BuzzerButton'
 import { ClueAttempts } from '@/components/ClueAttempts'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { GameKeyboard } from '@/components/GameKeyboard'
+import { CommunityVote } from '@/components/CommunityVote'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
@@ -505,6 +506,12 @@ export default function PlayPage() {
   const currentPlayer = players.find((p) => p.id === game.current_player_id)
 
   // === LOBBY ===
+  // Community Play: three strangers agree on the format before any board
+  // exists. Only community games ever reach this phase.
+  if (game.phase === 'game_voting') {
+    return <CommunityVote gameId={game.id} players={players} myPlayerId={myPlayerId} />
+  }
+
   if (game.phase === 'lobby') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-jeopardy-dark">
