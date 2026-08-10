@@ -1137,6 +1137,24 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                               ))}
                             </div>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
+                              🎤 Hosted
+                              <span className="block text-[10px] font-normal opacity-60">You run it</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1.5 flex-1">
+                              {sizes.map((s) => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => startMode('hosted', s.id)}
+                                  disabled={creating}
+                                  className="btn-stage btn-stage-ghost btn-stage-sm !h-[52px] px-1"
+                                >
+                                  <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                         <button
                           onClick={() => setMashupPreviewMode('idle')}
