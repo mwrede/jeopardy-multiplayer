@@ -11,9 +11,9 @@ import { MASHUPS, MIXABLE_THEMES, THEME_STYLES, type Mashup } from './mashup-the
 import { TopicBoardBuilder } from './TopicBoardBuilder'
 import type { BoardTopic } from '@/lib/topic-board'
 import { BoardPreview } from './BoardPreview'
+import { PlayModePicker, type PlayMode } from './PlayModePicker'
 import type { CustomBoard } from '@/types/game'
 
-type PlayMode = 'party' | 'multiplayer' | 'hosted'
 
 type CustomBoardRow = CustomBoardApiRow
 
@@ -1089,82 +1089,13 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                     </p>
                   )}
 
-                  {mashupPreviewMode === 'choose-mode' && (() => {
-                    const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
-                      { id: 'full', label: 'Full', desc: '6×5' },
-                      { id: 'half', label: 'Half', desc: '6×3' },
-                      { id: 'rapid', label: 'Rapid', desc: '3×3' },
-                    ]
-                    return (
-                      <div className="flex flex-col items-center gap-4 pt-5 border-t border-white/10">
-                        <p className="text-copper uppercase text-sm tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}>
-                          ▸ Pick a mode and board size ◂
-                        </p>
-                        <div className="w-full max-w-md space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                              📺 Party
-                              <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1.5 flex-1">
-                              {sizes.map((s) => (
-                                <button
-                                  key={s.id}
-                                  onClick={() => startMode('party', s.id)}
-                                  disabled={creating}
-                                  className="btn-stage btn-copper btn-stage-sm !h-[52px] px-1"
-                                >
-                                  <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                              🌐 Multiplayer
-                              <span className="block text-[10px] font-normal opacity-60">Own device</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1.5 flex-1">
-                              {sizes.map((s) => (
-                                <button
-                                  key={s.id}
-                                  onClick={() => startMode('multiplayer', s.id)}
-                                  disabled={creating}
-                                  className="btn-stage btn-chrome btn-stage-sm !h-[52px] px-1"
-                                >
-                                  <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                              🎤 Hosted
-                              <span className="block text-[10px] font-normal opacity-60">You run it</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1.5 flex-1">
-                              {sizes.map((s) => (
-                                <button
-                                  key={s.id}
-                                  onClick={() => startMode('hosted', s.id)}
-                                  disabled={creating}
-                                  className="btn-stage btn-stage-ghost btn-stage-sm !h-[52px] px-1"
-                                >
-                                  <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setMashupPreviewMode('idle')}
-                          className="text-ink-stage-2 hover:text-copper text-xs mt-1"
-                        >
-                          Back
-                        </button>
-                      </div>
-                    )
-                  })()}
+                  {mashupPreviewMode === 'choose-mode' && (
+                    <PlayModePicker
+                      onPick={startMode}
+                      onBack={() => setMashupPreviewMode('idle')}
+                      creating={creating}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -1304,82 +1235,13 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                   </p>
                 )}
 
-                {previewMode === 'choose-mode' && (() => {
-                  const sizes: Array<{ id: GameLength; label: string; desc: string }> = [
-                    { id: 'full', label: 'Full', desc: '6×5' },
-                    { id: 'half', label: 'Half', desc: '6×3' },
-                    { id: 'rapid', label: 'Rapid', desc: '3×3' },
-                  ]
-                  return (
-                    <div className="flex flex-col items-center gap-4 pt-5 border-t border-white/10">
-                      <p className="text-copper uppercase text-sm tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}>
-                        ▸ Pick a mode and board size ◂
-                      </p>
-                      <div className="w-full max-w-md space-y-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                            📺 Party
-                            <span className="block text-[10px] font-normal opacity-60">TV + phones</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5 flex-1">
-                            {sizes.map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => startMode('party', s.id)}
-                                disabled={creating}
-                                className="btn-stage btn-copper btn-stage-sm !h-[52px] px-1"
-                              >
-                                <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                            🌐 Multiplayer
-                            <span className="block text-[10px] font-normal opacity-60">Own device</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5 flex-1">
-                            {sizes.map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => startMode('multiplayer', s.id)}
-                                disabled={creating}
-                                className="btn-stage btn-chrome btn-stage-sm !h-[52px] px-1"
-                              >
-                                <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-28 sm:w-32 text-left text-white font-bold text-sm shrink-0">
-                            🎤 Hosted
-                            <span className="block text-[10px] font-normal opacity-60">You run it</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5 flex-1">
-                            {sizes.map((s) => (
-                              <button
-                                key={s.id}
-                                onClick={() => startMode('hosted', s.id)}
-                                disabled={creating}
-                                className="btn-stage btn-stage-ghost btn-stage-sm !h-[52px] px-1"
-                              >
-                                <span>{s.label}<span className="block text-[10px] opacity-80 font-normal">{s.desc}</span></span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setPreviewMode('idle')}
-                        className="text-ink-stage-2 hover:text-copper text-xs mt-1"
-                      >
-                        Back
-                      </button>
-                    </div>
-                  )
-                })()}
+                {previewMode === 'choose-mode' && (
+                  <PlayModePicker
+                    onPick={startMode}
+                    onBack={() => setPreviewMode('idle')}
+                    creating={creating}
+                  />
+                )}
               </div>
             </div>
           </div>

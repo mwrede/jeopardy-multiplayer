@@ -82,6 +82,7 @@ function CreateBoardContent() {
   const [error, setError] = useState('')
   const [shareCopied, setShareCopied] = useState(false)
   const [showPlayModal, setShowPlayModal] = useState(false)
+  const [playStep, setPlayStep] = useState<'mode' | 'screen'>('mode')
   const [autoSavedAt, setAutoSavedAt] = useState<number | null>(null)
   const [showInstructions, setShowInstructions] = useState(true)
   const [activeRound, setActiveRound] = useState<1 | 2 | 'fj'>(1)
@@ -584,6 +585,7 @@ function CreateBoardContent() {
     setSaving(true)
     setError('')
     setShowPlayModal(false)
+    setPlayStep('mode')
     try {
       const built = buildCustomBoard()
       if (mode === 'present') {
@@ -639,7 +641,7 @@ function CreateBoardContent() {
           Full Game (J! + DJ! + FJ!)
         </label>
         <div className="flex-1" />
-        <button onClick={() => setShowPlayModal(true)} disabled={saving}
+        <button onClick={() => { setPlayStep('mode'); setShowPlayModal(true) }} disabled={saving}
           className="bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2 text-sm rounded-lg transition-colors">
           {saving ? '...' : '▶ Play'}
         </button>
@@ -918,23 +920,43 @@ function CreateBoardContent() {
               </p>
 
               <div className="space-y-2.5">
+                {playStep === 'screen' ? (
+                  <>
+                    <p className="text-gray-400 text-xs mb-1">How are you playing?</p>
+                    <button
+                      onClick={() => handleLaunch('party')}
+                      className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                    >
+                      <span className="block text-white font-bold">📺 With a TV</span>
+                      <span className="block text-gray-400 text-xs mt-0.5">
+                        Board on one shared screen, everyone buzzes in on their phones.
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleLaunch('multiplayer')}
+                      className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
+                    >
+                      <span className="block text-white font-bold">📱 Just phones</span>
+                      <span className="block text-gray-400 text-xs mt-0.5">
+                        Everyone gets their own board on their own device.
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setPlayStep('mode')}
+                      className="w-full text-center text-xs text-gray-500 hover:text-gray-300 pt-1"
+                    >
+                      Back
+                    </button>
+                  </>
+                ) : (
+                  <>
                 <button
-                  onClick={() => handleLaunch('party')}
-                  className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
-                >
-                  <span className="block text-white font-bold">📺 Party Mode</span>
-                  <span className="block text-gray-400 text-xs mt-0.5">
-                    Board on one shared screen, everyone buzzes in on their phones.
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => handleLaunch('multiplayer')}
+                  onClick={() => setPlayStep('screen')}
                   className="w-full text-left px-4 py-3.5 rounded-xl border-2 border-white/15 bg-white/5 hover:border-jeopardy-gold hover:bg-white/10 transition-all"
                 >
                   <span className="block text-white font-bold">🎮 Multiplayer</span>
                   <span className="block text-gray-400 text-xs mt-0.5">
-                    Everyone plays on their own device, board and all.
+                    Play together — with a TV, or just on phones.
                   </span>
                 </button>
 
@@ -948,6 +970,8 @@ function CreateBoardContent() {
                     let players buzz in from their phones — your call at setup.
                   </span>
                 </button>
+                  </>
+                )}
               </div>
 
               <button
