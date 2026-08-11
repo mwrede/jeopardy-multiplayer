@@ -26,7 +26,7 @@ export const LOBBY_SEATS = 3
  * no result, no error. Everything here races a timeout so a stall surfaces as
  * a message instead of a button stuck on "Finding a game…".
  */
-const TIMEOUT_MS = 12_000
+const TIMEOUT_MS = 8_000
 
 function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
   return Promise.race([
@@ -215,14 +215,27 @@ export async function findMySeat(userId: string): Promise<{
 } | null> {
   if (!userId) return null
 
-  const { data: rows } = await supabase
+  // Two plain queries, not an embedded join. players and games have TWO
+  // foreign keys between them (players.game_id → games.id, and
+  // games.current_player_id → players.id), so `games!inner(...)` is ambiguous
+  // and PostgREST rejects it outright with PGRST201 — this lookup failed every
+  // time it ran.
+  const { data: rows, error } = await supabase
     .from('players')
-    .select('id, game_id, games!inner(room_code, status, phase, settings)')
+    .select('id, game_id')
     .eq('user_id', userId)
     .limit(20)
+  if (error || !rows?.length) return null
 
-  for (const r of (rows ?? []) as any[]) {
-    const g = Array.isArray(r.games) ? r.games[0] : r.games
+  const { data: games } = await supabase
+    .from('games')
+    .select('id, room_code, status, phase, settings')
+    .in('id', rows.map((r: any) => r.game_id))
+  if (!games?.length) return null
+
+  const byId = new Map(games.map((g: any) => [g.id, g]))
+  for (const r of rows as any[]) {
+    const g: any = byId.get(r.game_id)
     if (!g) continue
     const settings = typeof g.settings === 'string' ? JSON.parse(g.settings) : g.settings
     if (settings?.community !== true) continue
@@ -247,7 +260,7 @@ export async function findOrCreateGame(
   userId: string,
 ): Promise<{ roomCode: string; started: boolean; playerId: string }> {
   if (!userId) throw new Error('Sign in to play Community games.')
-  return withTimeout(findOrCreateGameInner(playerName, userId), 'Finding a game')
+  return findOrCreateGameInner(playerName, userId)
 }
 
 async function findOrCreateGameInner(
@@ -256,22 +269,31 @@ async function findOrCreateGameInner(
 ): Promise<{ roomCode: string; started: boolean; playerId: string }> {
   // Already seated somewhere? Go back there. Joining a second table would
   // reconnect you to the first anyway, which is what made this look broken.
-  const seat = await findMySeat(userId).catch(() => null)
+  const seat = await withTimeout(findMySeat(userId), 'Checking your seat').catch((e) => {
+    console.warn('[community] seat check failed:', e)
+    return null
+  })
   if (seat) {
     return { roomCode: seat.roomCode, started: false, playerId: seat.playerId }
   }
 
-  const open = await listCommunityLobbies().catch(() => [])
+  const open = await withTimeout(listCommunityLobbies(), 'Listing games').catch((e) => {
+    console.warn('[community] lobby list failed:', e)
+    return [] as CommunityLobby[]
+  })
 
   for (const lobby of open) {
     try {
-      return await joinCommunityLobby(lobby.roomCode, playerName, userId)
+      return await withTimeout(
+        joinCommunityLobby(lobby.roomCode, playerName, userId),
+        `Joining ${lobby.roomCode}`,
+      )
     } catch (e) {
       // Someone took the last seat between listing and joining — try the next.
       console.warn('[community] lobby full, trying another:', e)
     }
   }
 
-  const roomCode = await createCommunityLobby()
-  return joinCommunityLobby(roomCode, playerName, userId)
+  const roomCode = await withTimeout(createCommunityLobby(), 'Opening a new game')
+  return withTimeout(joinCommunityLobby(roomCode, playerName, userId), 'Taking a seat')
 }
