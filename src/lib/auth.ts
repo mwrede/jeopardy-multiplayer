@@ -30,27 +30,43 @@ export async function signInWithGoogle(next?: string) {
   if (error) throw error
 }
 
-export async function signOut() {
-  try {
-    const { error } = await supabase.auth.signOut()
-    if (!error) return
-    console.warn('[signOut] global sign-out failed, clearing locally:', error.message)
-  } catch (e) {
-    console.warn('[signOut] global sign-out threw, clearing locally:', e)
-  }
-
-  try {
-    await supabase.auth.signOut({ scope: 'local' })
-    return
-  } catch (e) {
-    console.warn('[signOut] local sign-out threw, clearing storage:', e)
-  }
-
+/** Wipe Supabase's stored session directly. No network, cannot fail. */
+function purgeLocalSession() {
   try {
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith('sb-') || key.includes('supabase.auth')) localStorage.removeItem(key)
     }
+    // App-side identity that shouldn't outlive the account.
+    localStorage.removeItem('communitySeat')
   } catch {}
+}
+
+export async function signOut() {
+  // Race the server call — a stale refresh token makes it hang rather than
+  // error, and an awaited hang never reaches the fallbacks below. That's what
+  // made the button do nothing.
+  const attempt = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  }
+
+  try {
+    await Promise.race([
+      attempt(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('sign-out timed out')), 4000)),
+    ])
+  } catch (e) {
+    console.warn('[signOut] server sign-out did not complete, clearing locally:', e)
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise((r) => setTimeout(r, 2000)),
+      ])
+    } catch {}
+  }
+
+  // Always, regardless of what happened above.
+  purgeLocalSession()
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
