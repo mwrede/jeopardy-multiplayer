@@ -16,7 +16,7 @@
  */
 
 import { supabase } from './supabase'
-import { createGame, joinGame } from './game-api'
+import { joinGame } from './game-api'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 
 export const LOBBY_SEATS = 3
@@ -88,16 +88,37 @@ export async function listCommunityLobbies(): Promise<CommunityLobby[]> {
     .sort((a, b) => b.playerCount - a.playerCount)
 }
 
-/** Open a fresh community lobby and return its room code. */
+/**
+ * Open a fresh community lobby and return its room code.
+ *
+ * Generates the room code here and inserts without reading the row back. The
+ * caller only needs the code, and `.select().single()` after an insert is an
+ * extra round-trip that can fail on its own — it's what broke saving private
+ * boards. Fewer moving parts on the one step that has to work.
+ */
 async function createCommunityLobby(): Promise<string> {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let roomCode = ''
+  for (let i = 0; i < 6; i++) roomCode += chars[Math.floor(Math.random() * chars.length)]
+
   const settings: any = {
     ...DEFAULT_CASUAL_SETTINGS,
     gameMode: 'multiplayer',
     gameLength: 'half',
     community: true,
   }
-  const { game } = await createGame(settings, true)
-  return game.room_code
+
+  const { error } = await supabase.from('games').insert({
+    room_code: roomCode,
+    status: 'lobby',
+    current_round: 1,
+    phase: 'lobby',
+    settings,
+    is_public: true,
+  })
+  if (error) throw error
+
+  return roomCode
 }
 
 /**
