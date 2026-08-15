@@ -133,13 +133,24 @@ export function useUser() {
       if (!cancelled) { setUser(null); setLoading(false) }
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // The callback MUST stay synchronous and MUST NOT await other Supabase
+    // calls. auth-js invokes it while holding its session lock, and every
+    // query needs that same lock to attach the access token — so an awaited
+    // query in here deadlocks the client, and from then on EVERY database
+    // call in the tab hangs forever with no error. Signed-in users only
+    // (INITIAL_SESSION fires on every page load with a session), which is
+    // why the app always worked signed out and "broke mysteriously" signed
+    // in: dead profile circle, sign-out hanging, community votes never
+    // saving, "Opening a new game timed out". setTimeout pushes the profile
+    // fetch to a macrotask that runs after the lock is released.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null
       setUser(u)
       setLoading(false)
       if (u) {
-        const p = await getProfile(u.id)
-        setProfile(p)
+        setTimeout(() => {
+          getProfile(u.id).then((p) => { if (!cancelled) setProfile(p) }).catch(() => {})
+        }, 0)
       } else {
         setProfile(null)
       }
