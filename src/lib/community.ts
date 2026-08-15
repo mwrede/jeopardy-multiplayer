@@ -37,8 +37,18 @@ function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
   ])
 }
 
-/** Ignore lobbies left sitting this long — the people in them are long gone. */
+/**
+ * Ignore lobbies untouched for this long — the people in them are long gone.
+ * Staleness is measured on updated_at, not created_at: the waiting page
+ * heartbeats the row (touchLobby), so a lobby with someone actually sitting in
+ * it stays listed no matter how long they've waited, while an abandoned one
+ * ages out.
+ */
 const STALE_MINUTES = 45
+
+function staleCutoff(): string {
+  return new Date(Date.now() - STALE_MINUTES * 60_000).toISOString()
+}
 
 export type CommunityLobby = {
   id: string
@@ -52,13 +62,11 @@ export type CommunityLobby = {
  * should fill before an empty one.
  */
 export async function listCommunityLobbies(): Promise<CommunityLobby[]> {
-  const cutoff = new Date(Date.now() - STALE_MINUTES * 60_000).toISOString()
-
   const { data: games, error } = await supabase
     .from('games')
     .select('id, room_code, created_at, settings')
     .eq('status', 'lobby')
-    .gte('created_at', cutoff)
+    .gte('updated_at', staleCutoff())
     .order('created_at', { ascending: false })
     .limit(60)
   if (error) throw error
@@ -144,6 +152,10 @@ export async function joinCommunityLobby(
   localStorage.setItem('playerId', player.id)
   localStorage.setItem('playerName', player.name)
 
+  // Taking a seat resets the lobby's staleness clock — it clearly isn't
+  // abandoned if people are still arriving.
+  await touchLobby(game.id)
+
   const { count } = await supabase
     .from('players')
     .select('id', { count: 'exact', head: true })
@@ -205,18 +217,39 @@ export async function leaveCommunityLobby(playerId: string, gameId?: string): Pr
   }
 }
 
-/** Current state of one lobby — used to watch a seat fill in real time. */
+/**
+ * Keep a lobby's staleness clock wound while someone is actually sitting in
+ * it. The waiting page calls this periodically; without it, a lobby someone
+ * has patiently watched for 45 minutes would silently drop off the list.
+ */
+export async function touchLobby(gameId: string): Promise<void> {
+  await supabase
+    .from('games')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', gameId)
+    .eq('status', 'lobby')
+}
+
+/**
+ * Current state of one lobby — used to watch a seat fill in real time.
+ *
+ * Returns null ONLY when the game row genuinely doesn't exist; a failed query
+ * throws instead. Callers rely on the difference — null means "this table is
+ * gone, stand up", while an error is a network blip to ride out.
+ */
 export async function getLobbyState(roomCode: string): Promise<{
   gameId: string
   phase: string
   players: { id: string; name: string }[]
 } | null> {
-  const { data: game } = await supabase
+  const { data: game, error } = await supabase
     .from('games').select('id, phase').eq('room_code', roomCode).maybeSingle()
+  if (error) throw error
   if (!game) return null
 
-  const { data: players } = await supabase
+  const { data: players, error: playersError } = await supabase
     .from('players').select('id, name').eq('game_id', game.id).order('join_order')
+  if (playersError) throw playersError
 
   return { gameId: game.id, phase: (game as any).phase, players: (players ?? []) as any }
 }
@@ -228,6 +261,11 @@ export async function getLobbyState(roomCode: string): Promise<{
  * already present and reconnects you, so the seat count doesn't move and
  * nothing appears to happen. You can also end up listed in two games at once.
  * Checking first means the button returns you to your table instead.
+ *
+ * Seats in DEAD games are vacated here rather than returned. A lobby past the
+ * staleness cutoff is invisible to everyone else (listCommunityLobbies hides
+ * it), so a seat in one is a trap: "Play now" would forever return you to a
+ * table nobody can ever join. Standing up and moving on is the only exit.
  */
 export async function findMySeat(userId: string): Promise<{
   roomCode: string
@@ -250,10 +288,11 @@ export async function findMySeat(userId: string): Promise<{
 
   const { data: games } = await supabase
     .from('games')
-    .select('id, room_code, status, phase, settings')
+    .select('id, room_code, status, phase, settings, created_at, updated_at')
     .in('id', rows.map((r: any) => r.game_id))
   if (!games?.length) return null
 
+  const cutoffMs = Date.now() - STALE_MINUTES * 60_000
   const byId = new Map(games.map((g: any) => [g.id, g]))
   for (const r of rows as any[]) {
     const g: any = byId.get(r.game_id)
@@ -261,6 +300,16 @@ export async function findMySeat(userId: string): Promise<{
     const settings = typeof g.settings === 'string' ? JSON.parse(g.settings) : g.settings
     if (settings?.community !== true) continue
     if (g.status === 'finished' || g.phase === 'game_over') continue
+
+    const lastTouch = Date.parse(g.updated_at ?? g.created_at ?? '')
+    if (!isNaN(lastTouch) && lastTouch < cutoffMs) {
+      // Dead table. Give up the seat so it stops holding this account hostage.
+      await leaveCommunityLobby(r.id, r.game_id).catch((e) =>
+        console.warn('[community] could not vacate stale seat:', e),
+      )
+      continue
+    }
+
     return { roomCode: g.room_code, playerId: r.id, gameId: r.game_id }
   }
   return null

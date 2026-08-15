@@ -511,7 +511,14 @@ export default function PlayPage() {
   // Community Play: three strangers agree on the format before any board
   // exists. Only community games ever reach this phase.
   if (game.phase === 'game_voting') {
-    return <CommunityVote gameId={game.id} players={players} myPlayerId={myPlayerId} />
+    return (
+      <CommunityVote
+        gameId={game.id}
+        players={players}
+        myPlayerId={myPlayerId}
+        votingSince={game.updated_at}
+      />
+    )
   }
 
   // A community game still filling up. Handled here as well as on /community

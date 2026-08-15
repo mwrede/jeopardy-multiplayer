@@ -1,12 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   castVote, startVotedGame,
   SIZE_OPTIONS, DIFFICULTY_OPTIONS, DECADE_OPTIONS,
   type SizeVote, type DifficultyVote, type DecadeVote,
 } from '@/lib/community-vote'
 import type { Player } from '@/types/game'
+
+/**
+ * The vote can't wait forever: one player closing their tab mid-vote used to
+ * strand the other two on "2 of 3 voted" until they gave up — the table then
+ * sat wedged in game_voting for good. After this window the vote closes with
+ * whatever ballots are in (missing votes fall back to sensible defaults).
+ */
+const VOTE_WINDOW_MS = 75_000
 
 /**
  * Three strangers agreeing on what to play.
@@ -19,10 +27,13 @@ export function CommunityVote({
   gameId,
   players,
   myPlayerId,
+  votingSince,
 }: {
   gameId: string
   players: Player[]
   myPlayerId: string | null
+  /** When the game entered game_voting (games.updated_at) — anchors the deadline. */
+  votingSince?: string | null
 }) {
   const [size, setSize] = useState<SizeVote>('half')
   const [difficulty, setDifficulty] = useState<DifficultyVote>('standard')
@@ -34,17 +45,48 @@ export function CommunityVote({
   const votesIn = players.filter((p) => (p as any).vote_size).length
   const everyoneVoted = players.length > 0 && votesIn >= players.length
 
-  // Whoever is first in join order fires the start, so it happens once.
+  // Every client sees the same deadline because it's anchored on a timestamp
+  // in the game row, not on when each tab happened to mount.
+  const mountedAt = useRef(Date.now())
+  const anchor = votingSince ? Date.parse(votingSince) : NaN
+  const deadline = (isNaN(anchor) ? mountedAt.current : anchor) + VOTE_WINDOW_MS
+
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    if (!everyoneVoted || starting) return
-    const first = [...players].sort((a, b) => a.join_order - b.join_order)[0]
-    if (first?.id !== myPlayerId) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const secondsLeft = Math.max(0, Math.ceil((deadline - now) / 1000))
+
+  // Fire the start exactly once per table. With everyone voted, the first
+  // seat by join order does it. Once time is up, seats take turns a few
+  // seconds apart — so a vanished first player can't block the start, and
+  // claimGameSeed makes even a genuine race safe (one caller wins, the rest
+  // no-op).
+  const firedRef = useRef(false)
+  useEffect(() => {
+    if (starting || firedRef.current || players.length === 0 || !myPlayerId) return
+
+    const seats = [...players].sort((a, b) => a.join_order - b.join_order)
+    const myIndex = seats.findIndex((p) => p.id === myPlayerId)
+    if (myIndex === -1) return
+
+    // The deadline path stays live even once everyone has voted — if the
+    // first seat locked in and then closed their tab, someone still has to
+    // pull the trigger.
+    const myTurnToFire =
+      (everyoneVoted && myIndex === 0) || now >= deadline + myIndex * 4_000
+
+    if (!myTurnToFire) return
+
+    firedRef.current = true
     setStarting(true)
     startVotedGame(gameId).catch((e) => {
       console.warn('[CommunityVote] start failed:', e)
+      firedRef.current = false
       setStarting(false)
     })
-  }, [everyoneVoted, players, myPlayerId, gameId, starting])
+  }, [everyoneVoted, now, deadline, players, myPlayerId, gameId, starting])
 
   async function lockIn() {
     if (!myPlayerId) return
@@ -76,6 +118,13 @@ export function CommunityVote({
         </h1>
         <p className="mt-2 text-center text-sm text-gray-400">
           Majority wins each one. Ties are a coin flip.
+        </p>
+        <p className="mt-1 text-center text-xs text-gray-500">
+          {starting
+            ? 'Building the board…'
+            : secondsLeft > 0
+              ? `Vote closes in ${secondsLeft}s — then the ballots that are in decide.`
+              : 'Time! Closing the vote…'}
         </p>
 
         <div className="mt-5 flex justify-center gap-1.5">

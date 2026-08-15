@@ -12,6 +12,7 @@ import {
   joinCommunityLobby,
   leaveCommunityLobby,
   getLobbyState,
+  touchLobby,
   LOBBY_SEATS,
   type CommunityLobby,
 } from '@/lib/community'
@@ -123,12 +124,32 @@ export default function CommunityPage() {
   useEffect(() => {
     if (!seat) return
     let cancelled = false
+    let lastTouch = 0
     const tick = async () => {
-      const state = await getLobbyState(seat.roomCode).catch(() => null)
-      if (cancelled || !state) return
+      let state
+      try {
+        state = await getLobbyState(seat.roomCode)
+      } catch {
+        return // network blip — keep the seat, try again next tick
+      }
+      if (cancelled) return
+      // The table is gone, or this seat was vacated (e.g. cleaned up as
+      // stale). Stand up rather than waiting forever at nothing.
+      if (!state || !state.players.some((p) => p.id === seat.playerId)) {
+        setSeat(null)
+        setSeatMates([])
+        return
+      }
       setSeatMates(state.players)
       if (state.phase === 'game_voting' || state.players.length >= LOBBY_SEATS) {
         router.push(`/game/${seat.roomCode}/play`)
+        return
+      }
+      // Sitting here IS activity — keep the lobby off the stale list so
+      // others can still find and join it, however long the wait.
+      if (Date.now() - lastTouch > 30_000) {
+        lastTouch = Date.now()
+        touchLobby(state.gameId).catch(() => {})
       }
     }
     tick()
