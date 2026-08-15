@@ -41,28 +41,21 @@ export default function CommunityPage() {
 
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
-    // Seats survive a reload — losing this in React state left players sitting
-    // on the page while everyone else moved on to the vote.
-    try {
-      const saved = localStorage.getItem('communitySeat')
-      if (saved) setSeat(JSON.parse(saved))
-    } catch {}
+    // Deliberately NOT restoring the seat from localStorage. The database is
+    // the source of truth (findMySeat below), and it also vacates seats in
+    // dead tables — a cached seat trusted before that check could bounce you
+    // straight into a ghost game's vote screen.
+    localStorage.removeItem('communitySeat')
   }, [])
 
-  // localStorage only knows about this browser. Ask the database where this
-  // account is actually sitting, so a second device shows the same table
-  // rather than offering to find a new one.
+  // Ask the database where this account is actually sitting. Survives
+  // reloads, works across devices, and never returns a seat in a stale game.
   useEffect(() => {
     if (!user) return
     findMySeat(user.id)
       .then((s) => { if (s) setSeat({ roomCode: s.roomCode, playerId: s.playerId }) })
       .catch(() => {})
   }, [user])
-
-  useEffect(() => {
-    if (seat) localStorage.setItem('communitySeat', JSON.stringify(seat))
-    else localStorage.removeItem('communitySeat')
-  }, [seat])
 
   // Nudge people toward a name, but never impose their real one — this is
   // what the other two players see.
