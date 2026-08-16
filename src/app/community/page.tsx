@@ -8,7 +8,7 @@ import { getCommunityLeaderboard, MIN_GAMES, type LeaderboardRow } from '@/lib/l
 import {
   listCommunityLobbies,
   findOrCreateGame,
-  findMySeat,
+  findAnySeat,
   joinCommunityLobby,
   leaveCommunityLobby,
   getLobbyState,
@@ -41,21 +41,23 @@ export default function CommunityPage() {
 
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
-    // Deliberately NOT restoring the seat from localStorage. The database is
-    // the source of truth (findMySeat below), and it also vacates seats in
-    // dead tables — a cached seat trusted before that check could bounce you
-    // straight into a ghost game's vote screen.
-    localStorage.removeItem('communitySeat')
   }, [])
 
-  // Ask the database where this account is actually sitting. Survives
-  // reloads, works across devices, and never returns a seat in a stale game.
+  // Ask the database where you're actually sitting — by account if signed in,
+  // by what this browser remembers if you're a guest. Either way the seat is
+  // verified against live rows, so a dead table is never restored. Waits for
+  // auth to settle first, or a signed-in user would briefly be treated as a
+  // guest and miss their own seat.
   useEffect(() => {
-    if (!user) return
-    findMySeat(user.id)
-      .then((s) => { if (s) setSeat({ roomCode: s.roomCode, playerId: s.playerId }) })
+    if (userLoading) return
+    let cancelled = false
+    findAnySeat(user?.id)
+      .then((s) => {
+        if (!cancelled && s) setSeat({ roomCode: s.roomCode, playerId: s.playerId })
+      })
       .catch(() => {})
-  }, [user])
+    return () => { cancelled = true }
+  }, [user, userLoading])
 
   // Nudge people toward a name, but never impose their real one — this is
   // what the other two players see.
@@ -166,27 +168,25 @@ export default function CommunityPage() {
           then it plays like any other multiplayer game.
         </p>
 
-        {/* Community is the one place an account is required — results are
-            ranked, and a leaderboard keyed to typed names isn't a leaderboard. */}
+        {/* Playing needs no account. Signing in only adds the leaderboard —
+            standings can't be kept for someone there's no way to recognise
+            again, so guests are simply skipped in the rankings. */}
         {!userLoading && !user && (
-          <div className="mt-6 rounded-xl border border-white/15 bg-black/30 p-5 text-center">
-            <p className="font-semibold text-white">Sign in to play</p>
-            <p className="mx-auto mt-1 max-w-[38ch] text-sm text-ink-stage-2">
-              Community games are ranked, so wins need an account to belong to.
-              Everything else on the site works without one.
+          <div className="mt-6 rounded-xl border border-white/15 bg-black/30 p-4 text-center">
+            <p className="text-sm text-ink-stage-2">
+              Playing as a guest. Sign in if you want your wins to count toward the leaderboard.
             </p>
             <button
               onClick={() => signInWithGoogle('/community')}
-              className="btn-stage btn-copper btn-stage-lg mt-4 w-full"
+              className="btn-stage btn-chrome btn-stage-sm mt-3"
             >
               Continue with Google
             </button>
-
           </div>
         )}
 
         {/* Your name — the one other players see. */}
-        <div className={`mt-6 ${!user ? 'pointer-events-none opacity-40' : ''}`}>
+        <div className="mt-6">
           <label className="mb-1.5 block text-[10px] uppercase tracking-[0.22em] text-copper" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
             Your name
           </label>
@@ -236,8 +236,8 @@ export default function CommunityPage() {
         ) : (
           <>
             <button
-              onClick={() => go(() => findOrCreateGame(name.trim(), user!.id))}
-              disabled={joining || !user}
+              onClick={() => go(() => findOrCreateGame(name.trim(), user?.id))}
+              disabled={joining || userLoading}
               className="btn-stage btn-copper btn-stage-lg mt-4 w-full"
             >
               {joining ? 'Finding a game…' : 'Play now'}
@@ -288,8 +288,8 @@ export default function CommunityPage() {
                 </span>
 
                 <button
-                  onClick={() => go(() => joinCommunityLobby(l.roomCode, name.trim(), user!.id))}
-                  disabled={joining || !user || !!seat}
+                  onClick={() => go(() => joinCommunityLobby(l.roomCode, name.trim(), user?.id))}
+                  disabled={joining || userLoading || !!seat}
                   className="btn-stage btn-stage-sm btn-chrome"
                   title={seat ? 'Leave your current game first' : undefined}
                 >

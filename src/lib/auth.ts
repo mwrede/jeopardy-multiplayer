@@ -134,15 +134,28 @@ export function useUser() {
     })
 
     // The callback MUST stay synchronous and MUST NOT await other Supabase
-    // calls. auth-js invokes it while holding its session lock, and every
-    // query needs that same lock to attach the access token — so an awaited
-    // query in here deadlocks the client, and from then on EVERY database
-    // call in the tab hangs forever with no error. Signed-in users only
-    // (INITIAL_SESSION fires on every page load with a session), which is
-    // why the app always worked signed out and "broke mysteriously" signed
-    // in: dead profile circle, sign-out hanging, community votes never
-    // saving, "Opening a new game timed out". setTimeout pushes the profile
-    // fetch to a macrotask that runs after the lock is released.
+    // calls. auth-js awaits subscriber callbacks while holding its session
+    // lock, and every PostgREST query needs that same lock to attach the
+    // access token — so an awaited query in here is a circular wait. The
+    // lock never releases, and from then on EVERY database call in the tab
+    // silently queues behind it forever, with no error.
+    //
+    // Verified against auth-js 2.99.1 (pinned in package-lock.json). The
+    // events that await subscribers are TOKEN_REFRESHED and the recovery
+    // SIGNED_IN, both emitted from _recoverAndRefresh inside the initialize
+    // lock — so it fires on page load for any returning user whose access
+    // token needs refreshing, and otherwise at the next hourly refresh or
+    // tab refocus. INITIAL_SESSION and the OAuth-redirect SIGNED_IN are
+    // emitted without await in this version and are safe.
+    //
+    // Signed-out users never enter that branch, which is why the app worked
+    // logged out and failed only when signed in: dead profile circle,
+    // sign-out hanging, community votes never saving, and "Opening a new
+    // game timed out" (the first call whose timeout is actually surfaced —
+    // the seat check and lobby list swallow theirs).
+    //
+    // setTimeout, not queueMicrotask: a macrotask is guaranteed to run after
+    // the lock's microtask drain releases it.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null
       setUser(u)

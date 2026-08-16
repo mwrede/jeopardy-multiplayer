@@ -40,7 +40,26 @@ export async function createGame(settings: GameSettings, isPublic: boolean = fal
   return { game: game as Game }
 }
 
-export async function joinGame(roomCode: string, playerName: string, userId?: string) {
+export type JoinOptions = {
+  /**
+   * Match an existing row by name when there's no account. Right for party
+   * games, where a guest who reloads has nothing else to be recognised by.
+   *
+   * Community Play passes false: strangers pick their own names, so two people
+   * typing "mike" would otherwise become the same player — the table would
+   * never fill and only one of them would ever advance. A guest there is
+   * identified by the player id kept in their own browser instead.
+   */
+  allowNameReconnect?: boolean
+}
+
+export async function joinGame(
+  roomCode: string,
+  playerName: string,
+  userId?: string,
+  opts: JoinOptions = {},
+) {
+  const { allowNameReconnect = true } = opts
   // Find game by room code — allow joining in any non-finished status
   const { data: game, error: gameError } = await supabase
     .from('games')
@@ -72,7 +91,9 @@ export async function joinGame(roomCode: string, playerName: string, userId?: st
     .eq('game_id', game.id)
   const { data: existing } = userId
     ? await reconnectQuery.eq('user_id', userId).maybeSingle()
-    : await reconnectQuery.eq('name', playerName).maybeSingle()
+    : allowNameReconnect
+      ? await reconnectQuery.eq('name', playerName).maybeSingle()
+      : { data: null }
 
   if (existing) {
     // Reconnect: update connection status, then best-effort claim ownership.

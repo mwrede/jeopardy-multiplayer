@@ -13,6 +13,12 @@
  *
  * Lobbies are ordinary games flagged with settings.community, so a private
  * game can never surface here.
+ *
+ * Signing in is optional. An account carries your record between devices and
+ * puts you on the leaderboard; a guest plays exactly the same game, identified
+ * only by the player id kept in their own browser. Guests can't be ranked —
+ * there'd be no way to tell two of them apart across games — so the standings
+ * simply skip them.
  */
 
 import { supabase } from './supabase'
@@ -55,6 +61,99 @@ export type CommunityLobby = {
   roomCode: string
   playerCount: number
   createdAt: string
+}
+
+export type Seat = { roomCode: string; playerId: string; gameId: string }
+
+/** Where a guest is sitting. The browser is the only record of it. */
+const GUEST_SEAT_KEY = 'communitySeat'
+
+function readGuestSeat(): { roomCode: string; playerId: string } | null {
+  try {
+    const raw = localStorage.getItem(GUEST_SEAT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.roomCode === 'string' && typeof parsed?.playerId === 'string') return parsed
+  } catch {}
+  return null
+}
+
+export function rememberGuestSeat(seat: { roomCode: string; playerId: string } | null) {
+  try {
+    if (seat) localStorage.setItem(GUEST_SEAT_KEY, JSON.stringify(seat))
+    else localStorage.removeItem(GUEST_SEAT_KEY)
+  } catch {}
+}
+
+/**
+ * The seat a guest left in their browser, but only if it's still real —
+ * verified against the database the same way an account's seat is. A
+ * remembered seat in a finished, stale, or vanished game is forgotten rather
+ * than returned, so a guest can never be trapped at a dead table.
+ */
+async function resolveGuestSeat(): Promise<Seat | null> {
+  const saved = readGuestSeat()
+  if (!saved) return null
+
+  const { data: game } = await supabase
+    .from('games')
+    .select('id, status, phase, settings, created_at, updated_at')
+    .eq('room_code', saved.roomCode)
+    .maybeSingle()
+
+  const settings = typeof (game as any)?.settings === 'string'
+    ? JSON.parse((game as any).settings)
+    : (game as any)?.settings
+  const lastTouch = Date.parse((game as any)?.updated_at ?? (game as any)?.created_at ?? '')
+
+  const dead =
+    !game ||
+    settings?.community !== true ||
+    (game as any).status === 'finished' ||
+    (game as any).phase === 'game_over' ||
+    (!isNaN(lastTouch) && lastTouch < Date.now() - STALE_MINUTES * 60_000)
+
+  if (dead) {
+    rememberGuestSeat(null)
+    return null
+  }
+
+  // The row still has to exist — the seat may have been cleared when someone
+  // else left and the table rewound.
+  const { data: player } = await supabase
+    .from('players')
+    .select('id')
+    .eq('id', saved.playerId)
+    .eq('game_id', (game as any).id)
+    .maybeSingle()
+
+  if (!player) {
+    rememberGuestSeat(null)
+    return null
+  }
+
+  return { roomCode: saved.roomCode, playerId: saved.playerId, gameId: (game as any).id }
+}
+
+/**
+ * Names are how three strangers tell each other apart, so two "mike"s in one
+ * lobby get numbered. Only cosmetic — identity is the player id — but a
+ * scoreboard with two identical rows is unreadable.
+ */
+async function uniqueNameInLobby(gameId: string, wanted: string): Promise<string> {
+  const { data: taken } = await supabase
+    .from('players')
+    .select('name')
+    .eq('game_id', gameId)
+
+  const names = new Set((taken ?? []).map((p: any) => (p.name ?? '').trim().toLowerCase()))
+  if (!names.has(wanted.trim().toLowerCase())) return wanted
+
+  for (let n = 2; n < 20; n++) {
+    const candidate = `${wanted} ${n}`
+    if (!names.has(candidate.toLowerCase())) return candidate
+  }
+  return wanted
 }
 
 /**
@@ -140,17 +239,29 @@ async function createCommunityLobby(): Promise<string> {
 export async function joinCommunityLobby(
   roomCode: string,
   playerName: string,
-  userId: string,
+  userId?: string | null,
 ): Promise<{ roomCode: string; started: boolean; playerId: string }> {
-  // An account is required here, unlike everywhere else in the app: results
-  // are ranked, and without one there's no way to tell two players apart or
-  // to credit a win to anyone.
-  if (!userId) throw new Error('Sign in to play Community games.')
+  // Guests are welcome. They just can't be ranked — see the note up top.
+  const isGuest = !userId
 
-  const { player, game } = await joinGame(roomCode, playerName, userId)
+  // Look the game up first so the name can be checked against the table it's
+  // actually joining.
+  const { data: lobby } = await supabase
+    .from('games').select('id').eq('room_code', roomCode.toUpperCase()).maybeSingle()
+
+  const name = lobby
+    ? await uniqueNameInLobby((lobby as any).id, playerName)
+    : playerName
+
+  // Guests never reconnect by name: two strangers both called "mike" would
+  // otherwise become one player, and the table could never fill.
+  const { player, game } = await joinGame(roomCode, name, userId ?? undefined, {
+    allowNameReconnect: false,
+  })
 
   localStorage.setItem('playerId', player.id)
   localStorage.setItem('playerName', player.name)
+  if (isGuest) rememberGuestSeat({ roomCode, playerId: player.id })
 
   // Taking a seat resets the lobby's staleness clock — it clearly isn't
   // abandoned if people are still arriving.
@@ -184,6 +295,9 @@ export async function joinCommunityLobby(
  */
 export async function leaveCommunityLobby(playerId: string, gameId?: string): Promise<void> {
   await supabase.from('players').delete().eq('id', playerId)
+  // Standing up clears the browser's record of the seat too, or a guest would
+  // keep being sent back to a table they just left.
+  if (readGuestSeat()?.playerId === playerId) rememberGuestSeat(null)
   if (!gameId) return
 
   const { data: game } = await supabase
@@ -322,24 +436,33 @@ export async function leaveAllSeats(userId: string): Promise<void> {
 }
 
 /**
+ * Where you're currently sitting, however you're identified: by account if
+ * you're signed in, by what your browser remembers if you're a guest. Either
+ * way the answer is checked against the database, and a seat at a dead table
+ * is given up rather than returned.
+ */
+export async function findAnySeat(userId?: string | null): Promise<Seat | null> {
+  return userId ? findMySeat(userId) : resolveGuestSeat()
+}
+
+/**
  * One button: sit down wherever there's room, opening a lobby only if every
  * existing one is full or stale. Tries the fullest first so games start soon.
  */
 export async function findOrCreateGame(
   playerName: string,
-  userId: string,
+  userId?: string | null,
 ): Promise<{ roomCode: string; started: boolean; playerId: string }> {
-  if (!userId) throw new Error('Sign in to play Community games.')
   return findOrCreateGameInner(playerName, userId)
 }
 
 async function findOrCreateGameInner(
   playerName: string,
-  userId: string,
+  userId?: string | null,
 ): Promise<{ roomCode: string; started: boolean; playerId: string }> {
   // Already seated somewhere? Go back there. Joining a second table would
   // reconnect you to the first anyway, which is what made this look broken.
-  const seat = await withTimeout(findMySeat(userId), 'Checking your seat').catch((e) => {
+  const seat = await withTimeout(findAnySeat(userId), 'Checking your seat').catch((e) => {
     console.warn('[community] seat check failed:', e)
     return null
   })
