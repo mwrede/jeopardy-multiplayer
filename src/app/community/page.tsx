@@ -13,6 +13,7 @@ import {
   leaveCommunityLobby,
   getLobbyState,
   touchLobby,
+  isUnderway,
   LOBBY_SEATS,
   type CommunityLobby,
 } from '@/lib/community'
@@ -38,6 +39,8 @@ export default function CommunityPage() {
   // can watch the seats fill instead of staring at an empty game screen.
   const [seat, setSeat] = useState<{ roomCode: string; playerId: string } | null>(null)
   const [seatMates, setSeatMates] = useState<{ id: string; name: string }[]>([])
+  // A game past the lobby: you're offered the way back in, or the way out.
+  const [underway, setUnderway] = useState(false)
 
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
@@ -106,12 +109,18 @@ export default function CommunityPage() {
   async function leave() {
     if (!seat) return
     const { playerId, roomCode } = seat
-    setSeat(null)
-    setSeatMates([])
+    setError('')
     try {
       const state = await getLobbyState(roomCode).catch(() => null)
       await leaveCommunityLobby(playerId, state?.gameId)
-    } catch { /* the seat frees regardless */ }
+      setSeat(null)
+      setSeatMates([])
+      setUnderway(false)
+    } catch (e: any) {
+      // Clearing the card while the row survived was worse than useless: the
+      // seat looked free, then the next seat check put you straight back.
+      setError(e?.message || 'Could not leave that game — try again.')
+    }
   }
 
   // Watch your own lobby. When it reaches three the game flips to voting, and
@@ -136,7 +145,13 @@ export default function CommunityPage() {
         return
       }
       setSeatMates(state.players)
-      if (state.phase === 'game_voting' || state.players.length >= LOBBY_SEATS) {
+      setUnderway(isUnderway(state))
+      // The vote is time-critical, so everyone is moved through together the
+      // moment the table fills. A game already underway is NOT auto-entered:
+      // being bounced straight back in left no way to reach the Leave button,
+      // so an abandoned game held its players until it went stale. Offer the
+      // choice instead.
+      if (state.phase === 'game_voting') {
         router.push(`/game/${seat.roomCode}/play`)
         return
       }
@@ -207,31 +222,58 @@ export default function CommunityPage() {
               You&apos;re in · {seat.roomCode}
             </p>
 
-            <div className="mt-3 flex justify-center gap-2">
-              {Array.from({ length: LOBBY_SEATS }, (_, i) => (
-                <span
-                  key={i}
-                  className={`h-3.5 w-3.5 rounded-full ${
-                    i < seatMates.length ? 'bg-jeopardy-gold-light' : 'bg-white/20'
-                  }`}
-                />
-              ))}
-            </div>
+            {underway ? (
+              <>
+                <p className="mt-3 text-sm text-white">This game is already under way.</p>
+                {seatMates.length > 0 && (
+                  <p className="mt-1 text-xs text-ink-stage-2">
+                    {seatMates.map((p) => p.name).join(' · ')}
+                  </p>
+                )}
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <a
+                    href={`/game/${seat.roomCode}/play`}
+                    className="btn-stage btn-copper btn-stage-sm"
+                  >
+                    Back to the game
+                  </a>
+                  <button onClick={leave} className="btn-stage btn-stage-sm btn-stage-ghost">
+                    Leave this game
+                  </button>
+                </div>
+                <p className="mt-3 text-[11px] text-ink-stage-2">
+                  Leaving ends it for the others too — three-handed is the format.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mt-3 flex justify-center gap-2">
+                  {Array.from({ length: LOBBY_SEATS }, (_, i) => (
+                    <span
+                      key={i}
+                      className={`h-3.5 w-3.5 rounded-full ${
+                        i < seatMates.length ? 'bg-jeopardy-gold-light' : 'bg-white/20'
+                      }`}
+                    />
+                  ))}
+                </div>
 
-            <p className="mt-3 text-sm text-white">
-              {seatMates.length === LOBBY_SEATS
-                ? 'Starting…'
-                : `Waiting for ${LOBBY_SEATS - seatMates.length} more`}
-            </p>
-            {seatMates.length > 0 && (
-              <p className="mt-1 text-xs text-ink-stage-2">
-                {seatMates.map((p) => p.name).join(' · ')}
-              </p>
+                <p className="mt-3 text-sm text-white">
+                  {seatMates.length === LOBBY_SEATS
+                    ? 'Starting…'
+                    : `Waiting for ${LOBBY_SEATS - seatMates.length} more`}
+                </p>
+                {seatMates.length > 0 && (
+                  <p className="mt-1 text-xs text-ink-stage-2">
+                    {seatMates.map((p) => p.name).join(' · ')}
+                  </p>
+                )}
+
+                <button onClick={leave} className="btn-stage btn-stage-sm btn-stage-ghost mt-4">
+                  Leave this game
+                </button>
+              </>
             )}
-
-            <button onClick={leave} className="btn-stage btn-stage-sm btn-stage-ghost mt-4">
-              Leave this game
-            </button>
           </div>
         ) : (
           <>

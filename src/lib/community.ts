@@ -294,28 +294,41 @@ export async function joinCommunityLobby(
  * replacement is found. Votes are cleared so the next round starts clean.
  */
 export async function leaveCommunityLobby(playerId: string, gameId?: string): Promise<void> {
-  await supabase.from('players').delete().eq('id', playerId)
   // Standing up clears the browser's record of the seat too, or a guest would
   // keep being sent back to a table they just left.
   if (readGuestSeat()?.playerId === playerId) rememberGuestSeat(null)
-  if (!gameId) return
 
-  const { data: game } = await supabase
-    .from('games').select('phase, status, settings').eq('id', gameId).maybeSingle()
-  if (!game || (game.settings as any)?.community !== true) return
+  const { data: game } = gameId
+    ? await supabase
+        .from('games').select('phase, status, settings').eq('id', gameId).maybeSingle()
+    : { data: null }
+
+  const isCommunity = !!game && (game.settings as any)?.community === true
   // A finished game keeps its result — the leaderboard needs it.
-  if (game.status === 'finished') return
+  const stillPlayable = isCommunity && (game as any).status !== 'finished'
 
-  const { count } = await supabase
-    .from('players').select('id', { count: 'exact', head: true }).eq('game_id', gameId)
+  // Would the table drop below three without this player? For the usual
+  // three-handed game, always — so the board is dealt again from scratch for
+  // whoever fills the seat next.
+  let rewind = false
+  if (stillPlayable && gameId) {
+    const { count } = await supabase
+      .from('players').select('id', { count: 'exact', head: true }).eq('game_id', gameId)
+    rewind = (count ?? 0) - 1 < LOBBY_SEATS
+  }
 
-  if ((count ?? 0) < LOBBY_SEATS) {
-    // Clear votes so the next full table decides fresh, and drop any board
-    // that was already dealt.
-    await supabase
-      .from('players')
-      .update({ vote_size: null, vote_difficulty: null, vote_decade: null, score: 0 })
-      .eq('game_id', gameId)
+  // ORDER MATTERS, and getting it wrong is why leaving a game in progress used
+  // to do nothing at all. Two references to players(id) have no ON DELETE rule,
+  // so Postgres refuses to delete a row either one still points at:
+  //
+  //   clues.answered_by        — anyone who has answered a clue correctly
+  //   games.current_player_id  — whoever's turn it is (fk_current_player)
+  //
+  // The delete's error was never checked, so the row survived, the count still
+  // read three, and nothing rewound. Clearing the board and the game row first
+  // releases both (clues cascade from categories, buzzes from clues).
+  if (rewind && gameId) {
+    await supabase.from('categories').delete().eq('game_id', gameId)
 
     await supabase
       .from('games')
@@ -325,9 +338,25 @@ export async function leaveCommunityLobby(playerId: string, gameId?: string): Pr
         current_clue_id: null,
         current_player_id: null,
         buzz_window_open: false,
+        // The old episode's Final Jeopardy would otherwise be waiting at the
+        // end of a board it no longer belongs to.
+        final_category_name: null,
+        final_clue_text: null,
+        final_answer: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', gameId)
+  }
+
+  const { error: deleteError } = await supabase.from('players').delete().eq('id', playerId)
+  if (deleteError) throw deleteError
+
+  // Clear votes and scores so the next full table starts clean.
+  if (rewind && gameId) {
+    await supabase
+      .from('players')
+      .update({ vote_size: null, vote_difficulty: null, vote_decade: null, score: 0 })
+      .eq('game_id', gameId)
   }
 }
 
@@ -354,10 +383,11 @@ export async function touchLobby(gameId: string): Promise<void> {
 export async function getLobbyState(roomCode: string): Promise<{
   gameId: string
   phase: string
+  status: string
   players: { id: string; name: string }[]
 } | null> {
   const { data: game, error } = await supabase
-    .from('games').select('id, phase').eq('room_code', roomCode).maybeSingle()
+    .from('games').select('id, phase, status').eq('room_code', roomCode).maybeSingle()
   if (error) throw error
   if (!game) return null
 
@@ -365,7 +395,17 @@ export async function getLobbyState(roomCode: string): Promise<{
     .from('players').select('id, name').eq('game_id', game.id).order('join_order')
   if (playersError) throw playersError
 
-  return { gameId: game.id, phase: (game as any).phase, players: (players ?? []) as any }
+  return {
+    gameId: game.id,
+    phase: (game as any).phase,
+    status: (game as any).status,
+    players: (players ?? []) as any,
+  }
+}
+
+/** A game that's past the lobby — dealt, or being dealt. */
+export function isUnderway(state: { phase: string; status: string }): boolean {
+  return state.status !== 'lobby' && state.phase !== 'lobby' && state.phase !== 'game_voting'
 }
 
 /**
