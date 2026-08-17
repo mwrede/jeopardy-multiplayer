@@ -287,11 +287,16 @@ export async function joinCommunityLobby(
 }
 
 /**
- * Get up from a table, from the waiting page or mid-vote or mid-game.
+ * Get up from a table at any point — waiting, mid-vote, or mid-game.
  *
- * Three-handed is the format, so losing a player means the others can't carry
- * on — the game rewinds to waiting and everyone left keeps their seat while a
- * replacement is found. Votes are cleared so the next round starts clean.
+ * Whoever is left carries on. Three-handed is the ideal, not a requirement:
+ * a game already dealt keeps its board, its scores and its answered clues and
+ * plays out with two, or with one. Rewinding everyone to the waiting room
+ * because a stranger closed their tab punished the people who stayed.
+ *
+ * The only thing that must be repaired is anything pointing AT the leaver: if
+ * it was their turn, the board passes to whoever is still here, so nobody is
+ * left waiting on someone who has gone.
  */
 export async function leaveCommunityLobby(playerId: string, gameId?: string): Promise<void> {
   // Standing up clears the browser's record of the seat too, or a guest would
@@ -300,49 +305,50 @@ export async function leaveCommunityLobby(playerId: string, gameId?: string): Pr
 
   const { data: game } = gameId
     ? await supabase
-        .from('games').select('phase, status, settings').eq('id', gameId).maybeSingle()
+        .from('games')
+        .select('phase, status, settings, current_player_id')
+        .eq('id', gameId)
+        .maybeSingle()
     : { data: null }
-
-  const isCommunity = !!game && (game.settings as any)?.community === true
-  // A finished game keeps its result — the leaderboard needs it.
-  const stillPlayable = isCommunity && (game as any).status !== 'finished'
-
-  // Would the table drop below three without this player? For the usual
-  // three-handed game, always — so the board is dealt again from scratch for
-  // whoever fills the seat next.
-  let rewind = false
-  if (stillPlayable && gameId) {
-    const { count } = await supabase
-      .from('players').select('id', { count: 'exact', head: true }).eq('game_id', gameId)
-    rewind = (count ?? 0) - 1 < LOBBY_SEATS
-  }
 
   // ORDER MATTERS, and getting it wrong is why leaving a game in progress used
   // to do nothing at all. Two references to players(id) have no ON DELETE rule,
-  // so Postgres refuses to delete a row either one still points at:
+  // so Postgres refuses to delete a row either one still points at, and the
+  // error went unchecked — the row survived and the seat never freed:
   //
   //   clues.answered_by        — anyone who has answered a clue correctly
   //   games.current_player_id  — whoever's turn it is (fk_current_player)
   //
-  // The delete's error was never checked, so the row survived, the count still
-  // read three, and nothing rewound. Clearing the board and the game row first
-  // releases both (clues cascade from categories, buzzes from clues).
-  if (rewind && gameId) {
-    await supabase.from('categories').delete().eq('game_id', gameId)
+  // Both are released here before the delete. The clue stays answered; it just
+  // stops being credited to someone who isn't in the game any more.
+  await supabase.from('clues').update({ answered_by: null }).eq('answered_by', playerId)
+
+  const isCommunity = !!game && (game.settings as any)?.community === true
+
+  if (gameId && (game as any)?.current_player_id === playerId) {
+    const { data: others } = await supabase
+      .from('players')
+      .select('id')
+      .eq('game_id', gameId)
+      .neq('id', playerId)
+      .order('join_order')
+      .limit(1)
+    const next = (others?.[0] as any)?.id ?? null
+
+    // Mid-clue, the room is waiting on a player who has gone. Hand the board
+    // to someone still here and put them back on the grid; Final Jeopardy and
+    // the pre-game phases don't take turns, so they only need the pointer
+    // cleared.
+    const phase = (game as any).phase as string
+    const takesTurns = !/^final/.test(phase) && !['lobby', 'game_voting', 'game_over'].includes(phase)
 
     await supabase
       .from('games')
       .update({
-        phase: 'lobby',
-        status: 'lobby',
-        current_clue_id: null,
-        current_player_id: null,
-        buzz_window_open: false,
-        // The old episode's Final Jeopardy would otherwise be waiting at the
-        // end of a board it no longer belongs to.
-        final_category_name: null,
-        final_clue_text: null,
-        final_answer: null,
+        current_player_id: next,
+        ...(takesTurns && next
+          ? { phase: 'board_selection', current_clue_id: null, buzz_window_open: false }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq('id', gameId)
@@ -351,12 +357,18 @@ export async function leaveCommunityLobby(playerId: string, gameId?: string): Pr
   const { error: deleteError } = await supabase.from('players').delete().eq('id', playerId)
   if (deleteError) throw deleteError
 
-  // Clear votes and scores so the next full table starts clean.
-  if (rewind && gameId) {
+  if (!gameId || !isCommunity) return
+
+  // Last one out closes the table, so an empty game can't linger as a ghost
+  // for anyone to be sent back to.
+  const { count } = await supabase
+    .from('players').select('id', { count: 'exact', head: true }).eq('game_id', gameId)
+
+  if ((count ?? 0) === 0 && (game as any).status !== 'finished') {
     await supabase
-      .from('players')
-      .update({ vote_size: null, vote_difficulty: null, vote_decade: null, score: 0 })
-      .eq('game_id', gameId)
+      .from('games')
+      .update({ status: 'finished', phase: 'game_over', updated_at: new Date().toISOString() })
+      .eq('id', gameId)
   }
 }
 

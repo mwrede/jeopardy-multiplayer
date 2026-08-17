@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   castVote, startVotedGame,
   SIZE_OPTIONS, DIFFICULTY_OPTIONS, DECADE_OPTIONS,
   type SizeVote, type DifficultyVote, type DecadeVote,
 } from '@/lib/community-vote'
+import { leaveCommunityLobby } from '@/lib/community'
 import type { Player } from '@/types/game'
 
 /**
@@ -41,6 +43,24 @@ export function CommunityVote({
   const [locked, setLocked] = useState(false)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
+  const [leaving, setLeaving] = useState(false)
+  const router = useRouter()
+
+  // You can change your mind at any point, including here. The others keep
+  // voting without you.
+  async function leaveGame() {
+    if (!myPlayerId) { router.push('/community'); return }
+    setLeaving(true)
+    setError('')
+    try {
+      await leaveCommunityLobby(myPlayerId, gameId)
+      localStorage.removeItem('playerId')
+      router.push('/community')
+    } catch (e: any) {
+      setLeaving(false)
+      setError(e?.message || 'Could not leave the game.')
+    }
+  }
 
   const votesIn = players.filter((p) => (p as any).vote_size).length
   const everyoneVoted = players.length > 0 && votesIn >= players.length
@@ -181,6 +201,16 @@ export function CommunityVote({
             {starting ? 'Building the board…' : `${votesIn} of ${players.length} voted`}
           </p>
         )}
+
+        <div className="mt-6 text-center">
+          <button
+            onClick={leaveGame}
+            disabled={leaving}
+            className="text-xs uppercase tracking-[0.22em] text-gray-500 transition-colors hover:text-white disabled:opacity-50"
+          >
+            {leaving ? 'Leaving…' : 'Leave game'}
+          </button>
+        </div>
       </div>
     </div>
   )

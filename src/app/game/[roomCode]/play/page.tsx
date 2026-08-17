@@ -36,6 +36,7 @@ import {
   rematchGame,
   joinGame,
 } from '@/lib/game-api'
+import { leaveCommunityLobby } from '@/lib/community'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 import {
   playCorrectSound, playWrongSound, playTimeUpSound,
@@ -125,6 +126,24 @@ export default function PlayPage() {
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
   const [gameAirDate, setGameAirDate] = useState<string | null>(null)
+  const [leavingGame, setLeavingGame] = useState(false)
+
+  /**
+   * Walk away from a community game mid-play. The others keep the board, their
+   * scores and every clue already answered — see leaveCommunityLobby.
+   */
+  async function leaveCommunityGame() {
+    if (!game || !myPlayerId) { router.push('/community'); return }
+    setLeavingGame(true)
+    try {
+      await leaveCommunityLobby(myPlayerId, game.id)
+      localStorage.removeItem('playerId')
+      router.push('/community')
+    } catch (e: any) {
+      setLeavingGame(false)
+      setError(e?.message || 'Could not leave the game.')
+    }
+  }
 
   // Fetch air date of the source game
   useEffect(() => {
@@ -623,13 +642,26 @@ export default function PlayPage() {
   // === SCOREBOARD (shared across phases) ===
   const Scoreboard = () => (
     <div className="bg-black/40 flex-shrink-0">
-      <div className="flex items-center justify-between px-3 py-1">
+      <div className="flex items-center justify-between gap-2 px-3 py-1">
         <span className="text-[10px] text-gray-500 font-mono">{game.room_code}</span>
-        {gameAirDate && (
-          <span className="text-[10px] text-gray-500">
-            {new Date(gameAirDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {gameAirDate && (
+            <span className="text-[10px] text-gray-500">
+              {new Date(gameAirDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          )}
+          {/* Community games are with strangers, so there has to be a way out
+              at any moment. Whoever stays keeps the board and their scores. */}
+          {isCommunityGame && (
+            <button
+              onClick={leaveCommunityGame}
+              disabled={leavingGame}
+              className="text-[10px] uppercase tracking-[0.18em] text-gray-500 transition-colors hover:text-white disabled:opacity-50"
+            >
+              {leavingGame ? 'Leaving…' : 'Leave'}
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex gap-2 px-2 pb-2 overflow-x-auto">
         {players.sort((a, b) => b.score - a.score).map((p) => (
