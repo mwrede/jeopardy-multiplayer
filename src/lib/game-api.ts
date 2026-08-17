@@ -6,6 +6,7 @@ import {
   pickTopicFinal,
   MAX_TOPICS,
   type BoardTopic,
+  themeForTerm,
 } from './topic-board'
 import { checkAnswer, checkAnswerDetailed } from './answer-check'
 
@@ -348,7 +349,7 @@ export async function startGame(gameId: string) {
   // (array, for Mix Mashups) — normalize to one list.
   const categoryThemesSetting = (settings as any)?.categoryThemes as string[] | undefined
   const singleTheme = (settings as any)?.categoryTheme as string | undefined
-  const categoryThemes =
+  let categoryThemes =
     categoryThemesSetting && categoryThemesSetting.length > 0
       ? categoryThemesSetting
       : singleTheme
@@ -357,7 +358,19 @@ export async function startGame(gameId: string) {
   // Free-text topic search — finds categories whose name matches a user-typed
   // term. Sidesteps the predefined category_type taxonomy entirely so users
   // can ask for arbitrary topics ("football", "the Beatles", "Africa", etc.)
-  const customCategorySearch = ((settings as any)?.customCategorySearch as string | undefined)?.trim() || undefined
+  let customCategorySearch = ((settings as any)?.customCategorySearch as string | undefined)?.trim() || undefined
+
+  // A typed topic that names one of the curated themes is served far better by
+  // the theme itself: "geography" as a name search finds only the categories
+  // with the word in the title, where the tag finds LAKES, EUROPEAN CAPITALS
+  // and U.S. RIVERS — what the player actually meant.
+  if (customCategorySearch && !categoryThemes) {
+    const theme = themeForTerm(customCategorySearch)
+    if (theme) {
+      categoryThemes = [theme]
+      customCategorySearch = undefined
+    }
+  }
 
   // Helper: pick N random categories that have enough clues
   async function pickCategories(roundName: string, count: number) {

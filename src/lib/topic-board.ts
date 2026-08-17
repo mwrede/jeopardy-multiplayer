@@ -31,7 +31,53 @@ export type BoardTopic = {
   label: string
 }
 
-export type PoolClue = { question: string; answer: string }
+export type PoolClue = {
+  /** The real J-Archive category this clue was written for, e.g. "U.S. RIVERS". */
+  category: string
+  question: string
+  answer: string
+}
+
+/**
+ * Typed terms that are really just one of the curated themes under another
+ * name. Someone asking for "geography" wants LAKES and EUROPEAN CAPITALS, not
+ * the handful of categories with the word "geography" in the title — and the
+ * theme lookup is both broader and better tagged.
+ */
+const THEME_ALIASES: Record<string, string> = {
+  geography: 'geography', geo: 'geography', maps: 'geography', countries: 'geography',
+  world: 'geography', places: 'geography',
+  history: 'history', historical: 'history', 'world history': 'history',
+  science: 'science', sciences: 'science', biology: 'science', chemistry: 'science',
+  physics: 'science', space: 'science', astronomy: 'science',
+  sports: 'sports', sport: 'sports', athletics: 'sports',
+  'pop culture': 'pop_culture', popculture: 'pop_culture', celebrities: 'pop_culture',
+  movies: 'pop_culture', film: 'pop_culture', tv: 'pop_culture', television: 'pop_culture',
+  food: 'food', 'food and drink': 'food', 'food & drink': 'food', cooking: 'food',
+  cuisine: 'food', drinks: 'food',
+  literature: 'literature', books: 'literature', novels: 'literature', poetry: 'literature',
+  authors: 'literature', writers: 'literature',
+  music: 'music', songs: 'music', bands: 'music', rock: 'music',
+  corporate: 'corporate', business: 'corporate', brands: 'corporate', companies: 'corporate',
+  finance: 'corporate',
+  politics: 'politics', political: 'politics', presidents: 'politics',
+  government: 'politics', elections: 'politics',
+}
+
+/** The curated theme a typed term really means, if it means one. */
+export function themeForTerm(term: string): string | null {
+  return THEME_ALIASES[term.trim().toLowerCase()] ?? null
+}
+
+/**
+ * Resolve a topic to what should actually be searched. A typed term matching a
+ * curated theme becomes that theme, so it draws on the whole tagged pool.
+ */
+export function resolveTopic(topic: BoardTopic): BoardTopic {
+  if (topic.kind === 'theme') return topic
+  const theme = themeForTerm(topic.value)
+  return theme ? { ...topic, kind: 'theme', value: theme } : topic
+}
 
 /**
  * Strip characters that would break PostgREST's `.or()` filter grammar
@@ -112,21 +158,69 @@ function dedupe(rows: any[]): PoolClue[] {
     const key = q.trim().toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ question: q, answer: a })
+    out.push({ category: (row?.category as string) ?? '', question: q, answer: a })
   }
   return out
 }
 
+/**
+ * Split a topic's clues back into the real categories they were written for,
+ * keeping only those with enough clues to fill a column on their own.
+ *
+ * This is what makes a Geography board read like Jeopardy: six columns headed
+ * LAKES, EUROPEAN CAPITALS, U.S. RIVERS rather than six headed GEOGRAPHY. The
+ * clues were always drawn from categories like those — the names were simply
+ * being thrown away, which also left every column an incoherent mix of lakes,
+ * capitals and rivers instead of five clues about one thing.
+ */
+export function groupIntoRealCategories(
+  pool: PoolClue[],
+  cluesPerCat: number,
+): { name: string; clues: PoolClue[] }[] {
+  const byCategory = new Map<string, PoolClue[]>()
+  for (const clue of pool) {
+    const name = (clue.category ?? '').trim()
+    if (!name) continue
+    const list = byCategory.get(name) ?? []
+    list.push(clue)
+    byCategory.set(name, list)
+  }
+
+  const full: { name: string; clues: PoolClue[] }[] = []
+  for (const [name, clues] of byCategory) {
+    if (clues.length >= cluesPerCat) full.push({ name, clues })
+  }
+  return shuffle(full)
+}
+
+/**
+ * Is this real category a fair header for the topic that found it?
+ *
+ * Always, for a curated theme — every category carrying that tag is on-topic.
+ * For a typed term the pool also contains clues that merely MENTION the word,
+ * so a search for "football" can drag in five clues from 1998 MOVIES; heading a
+ * column with that would be a non sequitur. Those fall back to the term itself.
+ */
+function categoryFitsTopic(topic: BoardTopic, categoryName: string): boolean {
+  if (topic.kind === 'theme') return true
+  const haystack = categoryName.toLowerCase()
+  const words = significantWords(sanitizeTerm(topic.value))
+  if (words.length === 0) return false
+  return words.some((w) => haystack.includes(w))
+}
+
 export async function fetchTopicPool(
-  topic: BoardTopic,
+  rawTopic: BoardTopic,
   roundName: string,
   limit = 800,
 ): Promise<PoolClue[]> {
+  const topic = resolveTopic(rawTopic)
+
   // Curated theme: one indexed equality lookup on the pre-tagged column.
   if (topic.kind === 'theme') {
     const { data, error } = await supabase
       .from('clue_pool')
-      .select('question, answer')
+      .select('category, question, answer')
       .eq('round', roundName)
       .eq('category_type', topic.value)
       .limit(limit)
@@ -150,11 +244,11 @@ export async function fetchTopicPool(
   const per = Math.ceil(limit / 2)
 
   const [byCategory, byQuestion, byAnswer] = await Promise.all([
-    supabase.from('clue_pool').select('question, answer')
+    supabase.from('clue_pool').select('category, question, answer')
       .eq('round', roundName).ilike('category', pattern).limit(per),
-    supabase.from('clue_pool').select('question, answer')
+    supabase.from('clue_pool').select('category, question, answer')
       .eq('round', roundName).ilike('question', pattern).limit(per),
-    supabase.from('clue_pool').select('question, answer')
+    supabase.from('clue_pool').select('category, question, answer')
       .eq('round', roundName).ilike('answer', pattern).limit(per),
   ])
 
@@ -273,38 +367,53 @@ export async function buildTopicRound(opts: {
     }),
   )
 
-  const cursor = new Map<string, number>()     // pool read position per topic
+  // Each topic's clues, split back into the real categories they came from.
+  // These are what actually head the columns.
+  const realCategories = new Map<string, { name: string; clues: PoolClue[] }[]>()
+  for (const value of distinct) {
+    const topic = slotTopics.find((t) => t.value === value)!
+    realCategories.set(
+      value,
+      groupIntoRealCategories(pools.get(value) ?? [], cluesPerCat)
+        .filter((c) => categoryFitsTopic(topic, c.name)),
+    )
+  }
+
+  // No board should show the same header twice, whichever topic reached it —
+  // ASIAN HISTORY is tagged both geography and history.
+  const usedNames = new Set<string>()
   const occurrence = new Map<string, number>() // header numbering per topic
   const clueIds: string[] = []
   let position = 0
   const thin: string[] = []
 
-  for (const topic of slotTopics) {
-    const pool = pools.get(topic.value) ?? []
-    const start = cursor.get(topic.value) ?? 0
-    const slice = pool.slice(start, start + cluesPerCat)
+  // A clue that already went on the board must not turn up again in a
+  // fallback column — the same pool feeds both paths.
+  const usedQuestions = new Set<string>()
+  const clueKey = (c: PoolClue) => c.question.trim().toLowerCase()
 
-    if (slice.length < cluesPerCat) {
-      // This topic ran dry — leave the slot for the backfill pass below.
-      if (!thin.includes(topic.label)) thin.push(topic.label)
-      continue
+  /** The next unused clues for a topic, or null if it can't fill a column. */
+  function takeLooseClues(topicValue: string): PoolClue[] | null {
+    const pool = pools.get(topicValue) ?? []
+    const slice: PoolClue[] = []
+    for (const clue of pool) {
+      if (usedQuestions.has(clueKey(clue))) continue
+      slice.push(clue)
+      if (slice.length === cluesPerCat) return slice
     }
-    cursor.set(topic.value, start + cluesPerCat)
+    return null
+  }
 
-    const occ = occurrence.get(topic.value) ?? 0
-    occurrence.set(topic.value, occ + 1)
-
+  /** Insert one column and its clues. Returns false if the insert failed. */
+  async function writeColumn(name: string, slice: PoolClue[]): Promise<boolean> {
     const { data: cat, error: catErr } = await supabase
       .from('categories')
-      .insert({
-        game_id: gameId,
-        name: headerFor(topic, occ),
-        round_number: roundNumber,
-        position,
-      })
+      .insert({ game_id: gameId, name, round_number: roundNumber, position })
       .select('id')
       .single()
-    if (catErr || !cat) continue
+    if (catErr || !cat) return false
+
+    for (const clue of slice) usedQuestions.add(clueKey(clue))
 
     for (let i = 0; i < cluesPerCat; i++) {
       const { data: clue } = await supabase
@@ -321,52 +430,69 @@ export async function buildTopicRound(opts: {
       if (clue) clueIds.push(clue.id)
     }
     position++
+    return true
+  }
+
+  /** The next real category this topic can still offer, if any. */
+  function takeRealCategory(topicValue: string): { name: string; clues: PoolClue[] } | null {
+    const queue = realCategories.get(topicValue) ?? []
+    while (queue.length > 0) {
+      const next = queue.shift()!
+      if (usedNames.has(next.name.toUpperCase())) continue
+      usedNames.add(next.name.toUpperCase())
+      return next
+    }
+    return null
+  }
+
+  for (const topic of slotTopics) {
+    const real = takeRealCategory(topic.value)
+
+    if (real) {
+      await writeColumn(real.name.toUpperCase(), real.clues.slice(0, cluesPerCat))
+      continue
+    }
+
+    // No whole category left for this topic — fall back to a mixed column
+    // under the topic's own name, which is still better than no column.
+    const slice = takeLooseClues(topic.value)
+    if (!slice) {
+      if (!thin.includes(topic.label)) thin.push(topic.label)
+      continue
+    }
+
+    const occ = occurrence.get(topic.value) ?? 0
+    occurrence.set(topic.value, occ + 1)
+    await writeColumn(headerFor(topic, occ), slice)
   }
 
   // Backfill: if some topics were too thin, top the board up from whichever
-  // topics still have clues left rather than failing the whole game.
+  // topics still have something left rather than failing the whole game.
+  // Whole categories first here too, so a backfilled column reads like the
+  // rest of the board.
+  if (position < numCategories) {
+    for (const value of distinct) {
+      while (position < numCategories) {
+        const real = takeRealCategory(value)
+        if (!real) break
+        await writeColumn(real.name.toUpperCase(), real.clues.slice(0, cluesPerCat))
+      }
+    }
+  }
+
   if (position < numCategories) {
     for (const value of distinct) {
       if (position >= numCategories) break
-      const pool = pools.get(value) ?? []
-      let start = cursor.get(value) ?? 0
       const topic = slotTopics.find((t) => t.value === value)!
 
-      while (position < numCategories && pool.length - start >= cluesPerCat) {
-        const slice = pool.slice(start, start + cluesPerCat)
-        start += cluesPerCat
-        cursor.set(value, start)
+      while (position < numCategories) {
+        const slice = takeLooseClues(value)
+        if (!slice) break
 
         const occ = occurrence.get(value) ?? 0
         occurrence.set(value, occ + 1)
 
-        const { data: cat } = await supabase
-          .from('categories')
-          .insert({
-            game_id: gameId,
-            name: headerFor(topic, occ),
-            round_number: roundNumber,
-            position,
-          })
-          .select('id')
-          .single()
-        if (!cat) break
-
-        for (let i = 0; i < cluesPerCat; i++) {
-          const { data: clue } = await supabase
-            .from('clues')
-            .insert({
-              category_id: cat.id,
-              value: values[i],
-              question: slice[i].question,
-              answer: slice[i].answer,
-              is_daily_double: false,
-            })
-            .select('id')
-            .single()
-          if (clue) clueIds.push(clue.id)
-        }
-        position++
+        if (!(await writeColumn(headerFor(topic, occ), slice))) break
       }
     }
   }
@@ -396,7 +522,8 @@ export async function pickTopicFinal(topics: BoardTopic[]): Promise<{
   question: string
   answer: string
 } | null> {
-  for (const topic of shuffle([...topics])) {
+  for (const rawTopic of shuffle([...topics])) {
+    const topic = resolveTopic(rawTopic)
     let rows: any[] = []
 
     if (topic.kind === 'theme') {
