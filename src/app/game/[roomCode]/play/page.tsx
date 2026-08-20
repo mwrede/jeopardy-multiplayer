@@ -127,6 +127,10 @@ export default function PlayPage() {
   const [codeCopied, setCodeCopied] = useState(false)
   const [gameAirDate, setGameAirDate] = useState<string | null>(null)
   const [leavingGame, setLeavingGame] = useState(false)
+  const [wagerCountdown, setWagerCountdown] = useState<number | null>(null)
+  const wagerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wagerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const finalWagerInputRef = useRef<string>('')
 
   /**
    * Walk away from a community game mid-play. The others keep the board, their
@@ -349,16 +353,78 @@ export default function PlayPage() {
     setHasPassed(false)
   }, [game?.current_clue_id])
 
-  // Auto-advance finals
+  // Auto-advance finals.
+  //
+  // Everyone wagering moves it on immediately; otherwise the clock does. A
+  // player who closed their tab still has a row, and that row never wagers —
+  // waiting on it left Final Jeopardy stuck for everyone who stayed.
+  //
+  // The deadline is anchored on when the phase began rather than on when this
+  // tab noticed, so every client agrees on it and a reload doesn't buy anyone
+  // a fresh fifteen seconds.
   useEffect(() => {
     if (!game || game.phase !== 'final_wager') return
-    if (players.length > 0 && players.every((p) => p.final_wager != null)) advanceToFinalClue(game.id)
-  }, [game?.phase, game?.id, players])
+    if (players.length > 0 && players.every((p) => p.final_wager != null)) {
+      advanceToFinalClue(game.id)
+      return
+    }
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const totalMs = game.settings?.final_wager_ms ?? 15000
+    // A moment past the players' own clocks, so their auto-submitted wagers
+    // land before the phase turns over.
+    const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs + 1500
+    const t = setTimeout(() => advanceToFinalClue(game.id), Math.max(0, deadline - Date.now()))
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.id, game?.updated_at, game?.settings?.final_wager_ms, players])
 
   useEffect(() => {
     if (!game || game.phase !== 'final_answering') return
     if (players.length > 0 && players.every((p) => p.final_answer != null)) startFinalReveal(game.id)
   }, [game?.phase, game?.id, players])
+
+  // Final Jeopardy wager clock. Mirrors the answer clock below: at zero it
+  // locks in whatever is typed, and $0 if nothing is.
+  useEffect(() => { finalWagerInputRef.current = finalWagerInput }, [finalWagerInput])
+  useEffect(() => {
+    const isMyWager =
+      game?.phase === 'final_wager' &&
+      myPlayer &&
+      !finalWagerLocked &&
+      myPlayer.final_wager == null
+    if (!isMyWager) {
+      setWagerCountdown(null)
+      if (wagerTimerRef.current) clearTimeout(wagerTimerRef.current)
+      if (wagerIntervalRef.current) clearInterval(wagerIntervalRef.current)
+      wagerTimerRef.current = null
+      wagerIntervalRef.current = null
+      return
+    }
+    // Anchored on the same instant the round-advance uses, so the number on
+    // screen is the truth. Counting 15 from whenever this tab mounted meant a
+    // reload showed more time than it had, and the round moved on before the
+    // wager it was still promising could be submitted.
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const totalMs = game.settings?.final_wager_ms ?? 15000
+    const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs
+    const remaining = () => Math.max(0, deadline - Date.now())
+
+    setWagerCountdown(Math.ceil(remaining() / 1000))
+    wagerIntervalRef.current = setInterval(() => {
+      setWagerCountdown(Math.ceil(remaining() / 1000))
+    }, 250)
+    wagerTimerRef.current = setTimeout(async () => {
+      if (!myPlayer) return
+      const maxWager = Math.max(myPlayer.score, 0)
+      const typed = parseInt(finalWagerInputRef.current) || 0
+      await submitFinalWager(myPlayer.id, Math.min(Math.max(typed, 0), maxWager))
+      setFinalWagerLocked(true)
+      setFinalWagerInput('')
+    }, remaining())
+    return () => {
+      if (wagerTimerRef.current) clearTimeout(wagerTimerRef.current)
+      if (wagerIntervalRef.current) clearInterval(wagerIntervalRef.current)
+    }
+  }, [game?.phase, game?.updated_at, myPlayer?.id, myPlayer?.score, finalWagerLocked, myPlayer?.final_wager, game?.settings?.final_wager_ms])
 
   // Final Jeopardy answer clock. Auto-submits whatever's typed at zero,
   // including nothing.
@@ -761,7 +827,7 @@ export default function PlayPage() {
         <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
           <h2 className="text-2xl font-bold text-jeopardy-gold mb-4">Wager Locked!</h2>
           <p className="text-3xl font-bold text-white">${(myPlayer.final_wager ?? 0).toLocaleString()}</p>
-          <p className="text-gray-400 mt-4">Waiting for others...</p>
+          <p className="text-gray-400 mt-4">Waiting for others — the clue comes up shortly either way.</p>
         </div>
       )
     }
@@ -769,7 +835,15 @@ export default function PlayPage() {
       <div className="h-[100dvh] flex flex-col items-center justify-center bg-jeopardy-dark p-6 overflow-hidden">
         <h2 className="text-2xl font-bold text-jeopardy-gold mb-2">Final Jeopardy!</h2>
         <p className="text-gray-400 mb-2 uppercase">{game.final_category_name}</p>
-        <p className="text-gray-500 mb-4">Wager $0 - ${maxWager.toLocaleString()}</p>
+        <p className="text-gray-500 mb-2">Wager $0 - ${maxWager.toLocaleString()}</p>
+        {/* Nobody should be able to hold up Final Jeopardy by walking away. */}
+        <p className={`mb-4 text-sm font-bold tabular-nums ${
+          wagerCountdown !== null && wagerCountdown <= 5 ? 'text-red-400' : 'text-jeopardy-gold-light'
+        }`}>
+          {wagerCountdown !== null
+            ? `${wagerCountdown}s to lock in`
+            : 'Locking in soon'}
+        </p>
         <div className="w-full max-w-xs">
           <GameKeyboard value={finalWagerInput} onChange={setFinalWagerInput} onSubmit={handleFinalWager}
             mode="numbers" placeholder="Enter wager" submitLabel="Lock In Wager"
