@@ -35,6 +35,7 @@ import {
   removePlayer,
   rematchGame,
   joinGame,
+  skipCurrentPlayer,
 } from '@/lib/game-api'
 import { leaveCommunityLobby } from '@/lib/community'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
@@ -131,6 +132,9 @@ export default function PlayPage() {
   const wagerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wagerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const finalWagerInputRef = useRef<string>('')
+  // Offer to skip the player holding up the game, but only after a pause —
+  // long enough that someone simply thinking is never skipped out of turn.
+  const [skipReady, setSkipReady] = useState(false)
 
   /**
    * Walk away from a community game mid-play. The others keep the board, their
@@ -146,6 +150,17 @@ export default function PlayPage() {
     } catch (e: any) {
       setLeavingGame(false)
       setError(e?.message || 'Could not leave the game.')
+    }
+  }
+
+  /** Move the turn on when whoever holds it isn't acting. */
+  async function handleSkipTurn() {
+    if (!game?.current_player_id) return
+    setError('')
+    try {
+      await skipCurrentPlayer(game.id, game.current_player_id)
+    } catch (e: any) {
+      setError(e?.message || 'Could not skip that turn.')
     }
   }
 
@@ -461,6 +476,26 @@ export default function PlayPage() {
     }
   }, [game?.phase, myPlayer?.id, finalAnswerLocked, myPlayer?.final_answer, game?.settings?.final_answer_ms])
 
+  // Phases that wait on one named player, and so can stall on them.
+  //
+  // Deliberately no automatic skip on "their row is gone": games.current_player_id
+  // is a foreign key with no ON DELETE rule, so it can never point at a deleted
+  // player — the delete is refused first. An auto-skip keyed on the client's
+  // player list would therefore never fire for a real absence, but WOULD fire
+  // while that list is still loading, skipping someone who never had a turn.
+  const SKIP_GRACE_MS = 20000
+  const stallablePhase =
+    game?.phase === 'board_selection' || game?.phase === 'daily_double_wager'
+
+  useEffect(() => {
+    setSkipReady(false)
+    if (!stallablePhase || isMyTurn || !game) return
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const readyAt = (isNaN(startedAt) ? Date.now() : startedAt) + SKIP_GRACE_MS
+    const t = setTimeout(() => setSkipReady(true), Math.max(0, readyAt - Date.now()))
+    return () => clearTimeout(t)
+  }, [stallablePhase, isMyTurn, game?.updated_at, game?.phase])
+
   // Auto-redirect on rematch
   useEffect(() => {
     if (!game?.rematch_room_code) return
@@ -715,6 +750,24 @@ export default function PlayPage() {
             <span className="text-[10px] text-gray-500">
               {new Date(gameAirDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
+          )}
+          {/* Skip whoever's turn it is. Lives up here because the two phases
+              that can stall — picking a clue and wagering on a Daily Double —
+              both show this header, so one control covers both. Stays
+              disabled briefly so nobody is skipped mid-thought. */}
+          {stallablePhase && !isMyTurn && currentPlayer && (
+            <button
+              onClick={handleSkipTurn}
+              disabled={!skipReady}
+              title={
+                skipReady
+                  ? `Skip ${currentPlayer.name} and move to the next player`
+                  : `You can skip ${currentPlayer.name} if they keep the game waiting`
+              }
+              className="text-[10px] uppercase tracking-[0.18em] text-gray-500 transition-colors hover:text-white disabled:opacity-30 disabled:hover:text-gray-500"
+            >
+              Skip
+            </button>
           )}
           {/* Community games are with strangers, so there has to be a way out
               at any moment. Whoever stays keeps the board and their scores. */}

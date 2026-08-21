@@ -1310,6 +1310,63 @@ async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnsw
 }
 
 /**
+ * Hand the board on when whoever holds it can't or won't act.
+ *
+ * Two phases wait on one named player — picking a clue, and wagering on a
+ * Daily Double — so a player who closes their tab or wanders off stops the
+ * game for everyone else with no way round it.
+ *
+ * `expectedPlayerId` makes this a compare-and-set: every client watching the
+ * same stalled turn may call it, and only the first lands. The rest quietly
+ * do nothing rather than skipping several players in a row.
+ */
+export async function skipCurrentPlayer(gameId: string, expectedPlayerId?: string) {
+  const { data: game } = await supabase
+    .from('games')
+    .select('current_player_id, current_clue_id, phase')
+    .eq('id', gameId)
+    .single()
+  if (!game) return
+
+  const { data: players } = await supabase
+    .from('players')
+    .select('id, join_order')
+    .eq('game_id', gameId)
+    .order('join_order', { ascending: true })
+  if (!players?.length) return
+
+  // Next by seating order, wrapping round. When the current player's row has
+  // gone entirely, indexOf is -1 and the turn starts again from the top.
+  const idx = players.findIndex((p: any) => p.id === game.current_player_id)
+  const next = players[(idx + 1) % players.length]
+  if (!next) return
+
+  const update: any = {
+    current_player_id: next.id,
+    phase: 'board_selection',
+    updated_at: new Date().toISOString(),
+  }
+
+  // A Daily Double belongs to whoever uncovered it. If they've gone it goes
+  // with them — handing their wager to someone else would be nonsense — so
+  // the clue closes unanswered and the board moves on. Routing through
+  // clue_result rather than straight back to the grid keeps the existing
+  // round-completion check in play, in case that was the last clue.
+  if (game.phase === 'daily_double_wager' && game.current_clue_id) {
+    await supabase
+      .from('clues')
+      .update({ is_answered: true, answered_by: null })
+      .eq('id', game.current_clue_id)
+    update.phase = 'clue_result'
+  }
+
+  let q = supabase.from('games').update(update).eq('id', gameId)
+  if (expectedPlayerId) q = q.eq('current_player_id', expectedPlayerId)
+  const { error } = await q
+  if (error) console.warn('[skipCurrentPlayer] failed:', error.message)
+}
+
+/**
  * Advance from clue_result to next state.
  * Checks if the round is complete and routes accordingly.
  * Called by the display page after showing the result animation.
