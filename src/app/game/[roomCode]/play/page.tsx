@@ -135,6 +135,10 @@ export default function PlayPage() {
   // Offer to skip the player holding up the game, but only after a pause —
   // long enough that someone simply thinking is never skipped out of turn.
   const [skipReady, setSkipReady] = useState(false)
+  // Removing someone takes two taps. A native confirm() is easy to dismiss by
+  // accident on a phone and can't be styled; arming the button in place is
+  // clearer and just as hard to do by mistake.
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
   /**
    * Walk away from a community game mid-play. The others keep the board, their
@@ -150,6 +154,28 @@ export default function PlayPage() {
     } catch (e: any) {
       setLeavingGame(false)
       setError(e?.message || 'Could not leave the game.')
+    }
+  }
+
+  /**
+   * Take a player out of the game entirely — for someone who has plainly gone,
+   * rather than someone merely losing.
+   */
+  async function handleRemovePlayer(targetId: string, name: string) {
+    if (!game) return
+    if (confirmRemoveId !== targetId) {
+      setConfirmRemoveId(targetId)
+      // Disarm on its own, so a half-pressed button never lingers — but leave
+      // long enough to read the prompt and aim at it on a phone.
+      setTimeout(() => setConfirmRemoveId((id) => (id === targetId ? null : id)), 10000)
+      return
+    }
+    setConfirmRemoveId(null)
+    setError('')
+    try {
+      await removePlayer(targetId, game.id)
+    } catch (e: any) {
+      setError(e?.message || `Could not remove ${name}.`)
     }
   }
 
@@ -787,7 +813,31 @@ export default function PlayPage() {
           <div key={p.id} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-center min-w-[80px] border-b-3 ${
             p.id === game.current_player_id ? 'bg-jeopardy-blue-cell/50 border-b-2 border-jeopardy-gold' : 'bg-jeopardy-blue-dark/30'
           } ${p.id === myPlayerId ? 'ring-1 ring-blue-400/30' : ''}`}>
-            <p className="text-[10px] text-white/60 truncate font-semibold uppercase">{p.name}</p>
+            <p className="text-[10px] text-white/60 truncate font-semibold uppercase">
+              {p.name}
+              {/* Take out someone who has plainly gone. Freely in a private
+                  game among friends; in Community — where these are strangers
+                  and two players could otherwise gang up on the leader — only
+                  once that player is actually holding the game up. */}
+              {p.id !== myPlayerId && (!isCommunityGame || (skipReady && p.id === game.current_player_id)) && (
+                <button
+                  onClick={() => handleRemovePlayer(p.id, p.name)}
+                  title={`Remove ${p.name} from the game`}
+                  aria-label={
+                    confirmRemoveId === p.id
+                      ? `Confirm removing ${p.name}`
+                      : `Remove ${p.name} from the game`
+                  }
+                  className={`ml-1 align-middle leading-none transition-colors ${
+                    confirmRemoveId === p.id
+                      ? 'text-[9px] font-bold text-red-400'
+                      : 'px-1 text-[13px] text-gray-500 hover:text-red-400'
+                  }`}
+                >
+                  {confirmRemoveId === p.id ? 'REMOVE?' : '×'}
+                </button>
+              )}
+            </p>
             <p className={`text-sm font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}>
               ${p.score.toLocaleString()}
             </p>
@@ -1112,7 +1162,8 @@ export default function PlayPage() {
         /* Board view */
         <div className="flex-1">
           <GameBoard game={game} categories={categories} clues={clues} players={players}
-            myPlayerId={myPlayerId} isMyTurn={isMyTurn} />
+            myPlayerId={myPlayerId} isMyTurn={isMyTurn}
+            canPickAnyway={skipReady && game.phase === 'board_selection'} />
         </div>
       )}
 

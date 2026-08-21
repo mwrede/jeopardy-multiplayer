@@ -11,6 +11,12 @@ interface GameBoardProps {
   players: Player[]
   myPlayerId: string | null
   isMyTurn: boolean
+  /**
+   * Let this player pick even when it isn't their turn. Set once the board has
+   * been sitting on someone who isn't acting, so one absent player can't stop
+   * the game — picking takes the turn, so play simply carries on with them.
+   */
+  canPickAnyway?: boolean
 }
 
 export function GameBoard({
@@ -20,7 +26,9 @@ export function GameBoard({
   players,
   myPlayerId,
   isMyTurn,
+  canPickAnyway = false,
 }: GameBoardProps) {
+  const canPick = isMyTurn || canPickAnyway
   const lengthConfig = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']
   const roundCategories = categories
     .filter((c) => Number(c.round_number) === Number(game.current_round))
@@ -35,7 +43,7 @@ export function GameBoard({
   }
 
   async function handleCellClick(clue: Clue | undefined) {
-    if (!clue || clue.is_answered || !isMyTurn || !myPlayerId || !game) return
+    if (!clue || clue.is_answered || !canPick || !myPlayerId || !game) return
 
     try {
       await selectClue(game.id, clue.id, myPlayerId)
@@ -50,12 +58,16 @@ export function GameBoard({
     <div className="flex flex-col h-full">
       {/* Turn indicator (scoreboard is shown by the parent page) */}
       <div className={`text-center py-2 mx-2 rounded-lg text-base ${
-        isMyTurn
+        canPick
           ? 'bg-jeopardy-gold/15 border border-jeopardy-gold/40'
           : ''
       }`}>
         {isMyTurn ? (
           <span className="text-jeopardy-gold font-bold">Your turn — pick a clue!</span>
+        ) : canPickAnyway ? (
+          <span className="text-jeopardy-gold font-bold">
+            {currentPlayer?.name || 'They'} hasn&apos;t picked — go ahead and pick one
+          </span>
         ) : (
           <span className="text-white/50 font-medium">
             {currentPlayer?.name || 'Someone'} is picking...
@@ -97,7 +109,7 @@ export function GameBoard({
                   <button
                     key={`${cat.id}-${value}`}
                     onClick={() => handleCellClick(clue)}
-                    disabled={isAnswered || !isMyTurn}
+                    disabled={isAnswered || !canPick}
                     className={`board-cell py-3 md:py-5 min-h-[44px] ${
                       isAnswered
                         ? wasCorrect
@@ -106,7 +118,7 @@ export function GameBoard({
                             ? 'board-cell-wrong'
                             : 'board-cell-answered'
                         : ''
-                    } ${!isMyTurn && !isAnswered ? 'opacity-70' : ''}`}
+                    } ${!canPick && !isAnswered ? 'opacity-70' : ''}`}
                   >
                     {isAnswered ? (
                       answeredByPlayer ? (

@@ -22,7 +22,7 @@
  */
 
 import { supabase } from './supabase'
-import { joinGame } from './game-api'
+import { joinGame, removePlayer } from './game-api'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 
 export const LOBBY_SEATS = 3
@@ -311,51 +311,14 @@ export async function leaveCommunityLobby(playerId: string, gameId?: string): Pr
         .maybeSingle()
     : { data: null }
 
-  // ORDER MATTERS, and getting it wrong is why leaving a game in progress used
-  // to do nothing at all. Two references to players(id) have no ON DELETE rule,
-  // so Postgres refuses to delete a row either one still points at, and the
-  // error went unchecked — the row survived and the seat never freed:
-  //
-  //   clues.answered_by        — anyone who has answered a clue correctly
-  //   games.current_player_id  — whoever's turn it is (fk_current_player)
-  //
-  // Both are released here before the delete. The clue stays answered; it just
-  // stops being credited to someone who isn't in the game any more.
-  await supabase.from('clues').update({ answered_by: null }).eq('answered_by', playerId)
-
   const isCommunity = !!game && (game.settings as any)?.community === true
 
-  if (gameId && (game as any)?.current_player_id === playerId) {
-    const { data: others } = await supabase
-      .from('players')
-      .select('id')
-      .eq('game_id', gameId)
-      .neq('id', playerId)
-      .order('join_order')
-      .limit(1)
-    const next = (others?.[0] as any)?.id ?? null
-
-    // Mid-clue, the room is waiting on a player who has gone. Hand the board
-    // to someone still here and put them back on the grid; Final Jeopardy and
-    // the pre-game phases don't take turns, so they only need the pointer
-    // cleared.
-    const phase = (game as any).phase as string
-    const takesTurns = !/^final/.test(phase) && !['lobby', 'game_voting', 'game_over'].includes(phase)
-
-    await supabase
-      .from('games')
-      .update({
-        current_player_id: next,
-        ...(takesTurns && next
-          ? { phase: 'board_selection', current_clue_id: null, buzz_window_open: false }
-          : {}),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', gameId)
-  }
-
-  const { error: deleteError } = await supabase.from('players').delete().eq('id', playerId)
-  if (deleteError) throw deleteError
+  // removePlayer does the delicate part: clues.answered_by and
+  // games.current_player_id both reference players(id) with no ON DELETE rule,
+  // so the row can't go while either still points at it, and it hands the
+  // board on if it was this player's turn. That logic lives in one place
+  // deliberately — it was written twice before and the copies drifted.
+  await removePlayer(playerId, gameId)
 
   if (!gameId || !isCommunity) return
 

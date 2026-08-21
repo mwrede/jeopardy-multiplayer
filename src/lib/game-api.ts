@@ -180,10 +180,62 @@ async function tryClaimPlayerOwnership(playerId: string, userId: string) {
 }
 
 /**
- * Remove a player from the game (kick from lobby).
+ * Remove a player, from the lobby or from a game in progress.
+ *
+ * Two references to players(id) have no ON DELETE rule, so Postgres refuses to
+ * delete a row either one still points at, and the error used to go unchecked —
+ * the player stayed, and the removal silently did nothing:
+ *
+ *   clues.answered_by        — anyone who has answered a clue correctly
+ *   games.current_player_id  — whoever's turn it is (fk_current_player)
+ *
+ * Both are released first. Answered clues stay answered; they just stop being
+ * credited to someone no longer in the game. If it was their turn, the board
+ * passes to the next player so the game doesn't stall on the person who has
+ * just been taken out of it.
+ *
+ * Pass gameId whenever the game may have started — without it only the clue
+ * references can be cleared, which is enough in a lobby and nowhere else.
  */
-export async function removePlayer(playerId: string) {
-  await supabase.from('players').delete().eq('id', playerId)
+export async function removePlayer(playerId: string, gameId?: string) {
+  await supabase.from('clues').update({ answered_by: null }).eq('answered_by', playerId)
+
+  if (gameId) {
+    const { data: game } = await supabase
+      .from('games')
+      .select('current_player_id, phase')
+      .eq('id', gameId)
+      .maybeSingle()
+
+    if (game?.current_player_id === playerId) {
+      const { data: others } = await supabase
+        .from('players')
+        .select('id')
+        .eq('game_id', gameId)
+        .neq('id', playerId)
+        .order('join_order', { ascending: true })
+        .limit(1)
+      const next = (others?.[0] as any)?.id ?? null
+
+      const phase = (game as any).phase as string
+      const takesTurns =
+        !/^final/.test(phase) && !['lobby', 'game_voting', 'game_over'].includes(phase)
+
+      await supabase
+        .from('games')
+        .update({
+          current_player_id: next,
+          ...(takesTurns && next
+            ? { phase: 'board_selection', current_clue_id: null, buzz_window_open: false }
+            : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', gameId)
+    }
+  }
+
+  const { error } = await supabase.from('players').delete().eq('id', playerId)
+  if (error) throw error
 }
 
 export async function setReady(playerId: string, isReady: boolean) {
