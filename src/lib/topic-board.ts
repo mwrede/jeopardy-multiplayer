@@ -7,10 +7,12 @@
  *   - a curated theme  → pulls from the pre-tagged `category_type` column
  *                        (geography, history, corporate, …). High quality,
  *                        indexed, fast.
- *   - a free-text term → pulls ANY clue that mentions the term, matching the
- *                        category name OR the question text OR the answer.
- *                        This is what makes "mechanical engineering" work even
- *                        though no J-Archive category is named that.
+ *   - a free-text term → matches the category name first, then the clue text.
+ *                        Never the answer: a clue whose ANSWER happens to
+ *                        contain "health care" is a clue about whatever its
+ *                        category says it is, not a health care clue.
+ *                        Question text is the backstop that makes narrow
+ *                        subjects work when no category is named for them.
  *
  * The board's category slots are split as evenly as possible across the chosen
  * topics. Pick geography + pop culture + history on a 6-wide board and you get
@@ -62,6 +64,50 @@ const THEME_ALIASES: Record<string, string> = {
   finance: 'corporate',
   politics: 'politics', political: 'politics', presidents: 'politics',
   government: 'politics', elections: 'politics',
+}
+
+/**
+ * Words to look for in CATEGORY names for a typed topic.
+ *
+ * Two jobs. First, a multi-word phrase is split up: "%health care%" as a single
+ * pattern matches no category at all (and times out the trigram index trying),
+ * while "health" matches HEALTH & MEDICINE, SICKNESS & HEALTH, HEALTH MATTERS.
+ *
+ * Second, a handful of everyday subjects are broadened to the words J-Archive
+ * actually names its categories with. Nobody writes a category called "health
+ * care", but there are dozens called MEDICINE, ANATOMY, DISEASES, HOSPITALS and
+ * THE HUMAN BODY — which is what someone asking for health care wants to play.
+ */
+const RELATED_CATEGORY_TERMS: Record<string, string[]> = {
+  health: ['health', 'medic', 'anatomy', 'disease', 'doctor', 'hospital', 'body'],
+  healthcare: ['health', 'medic', 'anatomy', 'disease', 'doctor', 'hospital', 'body'],
+  medicine: ['medic', 'health', 'anatomy', 'disease', 'doctor'],
+  medical: ['medic', 'health', 'anatomy', 'disease', 'doctor'],
+  law: ['law', 'legal', 'court', 'crime', 'judge'],
+  legal: ['law', 'legal', 'court', 'crime', 'judge'],
+  animals: ['animal', 'bird', 'mammal', 'insect', 'dog', 'cat', 'fish'],
+  animal: ['animal', 'bird', 'mammal', 'insect', 'dog', 'cat', 'fish'],
+  technology: ['tech', 'computer', 'internet', 'gadget', 'invention'],
+  tech: ['tech', 'computer', 'internet', 'gadget', 'invention'],
+  religion: ['religio', 'bible', 'church', 'faith', 'saint'],
+  war: ['war', 'battle', 'military', 'army'],
+  art: ['art', 'painting', 'sculpture', 'museum'],
+  transport: ['transport', 'car', 'train', 'plane', 'ship'],
+  fashion: ['fashion', 'clothing', 'style', 'designer'],
+}
+
+export function relatedCategoryTerms(term: string): string[] {
+  const words = significantWords(sanitizeTerm(term))
+  const out = new Set<string>()
+  for (const w of words) {
+    out.add(w)
+    for (const extra of RELATED_CATEGORY_TERMS[w] ?? []) out.add(extra)
+  }
+  // Whole phrase too, for the cases where a category really is named that.
+  const whole = sanitizeTerm(term).toLowerCase()
+  if (whole && words.length === 1) out.add(whole)
+  // Capped: each one is its own query.
+  return [...out].slice(0, 8)
 }
 
 /** The curated theme a typed term really means, if it means one. */
@@ -129,7 +175,7 @@ export function headerFor(topic: BoardTopic, occurrence: number): string {
 
 /**
  * Fetch a de-duplicated pool of clues for one topic in one round.
- * Themes filter on category_type; terms search category + question + answer.
+ * Themes filter on category_type; terms search category name, then clue text.
  */
 /**
  * Turn a raw Postgres error into something a player can act on. Statement
@@ -204,9 +250,16 @@ export function groupIntoRealCategories(
 function categoryFitsTopic(topic: BoardTopic, categoryName: string): boolean {
   if (topic.kind === 'theme') return true
   const haystack = categoryName.toLowerCase()
-  const words = significantWords(sanitizeTerm(topic.value))
+  const words = relatedCategoryTerms(topic.value)
   if (words.length === 0) return false
-  return words.some((w) => haystack.includes(w))
+  // Match at a word START, not anywhere in the string. Plain substring matching
+  // put HAS ANYBODY SEEN MY "GAL"? on a health board, because "anybody"
+  // contains "body". Anchoring only the front still lets a stem like "medic"
+  // reach MEDICINE and MEDICAL, which is the point of the related terms.
+  return words.some((w) => {
+    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`\\b${escaped}`, 'i').test(haystack)
+  })
 }
 
 export async function fetchTopicPool(
@@ -231,9 +284,16 @@ export async function fetchTopicPool(
     return dedupe(data ?? [])
   }
 
-  // Free-text term: match the category name, the clue text, or the answer.
+  // Free-text term: match the category name first, then the clue text.
   //
-  // Deliberately three separate .ilike() queries rather than one .or().
+  // NOT the answer. Searching answers is what made "health care" return a
+  // scatter of unrelated categories whose answers merely happened to contain
+  // the phrase — a clue about a president whose answer is "Medicare" is not a
+  // health care clue, it's a presidents clue. Matching the category name finds
+  // whole categories that really are about the topic; clue text is the
+  // backstop for subjects too specific to have their own category.
+  //
+  // Deliberately separate .ilike() queries rather than one .or().
   // supabase-js splices an .or() string raw into the URL, where the '%'
   // wildcards start percent-escape sequences and multi-word values break the
   // filter grammar — the query silently returns nothing. .ilike() is encoded
@@ -243,17 +303,25 @@ export async function fetchTopicPool(
   const pattern = `%${safe}%`
   const per = Math.ceil(limit / 2)
 
-  const [byCategory, byQuestion, byAnswer] = await Promise.all([
-    supabase.from('clue_pool').select('category, question, answer')
-      .eq('round', roundName).ilike('category', pattern).limit(per),
+  const catTerms = relatedCategoryTerms(topic.value)
+  const [categoryResults, byQuestion] = await Promise.all([
+    Promise.all(
+      catTerms.map((t) =>
+        supabase.from('clue_pool').select('category, question, answer')
+          .eq('round', roundName).ilike('category', `%${t}%`).limit(per),
+      ),
+    ),
     supabase.from('clue_pool').select('category, question, answer')
       .eq('round', roundName).ilike('question', pattern).limit(per),
-    supabase.from('clue_pool').select('category, question, answer')
-      .eq('round', roundName).ilike('answer', pattern).limit(per),
   ])
 
-  const failures = [byCategory, byQuestion, byAnswer].filter((r) => r.error)
-  if (failures.length === 3) {
+  const byCategory = {
+    data: categoryResults.flatMap((r) => r.data ?? []),
+    error: categoryResults.every((r) => r.error) ? categoryResults[0]?.error : null,
+  }
+
+  const failures = [byCategory, byQuestion].filter((r) => r.error)
+  if (failures.length === 2) {
     // Every probe failed — surface it instead of pretending the topic is empty.
     throw new Error(
       `Clue search failed for "${topic.label}": ${failures[0].error!.message}. ` +
@@ -270,7 +338,6 @@ export async function fetchTopicPool(
   const exact = dedupe([
     ...(byCategory.data ?? []),
     ...(byQuestion.data ?? []),
-    ...(byAnswer.data ?? []),
   ])
 
   // A multi-word phrase rarely appears verbatim in clue text — "mechanical
@@ -307,20 +374,20 @@ async function fetchAllWordsPool(
   const anchor = [...terms].sort((a, b) => b.length - a.length)[0]
   const pattern = `%${anchor}%`
 
-  const [cat, q, a] = await Promise.all([
+  const [cat, q] = await Promise.all([
     supabase.from('clue_pool').select('category, question, answer')
       .eq('round', roundName).ilike('category', pattern).limit(limit),
     supabase.from('clue_pool').select('category, question, answer')
       .eq('round', roundName).ilike('question', pattern).limit(limit),
-    supabase.from('clue_pool').select('category, question, answer')
-      .eq('round', roundName).ilike('answer', pattern).limit(limit),
   ])
 
-  const rows = [...(cat.data ?? []), ...(q.data ?? []), ...(a.data ?? [])]
+  const rows = [...(cat.data ?? []), ...(q.data ?? [])]
   const others = terms.filter((t) => t !== anchor)
 
+  // Category and question only — the answer is excluded here too, so a clue
+  // doesn't qualify just because the word turns up in its solution.
   const matching = rows.filter((r: any) => {
-    const haystack = `${r.category ?? ''} ${r.question ?? ''} ${r.answer ?? ''}`.toLowerCase()
+    const haystack = `${r.category ?? ''} ${r.question ?? ''}`.toLowerCase()
     return others.every((t) => haystack.includes(t))
   })
 
@@ -539,15 +606,13 @@ export async function pickTopicFinal(topics: BoardTopic[]): Promise<{
       if (!safe) continue
       const pattern = `%${safe}%`
       // Separate .ilike() calls for the same reason as fetchTopicPool.
-      const [cat, q, a] = await Promise.all([
+      const [cat, q] = await Promise.all([
         supabase.from('clue_pool').select('category, question, answer')
           .eq('round', 'Final Jeopardy').ilike('category', pattern).limit(25),
         supabase.from('clue_pool').select('category, question, answer')
           .eq('round', 'Final Jeopardy').ilike('question', pattern).limit(25),
-        supabase.from('clue_pool').select('category, question, answer')
-          .eq('round', 'Final Jeopardy').ilike('answer', pattern).limit(25),
       ])
-      rows = [...(cat.data ?? []), ...(q.data ?? []), ...(a.data ?? [])]
+      rows = [...(cat.data ?? []), ...(q.data ?? [])]
     }
 
     if (rows.length > 0) {

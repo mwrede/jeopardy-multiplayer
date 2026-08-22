@@ -6,18 +6,30 @@ import type { Player } from '@/types/game'
 
 /**
  * Lists every answer attempted on a clue, in buzz order, with a ✓/✗ per row.
- * Shown on the clue-result reveal so the room can see what everyone said.
+ *
+ * Shown on the clue-result reveal, and again while the buzzers are reopened
+ * after a wrong answer — at that point it's the room's record of what has
+ * already been tried and missed, so nobody buzzes in to repeat it.
  */
 export function ClueAttempts({
   gameId,
   clueId,
   players,
   variant = 'tv',
+  refreshKey,
+  heading = 'Answers given',
 }: {
   gameId: string
   clueId: string
   players: Player[]
   variant?: 'tv' | 'phone'
+  /**
+   * Change this to refetch. A wrong answer reopens the buzzers rather than
+   * ending the clue, so this list has to pick up each new attempt while the
+   * clue is still live — pass something that moves on every phase flip.
+   */
+  refreshKey?: string | number
+  heading?: string
 }) {
   const [rows, setRows] = useState<BuzzOrderRow[]>([])
 
@@ -27,7 +39,7 @@ export function ClueAttempts({
       if (!cancelled) setRows(r)
     })
     return () => { cancelled = true }
-  }, [gameId, clueId])
+  }, [gameId, clueId, refreshKey])
 
   // Only rows where someone actually attempted an answer
   const attempts = rows.filter((r) => r.is_correct !== null)
@@ -38,7 +50,7 @@ export function ClueAttempts({
   return (
     <div className={isTv ? 'mt-8 w-full max-w-2xl' : 'mt-5 w-full max-w-sm'}>
       <p className={`text-gray-500 uppercase tracking-[0.2em] font-bold mb-2 text-center ${isTv ? 'text-sm' : 'text-[10px]'}`}>
-        Answers given
+        {heading}
       </p>
       <div className="space-y-1.5">
         {attempts.map((r) => {

@@ -18,6 +18,7 @@ import {
   skipClue,
   passAfterBuzz,
   skipToRound,
+  openBuzzWindow,
 } from '@/lib/game-api'
 import { CLUE_INTRO_MS, buzzOpenDelayMs } from '@/lib/clue-timing'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
@@ -184,17 +185,7 @@ export default function DisplayPage() {
     })
 
     const openBuzz = setTimeout(async () => {
-      await supabase
-        .from('games')
-        .update({
-          phase: 'buzz_window',
-          buzz_window_open: true,
-          // 700ms lead so every phone can arm together via buzz_window_start.
-          buzz_window_start: new Date(Date.now() + 700).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', gameId)
-        .eq('phase', 'clue_reading') // only flip if still reading
+      await openBuzzWindow(gameId, { onlyIfReading: true })
     }, delay)
 
     return () => clearTimeout(openBuzz)
@@ -939,6 +930,16 @@ export default function DisplayPage() {
                     {buzzCountdown}
                   </p>
                 )}
+                {/* On a reopened window, the whole room can see what has
+                    already been guessed and missed. */}
+                <ClueAttempts
+                  gameId={game.id}
+                  clueId={currentClue.id}
+                  players={players}
+                  variant="tv"
+                  refreshKey={game.updated_at}
+                  heading="Already tried"
+                />
               </div>
             )}
             {game.phase === 'player_answering' && (

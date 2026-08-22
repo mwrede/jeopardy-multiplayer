@@ -24,6 +24,7 @@ import {
   passOnClue,
   passAfterBuzz,
   skipClue,
+  openBuzzWindow,
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -221,12 +222,7 @@ export default function PlayerPage() {
       phaseStartedAt: game.updated_at,
     })
     phaseTransitionRef.current = setTimeout(async () => {
-      await supabase.from('games').update({
-        phase: 'buzz_window',
-        buzz_window_open: true,
-        buzz_window_start: new Date(Date.now() + 700).toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', game.id).eq('phase', 'clue_reading')  // only flip if still clue_reading
+      await openBuzzWindow(game.id, { onlyIfReading: true })
     }, delay)
     return () => {
       if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
@@ -911,6 +907,16 @@ export default function PlayerPage() {
                 ? 'Get ready…'
                 : 'Watch the TV'}
           </p>
+          {/* What's already been guessed wrong. The buzzers reopen after every
+              wrong answer, so this is the room's record of what not to say. */}
+          <ClueAttempts
+            gameId={game.id}
+            clueId={currentClue.id}
+            players={players}
+            variant="phone"
+            refreshKey={game.updated_at}
+            heading="Already tried"
+          />
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
             <p className={`text-7xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'

@@ -1310,54 +1310,100 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
  * auto-timeout later closes the clue if nobody jumps in.
  */
 async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnswererId: string) {
-  const { data: nextRows } = await supabase
-    .from('buzzes')
-    .select('player_id, server_timestamp, client_timestamp')
-    .eq('game_id', gameId)
-    .eq('clue_id', clueId)
-    .eq('is_pass', false)
-    .is('is_correct', null) // untried — is_correct gets set once they attempt
-    .neq('player_id', lastAnswererId)
-    .order('server_timestamp', { ascending: true })
-    .order('client_timestamp', { ascending: true, nullsFirst: false })
-    .limit(1)
+  // The buzzers come back on. Every wrong answer reopens the race for whoever
+  // hasn't tried yet, rather than walking down a queue of who buzzed first —
+  // that queue meant the second-fastest buzzer was handed the clue without
+  // having to beat anyone to it, which isn't how the show plays.
+  //
+  // resolve_buzz keeps the reopened window honest: it ignores players who have
+  // already answered, and it restamps a buzz when it's reused, so nobody wins
+  // the new race on the strength of a buzz from the old one.
+  await openBuzzWindow(gameId, { reopen: true, clueId })
+}
 
-  const next = nextRows?.[0]
+/**
+ * Put the game into buzz_window with a start instant every device can agree on.
+ *
+ * Prefers the open_buzz_window function, which stamps the start from the
+ * DATABASE clock — otherwise the moment the buzzers light up is set by
+ * whichever browser happened to flip the phase, and one player with a wrong
+ * system clock drags the whole room with them.
+ *
+ * Falls back to the client clock when that function isn't installed yet, so
+ * the game still runs on a database without the migration.
+ */
+export async function openBuzzWindow(
+  gameId: string,
+  opts: { reopen?: boolean; onlyIfReading?: boolean; clueId?: string } = {},
+): Promise<void> {
+  let windowMs: number | null = null
 
-  if (next) {
-    await supabase
-      .from('games')
-      .update({
-        current_player_id: next.player_id,
-        phase: 'player_answering',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', gameId)
-    return
+  if (opts.reopen) {
+    // A reopened window is shorter: everyone has heard the clue already, so
+    // this is a quick "anyone else?" rather than a fresh read.
+    const { data: g } = await supabase
+      .from('games').select('settings').eq('id', gameId).maybeSingle()
+    const fullWindow = (g?.settings as any)?.buzz_window_ms ?? 10000
+    windowMs = Math.max(4000, Math.round(fullWindow * 0.5))
+
+    if (opts.clueId) {
+      // Wipe the slate so the new window is a genuine race.
+      //
+      // Without this the previous round decides the next one: whoever already
+      // holds is_winner keeps blocking everyone, and the winner is picked by
+      // earliest timestamp across every buzz on the clue — which is the player
+      // who just answered wrong. Both would hand the clue straight back to
+      // them.
+      //
+      // Anyone who has ANSWERED is out of the running (is_pass, which is how
+      // the buzz resolver already excludes people, and it keeps their row so
+      // the room can still see what they said). Anyone who buzzed but never
+      // got to answer has their row cleared entirely, so their old timestamp
+      // can't win a race they haven't entered yet.
+      await supabase
+        .from('buzzes')
+        .update({ is_pass: true, is_winner: false })
+        .eq('game_id', gameId)
+        .eq('clue_id', opts.clueId)
+        .not('is_correct', 'is', null)
+
+      await supabase
+        .from('buzzes')
+        .delete()
+        .eq('game_id', gameId)
+        .eq('clue_id', opts.clueId)
+        .is('is_correct', null)
+    }
   }
 
-  // Queue exhausted — reopen the buzz window for anyone who hasn't tried.
-  // Shorter than the opening window: everyone has already heard the clue, so
-  // this is a quick "anyone else?" rather than a fresh read.
-  const { data: g } = await supabase
-    .from('games').select('settings').eq('id', gameId).single()
-  const fullWindow = (g?.settings as any)?.buzz_window_ms ?? 10000
-  const reopenMs = Math.max(4000, Math.round(fullWindow * 0.5))
+  const { error } = await supabase.rpc('open_buzz_window', {
+    p_game_id: gameId,
+    p_lead_ms: 700,
+    p_window_ms: windowMs,
+    p_only_if_reading: !!opts.onlyIfReading,
+  })
+  if (!error) return
+
+  console.warn('[openBuzzWindow] open_buzz_window unavailable, using client clock:', error.message)
 
   const update: any = {
     phase: 'buzz_window',
     buzz_window_open: true,
     buzz_window_start: new Date(Date.now() + 700).toISOString(),
-    buzz_window_ms: reopenMs,
     updated_at: new Date().toISOString(),
   }
-  const { error } = await supabase.from('games').update(update).eq('id', gameId)
-  if (error) {
-    // buzz_window_ms column missing (migration not applied) — reopen anyway
-    // at the default duration rather than stranding the clue.
-    console.warn('[advanceAfterFailedAnswer] retrying without buzz_window_ms:', error.message)
+  if (windowMs !== null) update.buzz_window_ms = windowMs
+
+  let query = supabase.from('games').update(update).eq('id', gameId)
+  if (opts.onlyIfReading) query = query.eq('phase', 'clue_reading')
+  const { error: updateError } = await query
+  if (updateError) {
+    // buzz_window_ms column missing (migration not applied) — reopen anyway at
+    // the default duration rather than stranding the clue.
     delete update.buzz_window_ms
-    await supabase.from('games').update(update).eq('id', gameId)
+    let retry = supabase.from('games').update(update).eq('id', gameId)
+    if (opts.onlyIfReading) retry = retry.eq('phase', 'clue_reading')
+    await retry
   }
 }
 

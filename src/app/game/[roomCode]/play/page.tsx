@@ -36,6 +36,7 @@ import {
   rematchGame,
   joinGame,
   skipCurrentPlayer,
+  openBuzzWindow,
 } from '@/lib/game-api'
 import { leaveCommunityLobby } from '@/lib/community'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
@@ -248,12 +249,7 @@ export default function PlayPage() {
       phaseStartedAt: game.updated_at,
     })
     transitionRef.current = setTimeout(async () => {
-      await supabase.from('games').update({
-        phase: 'buzz_window', buzz_window_open: true,
-        // 700ms lead so every client arms at the same wall-clock moment.
-        buzz_window_start: new Date(Date.now() + 700).toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', game.id).eq('phase', 'clue_reading')
+      await openBuzzWindow(game.id, { onlyIfReading: true })
     }, delay)
     return () => { if (transitionRef.current) clearTimeout(transitionRef.current) }
   }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id, clues])
@@ -1165,7 +1161,18 @@ export default function PlayPage() {
                   secondaryAction={{ label: 'Pass', onClick: handlePassAfterBuzz, disabled: busy }} />
               </div>
             ) : (game.phase === 'buzz_window' || game.phase === 'clue_reading') ? (
-              hasTriedAnswer ? (
+              <>
+              {/* The buzzers reopen after every wrong answer, so the room can
+                  see what's already been said and missed. */}
+              <ClueAttempts
+                gameId={game.id}
+                clueId={currentClue.id}
+                players={players}
+                variant="phone"
+                refreshKey={game.updated_at}
+                heading="Already tried"
+              />
+              {hasTriedAnswer ? (
                 <div className="text-center py-4 rounded-xl bg-red-950/40 border border-red-900/60">
                   <p className="text-red-300 font-semibold">You got it wrong</p>
                   <p className="text-gray-400 text-xs mt-0.5">Waiting for other players...</p>
@@ -1180,7 +1187,8 @@ export default function PlayPage() {
                     <button onClick={handlePass} disabled={busy} className="btn-secondary w-full py-3 text-sm">I Don&apos;t Know</button>
                   )}
                 </div>
-              )
+              )}
+              </>
             ) : (
               <div className="text-center py-4"><p className="text-gray-500">Waiting...</p></div>
             )}
