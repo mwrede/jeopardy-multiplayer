@@ -827,7 +827,11 @@ export default function DisplayPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+    // A definite height, not min-height: the board below is a flex-1 child
+    // whose own grid is h-full, and h-full against an auto height collapses to
+    // content. That's why the board sat in the top two-thirds of a TV with a
+    // band of empty navy underneath.
+    <div className="h-[100dvh] overflow-hidden flex flex-col bg-jeopardy-dark">
       {/* Connection indicator + debug skip buttons */}
       <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
         {game.phase === 'board_selection' && game.current_round === 1 && (
@@ -960,7 +964,7 @@ export default function DisplayPage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1">
+        <div className="flex-1 min-h-0">
           <GameBoard
             game={game}
             categories={categories}

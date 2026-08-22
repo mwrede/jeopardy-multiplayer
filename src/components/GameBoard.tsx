@@ -87,7 +87,10 @@ export function GameBoard({
                 key={cat.id}
                 className="board-category p-1.5 md:p-3 min-h-[44px] md:min-h-[60px]"
               >
-                <span className="text-[9px] md:text-sm font-bold text-white uppercase leading-tight line-clamp-3 text-center tracking-wide">
+                {/* Steps up through the large breakpoints: the same board is a
+                    phone in your hand and a TV across the room, and 14px
+                    category headers are unreadable from a sofa. */}
+                <span className="text-[9px] md:text-sm lg:text-lg xl:text-2xl 2xl:text-3xl font-bold text-white uppercase leading-tight line-clamp-3 text-center tracking-wide">
                   {cat.name}
                 </span>
               </div>
@@ -122,7 +125,7 @@ export function GameBoard({
                   >
                     {isAnswered ? (
                       answeredByPlayer ? (
-                        <span className={`text-[8px] md:text-xs font-bold truncate block px-0.5 ${
+                        <span className={`text-[8px] md:text-xs lg:text-base xl:text-lg font-bold truncate block px-0.5 ${
                           wasCorrect ? 'text-green-400' : 'text-red-400'
                         }`}>
                           {answeredByPlayer.name}
@@ -131,7 +134,7 @@ export function GameBoard({
                         <span className="text-sm md:text-lg text-gray-500/60">—</span>
                       )
                     ) : (
-                      <span className="text-sm md:text-2xl font-bold" style={{ fontFamily: 'Swiss911, Impact, Arial Black, sans-serif' }}>
+                      <span className="text-sm md:text-2xl lg:text-4xl xl:text-5xl 2xl:text-6xl font-bold" style={{ fontFamily: 'Swiss911, Impact, Arial Black, sans-serif' }}>
                         ${value}
                       </span>
                     )}
