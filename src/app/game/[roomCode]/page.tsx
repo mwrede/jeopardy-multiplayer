@@ -8,6 +8,7 @@ import { GameKeyboard } from '@/components/GameKeyboard'
 import {
   joinGame,
   removePlayer,
+  skipCurrentPlayer,
   startGame,
   startGameFromSource,
   startCustomGame,
@@ -106,6 +107,7 @@ export default function PlayerPage() {
     myPlayer,
     myPlayerId,
     isMyTurn,
+    onlineIds,
     connected,
     refreshState,
   } = useGameChannel(roomCode)
@@ -193,6 +195,8 @@ export default function PlayerPage() {
   // Remove self from lobby when closing tab
   useEffect(() => {
     if (!game || game.phase !== 'lobby' || !myPlayerId) return
+    // Lobby only (see the guard above): mid-game the player row has to stay,
+    // or scores and answered clues would vanish with a closed tab.
     const handleUnload = () => { removePlayer(myPlayerId) }
     window.addEventListener('beforeunload', handleUnload)
     return () => window.removeEventListener('beforeunload', handleUnload)
@@ -479,7 +483,7 @@ export default function PlayerPage() {
                 p.id === myPlayerId
                   ? 'bg-jeopardy-blue/30 border border-jeopardy-blue/50'
                   : 'bg-white/5'
-              }`}
+              } ${p.id !== myPlayerId && !onlineIds.has(p.id) ? 'opacity-40' : ''}`}
             >
               <span className="font-semibold flex items-center gap-2">
                 {p.name}
@@ -490,7 +494,7 @@ export default function PlayerPage() {
               {/* Only the host can kick, and never themselves */}
               {myPlayer.is_creator && p.id !== myPlayerId && (
                 <button
-                  onClick={async () => { await removePlayer(p.id); await refreshState() }}
+                  onClick={async () => { await removePlayer(p.id, game.id); await refreshState() }}
                   className="text-xs text-red-400/60 hover:text-red-400 transition-colors px-2"
                   title="Remove player"
                 >
@@ -859,12 +863,28 @@ export default function PlayerPage() {
   // ===== BOARD SELECTION (waiting for other player) =====
   if (game.phase === 'board_selection' && !isMyTurn) {
     const picker = players.find((p) => p.id === game.current_player_id)
+    const pickerAway = !!game.current_player_id && !onlineIds.has(game.current_player_id)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
         <PlayerHeader myPlayer={myPlayer} game={game} />
         <p className="text-gray-400 text-xl mt-8">
           {picker?.name || 'Someone'} is picking a clue...
         </p>
+        {/* Same dead end as multiplayer had: a picker whose phone is dead
+            stops the party for everyone. Anyone can move it along. */}
+        {pickerAway && (
+          <>
+            <p className="mt-3 text-sm text-gray-500">
+              {picker?.name || 'They'} doesn&apos;t have the game open.
+            </p>
+            <button
+              onClick={() => skipCurrentPlayer(game.id, game.current_player_id!)}
+              className="btn-secondary mt-4 px-6 py-3"
+            >
+              Skip their turn
+            </button>
+          </>
+        )}
       </div>
     )
   }

@@ -103,6 +103,7 @@ export default function PlayPage() {
     myPlayerId,
     isMyTurn,
     connected,
+    onlineIds,
     refreshState,
   } = useGameChannel(roomCode)
 
@@ -502,6 +503,15 @@ export default function PlayPage() {
     }
   }, [game?.phase, myPlayer?.id, finalAnswerLocked, myPlayer?.final_answer, game?.settings?.final_answer_ms])
 
+  // Someone with the page closed isn't about to pick, so there's no reason to
+  // sit through the full pause before the others may act. Still a few seconds
+  // rather than none: a backgrounded phone can drop its socket briefly, and
+  // that shouldn't cost anyone their turn.
+  const currentPlayerOnline =
+    !game?.current_player_id || onlineIds.has(game.current_player_id)
+  const SKIP_GRACE_ONLINE_MS = 20000
+  const SKIP_GRACE_OFFLINE_MS = 6000
+
   // Phases that wait on one named player, and so can stall on them.
   //
   // Deliberately no automatic skip on "their row is gone": games.current_player_id
@@ -509,7 +519,6 @@ export default function PlayPage() {
   // player — the delete is refused first. An auto-skip keyed on the client's
   // player list would therefore never fire for a real absence, but WOULD fire
   // while that list is still loading, skipping someone who never had a turn.
-  const SKIP_GRACE_MS = 20000
   const stallablePhase =
     game?.phase === 'board_selection' || game?.phase === 'daily_double_wager'
 
@@ -517,10 +526,11 @@ export default function PlayPage() {
     setSkipReady(false)
     if (!stallablePhase || isMyTurn || !game) return
     const startedAt = Date.parse(game.updated_at ?? '')
-    const readyAt = (isNaN(startedAt) ? Date.now() : startedAt) + SKIP_GRACE_MS
+    const grace = currentPlayerOnline ? SKIP_GRACE_ONLINE_MS : SKIP_GRACE_OFFLINE_MS
+    const readyAt = (isNaN(startedAt) ? Date.now() : startedAt) + grace
     const t = setTimeout(() => setSkipReady(true), Math.max(0, readyAt - Date.now()))
     return () => clearTimeout(t)
-  }, [stallablePhase, isMyTurn, game?.updated_at, game?.phase])
+  }, [stallablePhase, isMyTurn, game?.updated_at, game?.phase, currentPlayerOnline])
 
   // Auto-redirect on rematch
   useEffect(() => {
@@ -809,10 +819,15 @@ export default function PlayPage() {
         </div>
       </div>
       <div className="flex gap-2 px-2 pb-2 overflow-x-auto">
-        {players.sort((a, b) => b.score - a.score).map((p) => (
-          <div key={p.id} className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-center min-w-[80px] border-b-3 ${
+        {players.sort((a, b) => b.score - a.score).map((p) => {
+          // Faded means the page isn't open on their end. It corrects itself
+          // the moment they come back, so it says "away", not "gone".
+          const away = !onlineIds.has(p.id) && p.id !== myPlayerId
+          return (
+          <div key={p.id} title={away ? `${p.name} doesn't have the game open` : undefined}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-center min-w-[80px] border-b-3 ${
             p.id === game.current_player_id ? 'bg-jeopardy-blue-cell/50 border-b-2 border-jeopardy-gold' : 'bg-jeopardy-blue-dark/30'
-          } ${p.id === myPlayerId ? 'ring-1 ring-blue-400/30' : ''}`}>
+          } ${p.id === myPlayerId ? 'ring-1 ring-blue-400/30' : ''} ${away ? 'opacity-40 grayscale' : ''}`}>
             <p className="text-[10px] text-white/60 truncate font-semibold uppercase">
               {p.name}
               {/* Take out someone who has plainly gone. Freely in a private
@@ -842,7 +857,8 @@ export default function PlayPage() {
               ${p.score.toLocaleString()}
             </p>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

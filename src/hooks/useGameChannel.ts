@@ -62,6 +62,20 @@ export function useGameChannel(roomCode: string) {
   })
   const [connected, setConnected] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
+  /**
+   * Players with the game open right now, by player id.
+   *
+   * Realtime Presence, not a database column: a websocket that goes away is
+   * the only reliable signal that someone closed the tab. players.is_connected
+   * was never trustworthy — it was set true on join and nothing ever set it
+   * back, so every player looked present forever.
+   *
+   * Treat this as a hint rather than a verdict. Backgrounding a phone browser
+   * can drop the socket for a few seconds, so presence is used to grey someone
+   * out and to shorten the wait before others may act — never to take a turn
+   * away the instant it blinks.
+   */
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set())
   const gameIdRef = useRef<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -122,7 +136,23 @@ export function useGameChannel(roomCode: string) {
 
     const gameId = state.game.id
 
-    const channel = supabase.channel(`game:${gameId}`)
+    const myId = state.myPlayerId
+    const channel = supabase.channel(`game:${gameId}`, {
+      // Keyed by player so a player's second tab doesn't read as a second
+      // person, and so closing one tab doesn't mark them gone.
+      config: { presence: { key: myId ?? `viewer:${Math.random().toString(36).slice(2)}` } },
+    })
+
+    channel.on('presence', { event: 'sync' }, () => {
+      const online = new Set<string>()
+      const presenceState = channel.presenceState() as Record<string, any[]>
+      for (const entries of Object.values(presenceState)) {
+        for (const entry of entries) {
+          if (entry?.playerId) online.add(entry.playerId as string)
+        }
+      }
+      setOnlineIds(online)
+    })
 
     // Game row changes → refresh game state
     channel.on(
@@ -192,6 +222,11 @@ export function useGameChannel(roomCode: string) {
 
     channel.subscribe((status) => {
       setConnected(status === 'SUBSCRIBED')
+      // Spectator screens (the TV in party mode) watch without announcing
+      // themselves — they aren't playing, so they shouldn't count as present.
+      if (status === 'SUBSCRIBED' && myId) {
+        channel.track({ playerId: myId })
+      }
     })
 
     channelRef.current = channel
@@ -199,7 +234,7 @@ export function useGameChannel(roomCode: string) {
     return () => {
       channel.unsubscribe()
     }
-  }, [state.game?.id, refreshState])
+  }, [state.game?.id, state.myPlayerId, refreshState])
 
   // 3. Polling fallback: refresh every 2 seconds to catch anything missed
   useEffect(() => {
@@ -222,6 +257,7 @@ export function useGameChannel(roomCode: string) {
     myPlayer,
     isMyTurn,
     connected,
+    onlineIds,
     refreshState,
   }
 }

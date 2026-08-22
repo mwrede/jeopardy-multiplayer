@@ -12,10 +12,13 @@ import { ProfileMenu } from '@/components/ProfileMenu'
 /**
  * LANDING PAGE
  *
- * Chrome wordmark, then the only two things you can do here: play a game or
- * build a board. No join-by-code form — joining happens by scanning the QR
- * on the host's screen or opening a link they shared, so there is nothing to
- * type here.
+ * Chrome wordmark, then the two things you come here to do: play a game or
+ * build a board.
+ *
+ * At the foot of the page, a room code box. Scanning the host's QR is still
+ * the usual way in, but it only helps someone sitting in front of that screen —
+ * a player whose phone died, whose tab closed, or who simply left mid-game had
+ * no way back to a game they were already in.
  */
 export default function Home() {
   const router = useRouter()
@@ -24,6 +27,19 @@ export default function Home() {
   const [myBoards, setMyBoards] = useState<LibraryBoard[]>([])
   const [busyBoard, setBusyBoard] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [rejoinCode, setRejoinCode] = useState('')
+
+  /**
+   * Room codes are the only thing you need to get back in — the game
+   * remembers you by the player id already in this browser, so rejoining
+   * lands you back on your own seat and score rather than as a new player.
+   */
+  function handleRejoin() {
+    const code = rejoinCode.trim().toUpperCase()
+    if (code.length < 4) { setError('Enter the room code from the game.'); return }
+    setError('')
+    router.push(`/game/${code}/play`)
+  }
 
   // The library is per-device plus, when signed in, everything you authored.
   // Runs for signed-out visitors too — boards can be made without an account.
@@ -223,9 +239,36 @@ export default function Home() {
 
         {error && <p className="mt-6 text-center text-sm text-copper-glow">{error}</p>}
 
-        <p className="mt-16 text-center text-xs text-ink-stage-2">
-          Joining a game? Scan the QR code on the host&apos;s screen, or open the link they send you.
-        </p>
+        {/* Below everything: the way back into a game you're already in. */}
+        <section className="mt-16 border-t border-white/10 pt-8">
+          <div className="mx-auto max-w-sm text-center">
+            <div className="eyebrow-copper mb-2">Join or rejoin a game</div>
+            <p className="mb-4 text-xs text-ink-stage-2">
+              Got a room code? Type it in. If you were already playing, this puts you
+              back on your own seat and score.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={rejoinCode}
+                onChange={(e) => setRejoinCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleRejoin() }}
+                placeholder="ROOM CODE"
+                maxLength={6}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                className="field-stage flex-1 text-center font-mono tracking-[0.3em]"
+              />
+              <button onClick={handleRejoin} className="btn-stage btn-copper">
+                Go
+              </button>
+            </div>
+            <p className="mt-4 text-xs text-ink-stage-2">
+              Or scan the QR code on the host&apos;s screen.
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   )

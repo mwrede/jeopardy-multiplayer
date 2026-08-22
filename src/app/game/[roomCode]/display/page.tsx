@@ -90,6 +90,7 @@ export default function DisplayPage() {
     categories,
     clues,
     connected,
+    onlineIds,
   } = useGameChannel(roomCode)
 
   // Fetch the player's typed answer when we enter clue_result phase
@@ -859,7 +860,7 @@ export default function DisplayPage() {
                 p.id === game.current_player_id
                   ? 'bg-jeopardy-blue-cell/50 border-jeopardy-gold scale-105'
                   : 'bg-jeopardy-blue-dark/30 border-transparent'
-              }`}
+              } ${onlineIds.has(p.id) ? '' : 'opacity-40 grayscale'}`}
             >
               <p className="text-sm text-white/60 truncate font-semibold uppercase tracking-wide">{p.name}</p>
               <p
