@@ -27,9 +27,8 @@ import {
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { computeClueReadingDelay } from '@/lib/clue-timing'
+import { buzzOpenDelayMs } from '@/lib/clue-timing'
 import { ClueAttempts } from '@/components/ClueAttempts'
-import { ClueText } from '@/components/ClueText'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 
@@ -214,11 +213,13 @@ export default function PlayerPage() {
       return
     }
     const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
-    // `|| computeClueReadingDelay` (not `??`) so that legacy games saved with
-    // reading_period_ms=0 still get the intro+voice reveal, not an instant flip.
-    const delay = (game.settings?.reading_period_ms || 0) > 0
-      ? (game.settings!.reading_period_ms as number)
-      : computeClueReadingDelay(currentClue?.question)
+    // Same calculation as the TV, from the same server timestamp, so the
+    // buzzers open at one instant rather than whenever a device gets there.
+    const delay = buzzOpenDelayMs({
+      question: currentClue?.question,
+      readingPeriodMs: game.settings?.reading_period_ms,
+      phaseStartedAt: game.updated_at,
+    })
     phaseTransitionRef.current = setTimeout(async () => {
       await supabase.from('games').update({
         phase: 'buzz_window',
@@ -230,7 +231,7 @@ export default function PlayerPage() {
     return () => {
       if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
     }
-  }, [game?.phase, game?.id, game?.current_clue_id, clues, game?.settings?.reading_period_ms])
+  }, [game?.phase, game?.id, game?.current_clue_id, game?.updated_at, clues, game?.settings?.reading_period_ms])
 
   // Buzz window countdown + arming. Scheduled against buzz_window_start (a
   // ~700ms-future timestamp) so every phone arms at the same moment.
@@ -899,24 +900,17 @@ export default function PlayerPage() {
         <PlayerHeader myPlayer={myPlayer} game={game} />
 
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
-          {/* Host-run games put the clue on the phone, but only once the host
-              opens the buzzers, so nobody reads ahead of the room. Party games
-              keep phones clue-free — the clue is on the TV. */}
-          {isHostRun ? (
-            game.phase === 'buzz_window' ? (
-              <p className="clue-type max-w-md text-center text-xl text-white">
-                <ClueText text={currentClue.question} />
-              </p>
-            ) : (
-              <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
-                Get ready…
-              </p>
-            )
-          ) : (
-            <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
-              Watch the TV
-            </p>
-          )}
+          {/* The phone is a buzzer, nothing else — in every mode that has a
+              screen of its own. Putting the clue here too split the room's
+              attention and, worse, meant people read at different speeds off
+              different devices instead of the one everybody can see. */}
+          <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
+            {game.phase === 'buzz_window'
+              ? 'Buzz!'
+              : isHostRun
+                ? 'Get ready…'
+                : 'Watch the TV'}
+          </p>
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
             <p className={`text-7xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'

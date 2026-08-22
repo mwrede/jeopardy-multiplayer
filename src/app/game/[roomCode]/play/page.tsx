@@ -39,6 +39,7 @@ import {
 } from '@/lib/game-api'
 import { leaveCommunityLobby } from '@/lib/community'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
+import { buzzOpenDelayMs } from '@/lib/clue-timing'
 import {
   playCorrectSound, playWrongSound, playTimeUpSound,
   playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound,
@@ -234,7 +235,18 @@ export default function PlayPage() {
       if (transitionRef.current) clearTimeout(transitionRef.current)
       return
     }
-    const delay = game.settings?.reading_period_ms ?? 0
+    // Was `?? 0`, which meant this page opened the buzzers the moment the clue
+    // appeared — and since every client races to make this flip, the earliest
+    // one wins, so it opened them for the whole room while the TV was still
+    // typing the clue out.
+    const currentQuestion = game.current_clue_id
+      ? clues.find((c) => c.id === game.current_clue_id)?.question
+      : null
+    const delay = buzzOpenDelayMs({
+      question: currentQuestion,
+      readingPeriodMs: game.settings?.reading_period_ms,
+      phaseStartedAt: game.updated_at,
+    })
     transitionRef.current = setTimeout(async () => {
       await supabase.from('games').update({
         phase: 'buzz_window', buzz_window_open: true,
@@ -244,7 +256,7 @@ export default function PlayPage() {
       }).eq('id', game.id).eq('phase', 'clue_reading')
     }, delay)
     return () => { if (transitionRef.current) clearTimeout(transitionRef.current) }
-  }, [game?.phase, game?.id])
+  }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id, clues])
 
   // Buzz countdown + arming. buzz_window_start is written ~700ms in the
   // future so every client arms at the same wall-clock moment, not whenever

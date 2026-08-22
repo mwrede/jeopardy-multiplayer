@@ -19,7 +19,7 @@ import {
   passAfterBuzz,
   skipToRound,
 } from '@/lib/game-api'
-import { CLUE_INTRO_MS } from '@/lib/clue-timing'
+import { CLUE_INTRO_MS, buzzOpenDelayMs } from '@/lib/clue-timing'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
 import { ClueAttempts } from '@/components/ClueAttempts'
 import type { Player } from '@/types/game'
@@ -175,18 +175,13 @@ export default function DisplayPage() {
     if (!currentClue?.question) return
 
     const gameId = game.id
-    const totalChars = currentClue.question.length
-    const settingsDelay = game.settings?.reading_period_ms
-    const revealDurationMs =
-      typeof settingsDelay === 'number' && settingsDelay > 0
-        ? settingsDelay
-        : Math.max(3000, Math.min(15000, totalChars * 55))
-    const phaseStartedAt = game.updated_at ? new Date(game.updated_at).getTime() : Date.now()
-    // Wait for intro + reveal + 600ms buffer, measured from the server phase
-    // start (converted to local clock). Clamp to reasonable local delay in case
-    // the client clock is way off.
-    const targetAt = phaseStartedAt + CLUE_INTRO_MS + revealDurationMs + 600
-    const delay = Math.max(500, Math.min(30000, targetAt - Date.now()))
+    // Shared with the phones — see buzzOpenDelayMs. Every screen that can flip
+    // this phase has to agree on when, or the earliest one decides for everyone.
+    const delay = buzzOpenDelayMs({
+      question: currentClue.question,
+      readingPeriodMs: game.settings?.reading_period_ms,
+      phaseStartedAt: game.updated_at,
+    })
 
     const openBuzz = setTimeout(async () => {
       await supabase
