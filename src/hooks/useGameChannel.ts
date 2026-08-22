@@ -74,8 +74,17 @@ export function useGameChannel(roomCode: string) {
    * can drop the socket for a few seconds, so presence is used to grey someone
    * out and to shorten the wait before others may act — never to take a turn
    * away the instant it blinks.
+   *
+   * The set is debounced through lastSeenRef: a player only counts as away
+   * after AWAY_AFTER_MS of continuous absence. The raw presence set lies in
+   * exactly the case that matters — a phone whose realtime socket is
+   * reconnecting still plays fine over REST (the buzzer works, polling keeps
+   * the screen fresh), so acting on a momentary blink greys someone who is
+   * sitting right there holding a live buzzer.
    */
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set())
+  /** playerId -> epoch ms they were last seen in presence (or optimistically seeded). */
+  const lastSeenRef = useRef<Map<string, number>>(new Map())
   const gameIdRef = useRef<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -121,6 +130,13 @@ export function useGameChannel(roomCode: string) {
       gameIdRef.current = game.id
 
       const fullState = await fetchFullState(game.id)
+      // Everyone starts with a fresh last-seen clock: a screen that loads
+      // mid-game must not grey the whole scoreboard while presence is still
+      // syncing. A player who is truly gone fades AWAY_AFTER_MS later.
+      const now = Date.now()
+      for (const p of fullState.players) {
+        if (!lastSeenRef.current.has(p.id)) lastSeenRef.current.set(p.id, now)
+      }
       setState((s) => ({
         ...s,
         ...fullState,
@@ -143,15 +159,32 @@ export function useGameChannel(roomCode: string) {
       config: { presence: { key: myId ?? `viewer:${Math.random().toString(36).slice(2)}` } },
     })
 
-    channel.on('presence', { event: 'sync' }, () => {
+    // A player is "online" if presence has seen them within the grace window.
+    // Absence must be continuous to count: brief socket flaps (backgrounded
+    // phones, wifi blips, our own reconnects) come and go well inside it.
+    const AWAY_AFTER_MS = 20_000
+
+    const recomputeOnline = () => {
+      const now = Date.now()
       const online = new Set<string>()
+      for (const [id, seen] of lastSeenRef.current) {
+        if (now - seen < AWAY_AFTER_MS) online.add(id)
+      }
+      setOnlineIds((prev) => {
+        if (prev.size === online.size && [...online].every((id) => prev.has(id))) return prev
+        return online
+      })
+    }
+
+    channel.on('presence', { event: 'sync' }, () => {
+      const now = Date.now()
       const presenceState = channel.presenceState() as Record<string, any[]>
       for (const entries of Object.values(presenceState)) {
         for (const entry of entries) {
-          if (entry?.playerId) online.add(entry.playerId as string)
+          if (entry?.playerId) lastSeenRef.current.set(entry.playerId as string, now)
         }
       }
-      setOnlineIds(online)
+      recomputeOnline()
     })
 
     // Game row changes → refresh game state
@@ -181,6 +214,9 @@ export function useGameChannel(roomCode: string) {
         filter: `game_id=eq.${gameId}`,
       },
       (payload) => {
+        // A brand-new player hasn't announced presence yet — give them the
+        // full grace window rather than greying them the moment they join.
+        lastSeenRef.current.set((payload.new as Player).id, Date.now())
         setState((s) => ({
           ...s,
           players: [...s.players.filter((p) => p.id !== (payload.new as Player).id), payload.new as Player],
@@ -222,16 +258,46 @@ export function useGameChannel(roomCode: string) {
 
     channel.subscribe((status) => {
       setConnected(status === 'SUBSCRIBED')
-      // Spectator screens (the TV in party mode) watch without announcing
-      // themselves — they aren't playing, so they shouldn't count as present.
-      if (status === 'SUBSCRIBED' && myId) {
-        channel.track({ playerId: myId })
+      if (status === 'SUBSCRIBED') {
+        // Our own socket just (re)connected. Any absence we recorded while it
+        // was down says nothing about the other players — reset their clocks
+        // and let the sync that follows sort out who is really here.
+        const now = Date.now()
+        for (const id of lastSeenRef.current.keys()) lastSeenRef.current.set(id, now)
+        recomputeOnline()
+        // Spectator screens (the TV in party mode) watch without announcing
+        // themselves — they aren't playing, so they shouldn't count as present.
+        if (myId) channel.track({ playerId: myId })
       }
     })
+
+    // Absence only shows with time, so presence needs a clock as well as
+    // events: re-evaluate every few seconds, and periodically re-announce
+    // ourselves — a channel revived from a backgrounded phone can come back
+    // without ever re-firing SUBSCRIBED, leaving us a silent ghost.
+    let tick = 0
+    const presenceTimer = setInterval(() => {
+      recomputeOnline()
+      tick++
+      if (myId && tick % 3 === 0) {
+        channel.track({ playerId: myId }).catch(() => {})
+      }
+    }, 5000)
+
+    // A phone coming back from the lock screen should re-announce right away,
+    // not up to 15s later.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && myId) {
+        channel.track({ playerId: myId }).catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
 
     channelRef.current = channel
 
     return () => {
+      clearInterval(presenceTimer)
+      document.removeEventListener('visibilitychange', onVisible)
       channel.unsubscribe()
     }
   }, [state.game?.id, state.myPlayerId, refreshState])
