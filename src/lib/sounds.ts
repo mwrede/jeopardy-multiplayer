@@ -212,51 +212,6 @@ export function playTickSound(urgent: boolean = false) {
 }
 
 /**
- * Typing click — one soft key press as the clue types itself out on the TV.
- *
- * A filtered noise burst rather than a tone: a pitched blip repeated fifty
- * times in a sentence reads as a machine beeping, while noise reads as a
- * keyboard. Quiet by design — this plays under whoever is reading the clue
- * aloud, so it should sit beneath the voice, not compete with it. The pitch
- * wanders a little each press so it doesn't turn into a metronome.
- */
-export function playTypeSound() {
-  try {
-    const ctx = getAudioContext()
-    const now = ctx.currentTime
-    const durationS = 0.03
-
-    const frameCount = Math.floor(ctx.sampleRate * durationS)
-    const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate)
-    const data = buffer.getChannelData(0)
-    for (let i = 0; i < frameCount; i++) {
-      // Decay the noise sharply so it's a click, not a hiss.
-      data[i] = (Math.random() * 2 - 1) * (1 - i / frameCount) ** 3
-    }
-
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-
-    const band = ctx.createBiquadFilter()
-    band.type = 'bandpass'
-    band.frequency.setValueAtTime(1400 + Math.random() * 700, now)
-    band.Q.setValueAtTime(1.2, now)
-
-    const gain = ctx.createGain()
-    gain.gain.setValueAtTime(0.035, now)
-    gain.gain.exponentialRampToValueAtTime(0.0005, now + durationS)
-
-    source.connect(band)
-    band.connect(gain)
-    gain.connect(ctx.destination)
-    source.start(now)
-    source.stop(now + durationS)
-  } catch (e) {
-    console.warn('Could not play type sound:', e)
-  }
-}
-
-/**
  * Board select sound — quick "boop" when a clue is selected
  */
 export function playSelectSound() {

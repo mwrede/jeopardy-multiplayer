@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ClueText } from './ClueText'
 import { CLUE_INTRO_MS } from '@/lib/clue-timing'
-import { playTypeSound } from '@/lib/sounds'
 
 /**
  * Party-mode clue reveal used on BOTH the TV display and the player phones.
@@ -53,30 +52,6 @@ export function AnimatedClueReveal({
   )
 
   const isTv = variant === 'tv'
-
-  // Click along with the letters as they appear.
-  //
-  // Throttled rather than one click per character: this is driven by
-  // requestAnimationFrame, so a long clue can add several characters in a
-  // single frame and a click each would be a burst of static. Roughly one
-  // every 60ms sounds like someone typing at a steady clip.
-  //
-  // TV only. In party mode the phones are in the same room as the TV and are
-  // running this same component, so playing on every device would give you
-  // half a dozen out-of-step keyboards at once.
-  const lastClickAtRef = useRef(0)
-  const lastVisibleRef = useRef(0)
-  useEffect(() => {
-    const previous = lastVisibleRef.current
-    lastVisibleRef.current = visibleChars
-    if (!isTv) return
-    // Nothing new, or the reveal has finished — silence.
-    if (visibleChars <= previous || visibleChars >= totalChars) return
-    const at = Date.now()
-    if (at - lastClickAtRef.current < 60) return
-    lastClickAtRef.current = at
-    playTypeSound()
-  }, [visibleChars, totalChars, isTv])
 
   if (inIntro) {
     return (
