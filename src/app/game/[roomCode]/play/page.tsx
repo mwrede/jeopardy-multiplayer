@@ -9,6 +9,7 @@ import { ClueAttempts } from '@/components/ClueAttempts'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { CommunityVote } from '@/components/CommunityVote'
+import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
@@ -40,7 +41,7 @@ import {
 } from '@/lib/game-api'
 import { leaveCommunityLobby } from '@/lib/community'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
-import { buzzOpenDelayMs } from '@/lib/clue-timing'
+import { buzzOpenDelayMs, computeReadingMs } from '@/lib/clue-timing'
 import {
   playCorrectSound, playWrongSound, playTimeUpSound,
   playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound,
@@ -1111,14 +1112,32 @@ export default function PlayPage() {
         <>
           {/* Clue display — scrollable if text is long */}
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2 overflow-y-auto">
-            {(() => {
-              const cat = categories.find((c) => c.id === currentClue.category_id)
-              return cat ? <p className="text-blue-300 text-sm font-bold uppercase tracking-wide mb-1 flex-shrink-0">{cat.name}</p> : null
-            })()}
-            <p className="text-jeopardy-gold text-lg font-bold mb-2 flex-shrink-0">${currentClue.value.toLocaleString()}</p>
-            <p className="text-lg md:text-xl text-white text-center leading-relaxed font-serif max-w-lg flex-shrink-0">
-              <ClueText text={currentClue.question} />
-            </p>
+            {/* The clue reads itself out here the same way it does on the TV:
+                category and value first, then the question typing across the
+                screen, and the buzzers open as it lands.
+
+                Before this the whole clue appeared at once and then everyone
+                sat looking at it for up to fifteen seconds waiting for the
+                buzzer — the wait was always there to give people time to read,
+                but with nothing happening it just looked broken.
+
+                Keyed by clue id so it plays once per clue: it deliberately
+                does NOT restart when a wrong answer reopens the buzzers, since
+                the room has already heard it by then. */}
+            <AnimatedClueReveal
+              key={currentClue.id}
+              variant="phone"
+              category={categories.find((c) => c.id === currentClue.category_id)?.name ?? null}
+              value={currentClue.value}
+              question={currentClue.question}
+              revealDurationMs={
+                (game.settings?.reading_period_ms && game.settings.reading_period_ms > 0)
+                  ? game.settings.reading_period_ms
+                  : computeReadingMs(currentClue.question)
+              }
+              anchorAt={game.updated_at ? Date.parse(game.updated_at) : undefined}
+              skipAnimation={game.phase !== 'clue_reading'}
+            />
 
             {/* Phase indicators */}
             {game.phase === 'buzz_window' && buzzCountdown !== null && (

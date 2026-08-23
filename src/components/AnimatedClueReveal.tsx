@@ -22,14 +22,33 @@ export function AnimatedClueReveal({
   question,
   revealDurationMs,
   variant,
+  anchorAt,
+  skipAnimation = false,
 }: {
   category: string | null
   value: number
   question: string
   revealDurationMs: number
   variant: 'tv' | 'phone'
+  /**
+   * When the clue actually went up, as epoch ms from the SERVER clock. The
+   * buzzers open from that same instant, so without it the two drift apart: a
+   * screen that loads a few seconds late starts typing from the beginning
+   * while the buzzers open on schedule, leaving the clue half-written when
+   * people can already buzz.
+   *
+   * Read once, at mount. It must NOT be reactive — a wrong answer reopening
+   * the buzzers moves the underlying timestamp, and re-reading it would retype
+   * a clue the room has already heard.
+   */
+  anchorAt?: number
+  /** Mounted after the reading was over: show the finished clue, no replay. */
+  skipAnimation?: boolean
 }) {
-  const mountedAtRef = useRef<number>(Date.now())
+  const mountedAtRef = useRef<number>(
+    typeof anchorAt === 'number' && !isNaN(anchorAt) ? anchorAt : Date.now(),
+  )
+  const skipRef = useRef<boolean>(skipAnimation)
   const [now, setNow] = useState<number>(() => Date.now())
 
   useEffect(() => {
@@ -42,7 +61,9 @@ export function AnimatedClueReveal({
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  const elapsed = now - mountedAtRef.current
+  const elapsed = skipRef.current
+    ? Number.MAX_SAFE_INTEGER
+    : now - mountedAtRef.current
   const inIntro = elapsed < CLUE_INTRO_MS
   const revealElapsed = Math.max(0, elapsed - CLUE_INTRO_MS)
   const totalChars = question.length

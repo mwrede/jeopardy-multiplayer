@@ -911,6 +911,8 @@ export default function DisplayPage() {
                 ? game.settings.reading_period_ms
                 : Math.max(3000, Math.min(15000, currentClue.question.length * 55))
             }
+            anchorAt={game.updated_at ? Date.parse(game.updated_at) : undefined}
+            skipAnimation={game.phase !== 'clue_reading'}
           />
 
           {/* Phase indicator */}
