@@ -256,12 +256,7 @@ function GameCard({
               <ChallengeShare
                 game={game}
                 small
-                result={{
-                  score: mine.score,
-                  correct: mine.correct_count,
-                  rank: myRank || undefined,
-                  players: results.length,
-                }}
+                result={{ score: mine.score, clueResults: mine.clue_results }}
               />
               <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-stage-ghost">
                 Standings

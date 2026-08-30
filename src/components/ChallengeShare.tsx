@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { CLUES_PER_GAME, type ChallengeGame } from '@/lib/challenge-data'
-import { formatMoney } from '@/lib/challenge'
+import { type ChallengeGame } from '@/lib/challenge-data'
+import { formatMoney, type ClueResult } from '@/lib/challenge'
 
 /**
  * The share button for a challenge board — one per game, everywhere a game
@@ -21,7 +21,7 @@ export function ChallengeShare({
   small,
 }: {
   game: ChallengeGame
-  result?: { score: number; correct: number; rank?: number; players?: number }
+  result?: { score: number; clueResults: ClueResult[] }
   small?: boolean
 }) {
   const [copied, setCopied] = useState(false)
@@ -32,20 +32,29 @@ export function ChallengeShare({
     const label =
       game.series === 'michaels' ? `Michael's Jeopardy Challenge · ${game.title}` : game.title
 
-    const text = (
-      result
-        ? [
-            `🏆 Jeopardy Challenge — ${label}`,
-            `I made ${formatMoney(result.score)} (${result.correct}/${CLUES_PER_GAME} right${
-              result.rank && result.players ? `, #${result.rank} of ${result.players}` : ''
-            }).`,
-            `One shot, real clues — beat me: ${url}`,
-          ]
-        : [
-            `🏆 Jeopardy Challenge — ${label}`,
-            `One-shot board, real Jeopardy clues. Play it: ${url}`,
-          ]
-    ).join('\n')
+    let text: string
+    if (result) {
+      // The line reads round by round: money, then rights per round.
+      const right = (rd: number) =>
+        result.clueResults.filter((x) => (x.rd ?? 1) === rd && x.outcome === 'correct').length
+      const fj = result.clueResults.find((x) => x.rd === 3)
+      const rounds = [
+        `Jeopardy ${right(1)}/9`,
+        `Double Jeopardy ${right(2)}/9`,
+        ...(fj ? [`Final ${fj.outcome === 'correct' ? '✓' : '✗'}`] : []),
+      ].join(' · ')
+      text = [
+        `🏆 Jeopardy Challenge — ${label}`,
+        `💰 ${formatMoney(result.score)}`,
+        rounds,
+        `One shot, real clues — beat me: ${url}`,
+      ].join('\n')
+    } else {
+      text = [
+        `🏆 Jeopardy Challenge — ${label}`,
+        `One-shot board, real Jeopardy clues. Play it: ${url}`,
+      ].join('\n')
+    }
 
     try {
       await navigator.clipboard.writeText(text)

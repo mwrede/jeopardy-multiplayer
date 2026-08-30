@@ -390,12 +390,7 @@ export default function ChallengeGamePage() {
           <div className="mt-4">
             <ChallengeShare
               game={game}
-              result={{
-                score: mine.score,
-                correct: mine.correct_count,
-                rank: rank || undefined,
-                players: allResults.length,
-              }}
+              result={{ score: mine.score, clueResults: mine.clue_results }}
             />
             <p className="mt-2 text-[11px] text-ink-stage-2">
               Copies your result and a link so someone else can play this exact board.
@@ -477,12 +472,7 @@ export default function ChallengeGamePage() {
             <div className="mt-4">
               <ChallengeShare
                 game={game}
-                result={{
-                  score: myScore,
-                  correct: clueResults.filter((x) => x.outcome === 'correct').length,
-                  rank: mine ? allResults.findIndex((x) => x.id === mine.id) + 1 || undefined : undefined,
-                  players: allResults.length,
-                }}
+                result={{ score: myScore, clueResults }}
               />
               <p className="mt-2 text-[11px] text-ink-stage-2">
                 Copies your result and a link so someone else can play this exact board.
