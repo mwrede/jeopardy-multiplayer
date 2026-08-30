@@ -633,7 +633,9 @@ function BoardHeading({ game, compact }: { game: ChallengeGame; compact?: boolea
       {!compact && (
         <>
           <p className="mt-2 text-sm text-ink-stage-2">{game.blurb}</p>
-          {game.episode && (
+          {/* Standard boards are TITLED by their show number and air date,
+              and their blurb tells the story — nothing left to repeat. */}
+          {game.episode && game.tier !== 'standard' && (
             <p className="mt-1 text-xs text-copper">
               {game.episode.note} · {game.episode.show}, aired {formatAirDate(game.episode.airDate)}
             </p>

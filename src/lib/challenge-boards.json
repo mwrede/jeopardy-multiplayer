@@ -454,10 +454,10 @@
  },
  {
   "key": "standard-1",
-  "title": "Standard Game 1",
+  "title": "Show #1 · Sep 10, 1984",
   "tier": "standard",
   "series": "lineup",
-  "blurb": "Show #1 — the very first episode, September 10, 1984.",
+  "blurb": "The very first episode of Jeopardy!, with Alex Trebek.",
   "episode": {
    "show": "Show #1",
    "airDate": "1984-09-10",
@@ -605,10 +605,10 @@
  },
  {
   "key": "standard-2",
-  "title": "Standard Game 2",
+  "title": "Show #2665 · Mar 15, 1996",
   "tier": "standard",
   "series": "lineup",
-  "blurb": "Show #2665, aired March 15, 1996.",
+  "blurb": "A classic from Season 12.",
   "episode": {
    "show": "Show #2665",
    "airDate": "1996-03-15",
@@ -756,10 +756,10 @@
  },
  {
   "key": "standard-3",
-  "title": "Standard Game 3",
+  "title": "Show #4558 · Jun 2, 2004",
   "tier": "standard",
   "series": "lineup",
-  "blurb": "Show #4558 — the first night of Ken Jennings' 74-game streak, June 2, 2004.",
+  "blurb": "Ken Jennings' debut — night one of the 74-game streak.",
   "episode": {
    "show": "Show #4558",
    "airDate": "2004-06-02",
@@ -907,10 +907,10 @@
  },
  {
   "key": "standard-4",
-  "title": "Standard Game 4",
+  "title": "Show #7973 · Apr 17, 2019",
   "tier": "standard",
   "series": "lineup",
-  "blurb": "Show #7973 — the night Holzhauer won a record $131,127, April 17, 2019.",
+  "blurb": "The night James Holzhauer won a record $131,127.",
   "episode": {
    "show": "Show #7973",
    "airDate": "2019-04-17",
@@ -1058,10 +1058,10 @@
  },
  {
   "key": "standard-5",
-  "title": "Standard Game 5",
+  "title": "Show #8513 · Nov 17, 2021",
   "tier": "standard",
   "series": "lineup",
-  "blurb": "Show #8513 — the start of Amy Schneider's 40-game streak, November 17, 2021.",
+  "blurb": "Amy Schneider's debut — the start of a 40-game streak.",
   "episode": {
    "show": "Show #8513",
    "airDate": "2021-11-17",

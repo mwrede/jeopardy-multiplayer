@@ -199,7 +199,9 @@ function GameCard({
         <div>
           <h2 className="text-lg font-bold leading-tight text-white">{game.title}</h2>
           <p className="mt-1 text-xs text-ink-stage-2">{game.blurb}</p>
-          {game.episode && (
+          {/* Standard boards carry the show number and air date as their
+              TITLE, so repeating it here would just be noise. */}
+          {game.episode && game.tier !== 'standard' && (
             <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-copper">
               {game.episode.show} · aired {formatAirDate(game.episode.airDate)}
             </p>
