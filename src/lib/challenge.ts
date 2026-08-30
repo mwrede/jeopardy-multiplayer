@@ -176,28 +176,17 @@ export async function submitChallengeResult(input: {
 }
 
 /**
- * Deal in up to three real previous players as ghost opponents.
- *
- * The current leader is always at the table — the leaderboard chase should be
- * playable, not abstract — and the remaining seats go to a random draw of
- * everyone else, so repeat visitors to different boards don't always face the
- * same trio.
+ * Deal in the board's TOP PLAYER as your ghost opponent — one seat, one
+ * rival, and it's always the score to beat. Their recorded game replays
+ * beside yours clue by clue.
  */
 export function pickOpponents(
   results: ChallengeResult[],
   identityKey: string,
-  n = 3,
 ): ChallengeResult[] {
   const others = results.filter((r) => r.identity_key !== identityKey)
-  if (others.length <= n) return [...others].sort((a, b) => b.score - a.score)
-
-  const leader = others.reduce((best, r) => (r.score > best.score ? r : best), others[0])
-  const rest = others.filter((r) => r.id !== leader.id)
-  for (let i = rest.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[rest[i], rest[j]] = [rest[j], rest[i]]
-  }
-  return [leader, ...rest.slice(0, n - 1)].sort((a, b) => b.score - a.score)
+  if (others.length === 0) return []
+  return [others.reduce((best, r) => (r.score > best.score ? r : best), others[0])]
 }
 
 export type OverallRow = {

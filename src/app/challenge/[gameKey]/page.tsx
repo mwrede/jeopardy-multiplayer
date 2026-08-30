@@ -32,11 +32,11 @@ import {
  * Final Jeopardy with a wager. Every clue is a real clue from a real episode,
  * and the screen says which game it aired in.
  *
- * The trick that makes solo feel like a table of four: before you start, up
- * to three REAL previous players are dealt in beside you. Their finished
- * games are on record clue by clue — wagers included — so when you resolve a
- * clue, their recorded result for that same clue lands on their score at the
- * same moment. By the end their totals are their true final scores.
+ * The trick that makes solo feel like a real matchup: the board's TOP PLAYER
+ * — the actual person holding the best score — is dealt in beside you. Their
+ * finished game is on record clue by clue, wagers included, so when you
+ * resolve a clue their recorded result lands on their score at the same
+ * moment. By the end their total is their true final score.
  *
  * One play per person, enforced by the database. A half-finished run is
  * parked in this browser so a refresh resumes rather than resets — against
@@ -441,7 +441,7 @@ export default function ChallengeGamePage() {
   if (phase === 'done') {
     const table = [
       { name: `${name} (you)`, score: myScore, you: true },
-      ...opponents.map((o) => ({ name: o.player_name, score: o.score, you: false })),
+      ...opponents.map((o) => ({ name: `👑 Top Player — ${o.player_name}`, score: o.score, you: false })),
     ].sort((a, b) => b.score - a.score)
     const won = table[0]?.you && (table.length === 1 || table[0].score > table[1].score)
 
@@ -450,7 +450,11 @@ export default function ChallengeGamePage() {
         <BoardHeading game={game} />
         <div className="mt-6 rounded-xl border-2 border-jeopardy-gold bg-jeopardy-gold/10 p-5 text-center">
           <p className="text-[10px] uppercase tracking-[0.28em] text-jeopardy-gold-light">
-            {submitting ? 'Recording your score…' : won ? 'You won the table' : 'Final scores'}
+            {submitting
+              ? 'Recording your score…'
+              : won
+                ? opponents.length > 0 ? 'You beat the Top Player' : 'First score on the board'
+                : 'Final scores'}
           </p>
           <div className="mx-auto mt-3 max-w-sm space-y-1.5">
             {table.map((p, i) => (
@@ -522,7 +526,7 @@ export default function ChallengeGamePage() {
       <div className="mx-auto mt-4 flex max-w-2xl flex-wrap items-stretch justify-center gap-2">
         <ScoreCard name={`${name} (you)`} score={myScore} you />
         {opponents.map((o) => (
-          <ScoreCard key={o.id} name={o.player_name} score={ghostScoreSoFar(o, clueResults)} />
+          <ScoreCard key={o.id} name={o.player_name} label="👑 Top Player" score={ghostScoreSoFar(o, clueResults)} />
         ))}
       </div>
 
@@ -672,12 +676,15 @@ function BoardHeading({ game, compact }: { game: ChallengeGame; compact?: boolea
   )
 }
 
-/** The small provenance line on every clue screen: which game this aired in. */
+/** The provenance chip on every clue screen: which real game this aired in. */
 function SourceLine({ show, airDate }: { show: string | null; airDate: string | null }) {
   if (!airDate && !show) return null
   return (
-    <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-white/45">
-      {show ? `${show} · ` : ''}aired {formatAirDate(airDate)}
+    <p className="mt-6">
+      <span className="inline-block rounded-full border border-white/20 bg-black/25 px-3.5 py-1.5 text-sm text-white/85">
+        Real clue from{airDate ? ` the ${formatAirDate(airDate)} game` : ''}
+        {show ? ` (${show})` : ''}
+      </span>
     </p>
   )
 }
@@ -701,9 +708,9 @@ function Avatar({ name, size = 56 }: { name: string; size?: number }) {
 }
 
 /**
- * The pre-game matchup card: you on one side, the real previous players
- * you're up against on the other. Their scores are NOT shown — you find out
- * how they did the way they found out, one clue at a time.
+ * The pre-game matchup card: you against the board's TOP PLAYER. Their final
+ * score is NOT shown — you find out how they did the way they found out, one
+ * clue at a time.
  */
 function MatchupIntro({
   game,
@@ -715,8 +722,9 @@ function MatchupIntro({
   name: string
 }) {
   const flashy = game.tier === 'teen'
+  const top = opponents[0]
 
-  if (opponents.length === 0) {
+  if (!top) {
     return (
       <div className="mt-6 rounded-xl border border-white/15 bg-black/30 p-5 text-center">
         <p className="text-sm text-ink-stage">
@@ -743,43 +751,50 @@ function MatchupIntro({
         Tonight&apos;s matchup
       </p>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-3 md:gap-5">
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-4 md:gap-6">
         <div className="flex flex-col items-center gap-1.5">
-          <Avatar name={name || 'You'} size={flashy ? 72 : 60} />
-          <span className="max-w-[90px] truncate text-xs font-bold text-white">{name || 'You'}</span>
+          <Avatar name={name || 'You'} size={flashy ? 76 : 64} />
+          <span className="max-w-[110px] truncate text-sm font-bold text-white">{name || 'You'}</span>
         </div>
 
         <span
-          className={`px-1 ${flashy ? 'text-3xl text-fuchsia-300' : 'text-2xl text-copper'}`}
+          className={`px-1 ${flashy ? 'text-4xl text-fuchsia-300' : 'text-3xl text-copper'}`}
           style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
         >
           VS
         </span>
 
-        {opponents.map((o) => (
-          <div key={o.id} className="flex flex-col items-center gap-1.5">
-            <Avatar name={o.player_name} size={flashy ? 72 : 60} />
-            <span className="max-w-[90px] truncate text-xs font-bold text-ink-stage">{o.player_name}</span>
-          </div>
-        ))}
+        <div className="flex flex-col items-center gap-1.5">
+          <Avatar name={top.player_name} size={flashy ? 76 : 64} />
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-jeopardy-gold-light">
+            👑 Top Player
+          </span>
+          <span className="max-w-[110px] truncate text-sm font-bold text-white">{top.player_name}</span>
+        </div>
       </div>
 
       <p className="mt-4 text-[11px] text-ink-stage-2">
-        These are real players and real games — as you clear each clue you&apos;ll see
-        who of them got it, and their money (wagers included) lands as you go.
+        That&apos;s the real person holding this board&apos;s best score. As you clear each
+        clue you&apos;ll see whether they got it, and their money (wagers included)
+        lands as you go.
       </p>
     </div>
   )
 }
 
-function ScoreCard({ name, score, you }: { name: string; score: number; you?: boolean }) {
+function ScoreCard({ name, score, you, label }: { name: string; score: number; you?: boolean; label?: string }) {
   return (
     <div
       className={`flex min-w-[120px] flex-1 flex-col items-center rounded-lg border px-3 py-2 sm:flex-none ${
         you ? 'border-jeopardy-gold bg-jeopardy-gold/15' : 'border-white/10 bg-black/30'
       }`}
     >
-      <span className={`max-w-[130px] truncate text-[11px] font-bold ${you ? 'text-white' : 'text-ink-stage-2'}`}>
+      {label && (
+        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-jeopardy-gold-light">
+          {label}
+        </span>
+      )}
+      <span className={`max-w-[140px] truncate text-[11px] font-bold ${you ? 'text-white' : 'text-ink-stage-2'}`}>
         {name}
       </span>
       <span
@@ -791,7 +806,7 @@ function ScoreCard({ name, score, you }: { name: string; score: number; you?: bo
   )
 }
 
-/** "Sarah got it for $2,000 · Rob missed it" — the table's record on one clue. */
+/** "✓ Top Player Mike GOT IT" — the top player's record on this clue, writ large. */
 function GhostOutcomes({
   opponents,
   rd,
@@ -808,18 +823,20 @@ function GhostOutcomes({
   if (opponents.length === 0) return null
   const rows = opponents.map((o) => ({ o, res: ghostResultOn(o, rd, c, r) }))
   return (
-    <div className="mt-5 space-y-1 rounded-lg bg-black/30 px-4 py-3 text-left text-sm">
+    <div className="mt-5 space-y-2 rounded-lg bg-black/30 px-4 py-4">
       {rows.map(({ o, res }) => (
         <p
           key={o.id}
-          className={
-            res?.outcome === 'correct' ? 'text-green-300' : res?.outcome === 'wrong' ? 'text-red-300' : 'text-white/50'
-          }
+          className={`text-xl font-bold md:text-2xl ${
+            res?.outcome === 'correct' ? 'text-green-300' : res?.outcome === 'wrong' ? 'text-red-300' : 'text-white/60'
+          }`}
         >
           {res?.outcome === 'correct' ? '✓' : res?.outcome === 'wrong' ? '✗' : '—'}{' '}
-          {o.player_name}{' '}
-          {res?.outcome === 'correct' ? 'got it' : res?.outcome === 'wrong' ? 'missed it' : 'let it go'}
-          {showAmounts && res && res.outcome !== 'pass' ? ` for ${formatMoney(res.value)}` : ''}
+          <span className="text-base font-bold uppercase tracking-wide text-jeopardy-gold-light md:text-lg">
+            👑 Top Player {o.player_name}
+          </span>{' '}
+          {res?.outcome === 'correct' ? 'GOT IT' : res?.outcome === 'wrong' ? 'MISSED IT' : 'passed'}
+          {showAmounts && res && res.outcome !== 'pass' ? ` — ${formatMoney(res.value)}` : ''}
         </p>
       ))}
     </div>
