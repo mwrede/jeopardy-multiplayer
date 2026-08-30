@@ -131,17 +131,9 @@ export default function Home() {
             <div className="board-panel-inner">
               <a href="/find" className="tile">
                 <TileBadge>Private games</TileBadge>
-                <img
-                  src="/contestants.png"
-                  alt=""
-                  aria-hidden="true"
-                  className="tile-art"
-                />
+                <span className="tile-art tile-art-glyph" aria-hidden="true">&#127918;</span>
                 <div className="tile-body">
-                  <h2 className="tile-title text-3xl md:text-4xl">Play Jeopardy!</h2>
-                  <p className="mt-2 text-sm text-blue-100/75">
-                    Forty-two seasons, themed boards, and your own private games.
-                  </p>
+                  <h2 className="tile-title text-3xl md:text-4xl">Play with Friends &#10084;&#65039;</h2>
                 </div>
               </a>
             </div>
@@ -151,12 +143,15 @@ export default function Home() {
             <div className="board-panel-inner">
               <a href="/community" className="tile">
                 <TileBadge>Public · vs real people</TileBadge>
-                <span className="tile-art tile-art-glyph" aria-hidden="true">&#127918;</span>
+                {/* The three contestants at their podiums — strangers, met on stage. */}
+                <img
+                  src="/contestants.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="tile-art"
+                />
                 <div className="tile-body">
-                  <h2 className="tile-title text-3xl md:text-4xl">Community Play</h2>
-                  <p className="mt-2 text-sm text-blue-100/75">
-                    Drop into a game with strangers. Starts with two or three.
-                  </p>
+                  <h2 className="tile-title text-3xl md:text-4xl">Play Strangers</h2>
                 </div>
               </a>
             </div>
@@ -166,14 +161,9 @@ export default function Home() {
             <div className="board-panel-inner">
               <a href="/challenge" className="tile">
                 <TileBadge>Solo</TileBadge>
-                {/* Slightly smaller than the default glyph — this tile's
-                    three-line title needs the extra headroom. */}
-                <span className="tile-art tile-art-glyph" style={{ fontSize: 64 }} aria-hidden="true">&#127942;</span>
+                <span className="tile-art tile-art-glyph" aria-hidden="true">&#127942;</span>
                 <div className="tile-body">
-                  <h2 className="tile-title text-3xl md:text-4xl">Solo Challenge Play</h2>
-                  <p className="mt-2 text-sm text-blue-100/75">
-                    One-shot 3×3 boards. Race the leaderboard — every rival is a real player.
-                  </p>
+                  <h2 className="tile-title text-3xl md:text-4xl">Solo Challenge</h2>
                 </div>
               </a>
             </div>
@@ -187,9 +177,6 @@ export default function Home() {
                 <TypingClue />
                 <div className="tile-body">
                   <h2 className="tile-title text-3xl md:text-4xl">Create a Board</h2>
-                  <p className="mt-2 text-sm text-blue-100/75">
-                    Write your own categories and clues, then host the game.
-                  </p>
                 </div>
               </a>
 
