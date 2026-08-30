@@ -1,12 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useUser } from '@/lib/auth'
 import { checkAnswerDetailed } from '@/lib/answer-check'
 import {
   getChallengeGame,
-  CHALLENGE_CLUE_VALUES,
+  isDailyDouble,
+  formatAirDate,
+  ROUND_VALUES,
+  CLUES_PER_GAME,
   TIER_LABELS,
   type ChallengeGame,
 } from '@/lib/challenge-data'
@@ -22,23 +25,28 @@ import {
 } from '@/lib/challenge'
 
 /**
- * ONE CHALLENGE BOARD — the solo game itself.
+ * ONE CHALLENGE BOARD — a full miniature Jeopardy! game, solo.
+ *
+ * Jeopardy round, Double Jeopardy round, a hidden Daily Double in each, and
+ * Final Jeopardy with a wager. Every clue is a real clue from a real episode,
+ * and the screen says which game it aired in.
  *
  * The trick that makes solo feel like a table of four: before you start, up
  * to three REAL previous players are dealt in beside you. Their finished
- * games are on record clue by clue, so when you resolve a clue, their
- * recorded result for that same clue lands on their score at the same moment.
- * By the end their totals are their true final scores — you genuinely just
- * played the game those people played.
+ * games are on record clue by clue — wagers included — so when you resolve a
+ * clue, their recorded result for that same clue lands on their score at the
+ * same moment. By the end their totals are their true final scores.
  *
  * One play per person, enforced by the database. A half-finished run is
- * parked in this browser so a refresh resumes rather than resets — and
- * resumes against the same three opponents.
+ * parked in this browser so a refresh resumes rather than resets — against
+ * the same three opponents.
  */
 
 const CLUE_SECONDS = 30
+const FJ_SECONDS = 35
 
 type Phase = 'loading' | 'played' | 'intro' | 'playing' | 'done'
+type OverlayStage = 'wager' | 'answering' | 'reveal'
 
 /** Where a half-played run is parked between refreshes. */
 const runKey = (gameKey: string) => `challengeRun:${gameKey}`
@@ -62,14 +70,16 @@ function scoreOf(results: ClueResult[]): number {
   )
 }
 
+const cellKey = (rd: number, c: number, r: number) => `${rd}:${c}:${r}`
+
 /** A ghost's score counting only the clues the live player has resolved. */
 function ghostScoreSoFar(op: ChallengeResult, resolved: ClueResult[]): number {
-  const done = new Set(resolved.map((r) => `${r.c}:${r.r}`))
-  return scoreOf(op.clue_results.filter((r) => done.has(`${r.c}:${r.r}`)))
+  const done = new Set(resolved.map((x) => cellKey(x.rd ?? 1, x.c, x.r)))
+  return scoreOf(op.clue_results.filter((x) => done.has(cellKey(x.rd ?? 1, x.c, x.r))))
 }
 
-function ghostOutcomeOn(op: ChallengeResult, c: number, r: number): ClueOutcome {
-  return op.clue_results.find((x) => x.c === c && x.r === r)?.outcome ?? 'pass'
+function ghostResultOn(op: ChallengeResult, rd: number, c: number, r: number): ClueResult | undefined {
+  return op.clue_results.find((x) => (x.rd ?? 1) === rd && x.c === c && x.r === r)
 }
 
 const AVATAR_COLORS = ['#F58A2C', '#38BDF8', '#A78BFA', '#34D399', '#F472B6', '#FACC15']
@@ -92,14 +102,28 @@ export default function ChallengeGamePage() {
   const [opponents, setOpponents] = useState<ChallengeResult[]>([])
   const [clueResults, setClueResults] = useState<ClueResult[]>([])
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  // The open clue, and what's happened inside it.
-  const [active, setActive] = useState<{ c: number; r: number } | null>(null)
-  const [overlayStage, setOverlayStage] = useState<'answering' | 'reveal'>('answering')
+  // The open board clue and what's happened inside it.
+  const [active, setActive] = useState<{ rd: number; c: number; r: number } | null>(null)
+  const [overlayStage, setOverlayStage] = useState<OverlayStage>('answering')
   const [typed, setTyped] = useState('')
+  const [wagerText, setWagerText] = useState('')
+  /** The money on the line for the open clue — cell value, or a locked wager. */
+  const [stake, setStake] = useState(0)
   const [lastOutcome, setLastOutcome] = useState<ClueOutcome>('pass')
   const [secondsLeft, setSecondsLeft] = useState(CLUE_SECONDS)
-  const [submitting, setSubmitting] = useState(false)
+
+  // Between-round curtain, and the Final Jeopardy sequence.
+  const [djSeen, setDjSeen] = useState(false)
+  const [fjStage, setFjStage] = useState<null | OverlayStage>(null)
+
+  const r1Count = clueResults.filter((x) => (x.rd ?? 1) === 1).length
+  const r2Count = clueResults.filter((x) => x.rd === 2).length
+  const fjResult = clueResults.find((x) => x.rd === 3)
+  const boardDone = r1Count >= 9 && r2Count >= 9
+  const currentRound = r1Count < 9 ? 1 : 2
+  const myScore = scoreOf(clueResults)
 
   // ── Load: who am I, who has played, have I? ──────────────────────────
   useEffect(() => {
@@ -127,20 +151,15 @@ export default function ChallengeGamePage() {
             .map((oid) => results.find((r) => r.id === oid))
             .filter(Boolean) as ChallengeResult[]
           setOpponents(ops)
-          if (saved.clueResults.length >= 9) {
-            // The board was cleared but never recorded — a refresh on the
-            // final screen, or a submit that failed. Record it now rather
-            // than stranding a finished game in "playing".
+          if (saved.clueResults.length >= CLUES_PER_GAME) {
+            // Cleared but never recorded — a refresh on the final screen, or
+            // a submit that failed. Record it now.
             finalize(saved.name, id, saved.clueResults)
           } else {
             setPhase('playing')
           }
         } else {
-          setName(
-            localStorage.getItem('playerName') ||
-            profile?.display_name ||
-            '',
-          )
+          setName(localStorage.getItem('playerName') || profile?.display_name || '')
           setOpponents(pickOpponents(results, id))
           setPhase('intro')
         }
@@ -154,8 +173,7 @@ export default function ChallengeGamePage() {
         )
         setPhase('intro')
       })
-  // profile arrives after user; it only seeds the name field, so user/loading
-  // are the real triggers.
+  // profile arrives after user; it only seeds the name field.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, userLoading, game?.key])
 
@@ -170,7 +188,7 @@ export default function ChallengeGamePage() {
     } catch {}
   }, [game])
 
-  // ── Clue timer ───────────────────────────────────────────────────────
+  // ── Clue timer (board clues) ─────────────────────────────────────────
   useEffect(() => {
     if (!active || overlayStage !== 'answering') return
     setSecondsLeft(CLUE_SECONDS)
@@ -180,14 +198,37 @@ export default function ChallengeGamePage() {
       setSecondsLeft(Math.max(0, left))
       if (left <= 0) {
         clearInterval(t)
-        resolveClue('pass', '')
+        resolveClue('timeout', '')
       }
     }, 250)
     return () => clearInterval(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, overlayStage])
 
-  const myScore = scoreOf(clueResults)
+  // ── Final Jeopardy timer ─────────────────────────────────────────────
+  useEffect(() => {
+    if (fjStage !== 'answering') return
+    setSecondsLeft(FJ_SECONDS)
+    const started = Date.now()
+    const t = setInterval(() => {
+      const left = FJ_SECONDS - Math.floor((Date.now() - started) / 1000)
+      setSecondsLeft(Math.max(0, left))
+      if (left <= 0) {
+        clearInterval(t)
+        resolveFinal('')
+      }
+    }, 250)
+    return () => clearInterval(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fjStage])
+
+  // Both rounds cleared → Final Jeopardy begins.
+  useEffect(() => {
+    if (phase === 'playing' && boardDone && !fjResult && fjStage === null && !active) {
+      setWagerText('')
+      setFjStage('wager')
+    }
+  }, [phase, boardDone, fjResult, fjStage, active])
 
   // ── Actions ──────────────────────────────────────────────────────────
   function begin() {
@@ -200,25 +241,45 @@ export default function ChallengeGamePage() {
     setPhase('playing')
   }
 
-  function openClue(c: number, r: number) {
-    if (clueResults.some((x) => x.c === c && x.r === r)) return
+  function openClue(rd: number, c: number, r: number) {
+    if (!game || clueResults.some((x) => (x.rd ?? 1) === rd && x.c === c && x.r === r)) return
     setTyped('')
-    setOverlayStage('answering')
-    setActive({ c, r })
+    if (isDailyDouble(game, rd, c, r)) {
+      setWagerText('')
+      setOverlayStage('wager')
+    } else {
+      setStake(ROUND_VALUES[rd - 1][r])
+      setOverlayStage('answering')
+    }
+    setActive({ rd, c, r })
   }
 
-  function resolveClue(kind: 'answer' | 'pass', text: string) {
-    if (!active || !game) return
-    const { c, r } = active
-    const clue = game.categories[c].clues[r]
-    const value = CHALLENGE_CLUE_VALUES[r]
+  /** Most you can put on a Daily Double: your total, or the round's top value. */
+  function ddMax(rd: number): number {
+    return Math.max(myScore, ROUND_VALUES[rd - 1][2])
+  }
 
-    let outcome: ClueOutcome = 'pass'
+  function confirmWager() {
+    if (!active) return
+    const max = ddMax(active.rd)
+    const w = Math.min(max, Math.max(5, Math.round(Number(wagerText) || 0)))
+    setStake(w)
+    setOverlayStage('answering')
+  }
+
+  function resolveClue(kind: 'answer' | 'pass' | 'timeout', text: string) {
+    if (!active || !game) return
+    const { rd, c, r } = active
+    const clue = game.rounds[rd - 1][c].clues[r]
+    const dd = isDailyDouble(game, rd, c, r)
+
+    // On a Daily Double there's no passing — the wager rides on it either way.
+    let outcome: ClueOutcome = dd ? 'wrong' : 'pass'
     if (kind === 'answer' && text.trim()) {
-      outcome = checkAnswerDetailed(text, clue.answer).correct ? 'correct' : 'wrong'
+      outcome = checkAnswerDetailed(text, clue.a).correct ? 'correct' : 'wrong'
     }
 
-    const next = [...clueResults, { c, r, outcome, value, answer: text.trim() || undefined }]
+    const next = [...clueResults, { rd, c, r, outcome, value: stake, answer: text.trim() || undefined }]
     setClueResults(next)
     setLastOutcome(outcome)
     setOverlayStage('reveal')
@@ -226,14 +287,37 @@ export default function ChallengeGamePage() {
   }
 
   function closeClue() {
-    if (!game || !identity) { setActive(null); return }
-    const finished = clueResults.length >= 9
     setActive(null)
-    if (finished) finalize(name, identity, clueResults)
+  }
+
+  function confirmFjWager() {
+    const max = Math.max(0, myScore)
+    const w = Math.min(max, Math.max(0, Math.round(Number(wagerText) || 0)))
+    setStake(w)
+    setTyped('')
+    setFjStage('answering')
+  }
+
+  function resolveFinal(text: string) {
+    if (!game) return
+    // Not answering Final Jeopardy is a miss — the wager is lost, as on the show.
+    const outcome: ClueOutcome =
+      text.trim() && checkAnswerDetailed(text, game.finalJeopardy.a).correct ? 'correct' : 'wrong'
+    const next = [...clueResults, { rd: 3, c: 0, r: 0, outcome, value: stake, answer: text.trim() || undefined }]
+    setClueResults(next)
+    setLastOutcome(outcome)
+    setFjStage('reveal')
+    saveRun(name, opponents, next)
+  }
+
+  function closeFinal() {
+    if (!identity) return
+    setFjStage(null)
+    finalize(name, identity, clueResults)
   }
 
   /**
-   * Board cleared — record it and pull the fresh standings. The unique
+   * Game over — record it and pull the fresh standings. The unique
    * constraint is the referee if this somehow runs twice; a rejection for
    * "already played" is recovered by loading the standing result instead.
    */
@@ -300,7 +384,7 @@ export default function ChallengeGamePage() {
           <p className="text-[10px] uppercase tracking-[0.28em] text-jeopardy-gold-light">Your one shot</p>
           <p className="mt-2 text-4xl font-bold text-white">{formatMoney(mine.score)}</p>
           <p className="mt-1 text-sm text-ink-stage-2">
-            {mine.correct_count} of 9 right · #{rank} of {allResults.length} — this board is done for you.
+            {mine.correct_count} of {CLUES_PER_GAME} right · #{rank} of {allResults.length} — this board is done for you.
           </p>
         </div>
         <Standings results={allResults} identity={identity} title="Leaderboard" />
@@ -331,8 +415,9 @@ export default function ChallengeGamePage() {
             Play — one shot
           </button>
           <p className="mt-2 text-center text-[11px] text-ink-stage-2">
-            9 clues · {CLUE_SECONDS}s each · right answers win the money, wrong ones lose it.
-            Once you start, this board is spent.
+            Two 3×3 rounds, a hidden Daily Double in each, then Final Jeopardy.
+            Right answers win the money, wrong ones lose it — and once you start,
+            this board is spent.
           </p>
           {error && <p className="mt-3 text-center text-sm text-copper-glow">{error}</p>}
         </div>
@@ -382,7 +467,31 @@ export default function ChallengeGamePage() {
   }
 
   // ── phase === 'playing' ──────────────────────────────────────────────
-  const resolvedKeys = new Set(clueResults.map((x) => `${x.c}:${x.r}`))
+
+  // The curtain between rounds.
+  if (r1Count >= 9 && r2Count === 0 && !djSeen && !active) {
+    return (
+      <Shell>
+        <BoardHeading game={game} compact />
+        <div className="mt-10 rounded-xl border-2 border-jeopardy-gold bg-jeopardy-gold/10 p-8 text-center">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-jeopardy-gold-light">
+            That&apos;s the Jeopardy round
+          </p>
+          <p className="mt-3 text-3xl font-bold text-white">{formatMoney(myScore)}</p>
+          <h2 className="display-chrome mt-6 text-3xl">Double Jeopardy</h2>
+          <p className="mt-2 text-sm text-ink-stage-2">
+            Values double — and another Daily Double is hiding out there.
+          </p>
+          <button onClick={() => setDjSeen(true)} className="btn-stage btn-copper btn-stage-lg mt-6">
+            Bring on the board
+          </button>
+        </div>
+      </Shell>
+    )
+  }
+
+  const roundCats = game.rounds[currentRound - 1]
+  const values = ROUND_VALUES[currentRound - 1]
 
   return (
     <Shell wide>
@@ -396,64 +505,99 @@ export default function ChallengeGamePage() {
         ))}
       </div>
 
-      <div className="board-wrapper mx-auto mt-5 max-w-2xl">
-        <div className="grid grid-cols-3 gap-1 p-1">
-          {game.categories.map((cat, c) => (
-            <div key={c} className="board-category min-h-[64px] px-2 py-2 text-[11px] font-bold uppercase leading-tight text-white md:text-sm">
-              {cat.name}
+      {!boardDone && (
+        <>
+          <p className="mt-4 text-center text-[10px] font-bold uppercase tracking-[0.3em] text-jeopardy-gold-light">
+            {currentRound === 1 ? 'Jeopardy Round' : 'Double Jeopardy Round'}
+          </p>
+
+          <div className="board-wrapper mx-auto mt-2 max-w-2xl">
+            <div className="grid grid-cols-3 gap-1 p-1">
+              {roundCats.map((cat, c) => (
+                <div key={c} className="board-category min-h-[64px] px-2 py-2 text-[11px] font-bold uppercase leading-tight text-white md:text-sm">
+                  {cat.name}
+                </div>
+              ))}
+              {[0, 1, 2].map((r) =>
+                roundCats.map((_, c) => {
+                  const res = clueResults.find((x) => (x.rd ?? 1) === currentRound && x.c === c && x.r === r)
+                  return (
+                    <button
+                      key={`${c}:${r}`}
+                      onClick={() => openClue(currentRound, c, r)}
+                      disabled={!!res}
+                      className={`min-h-[72px] text-2xl md:min-h-[88px] md:text-4xl ${
+                        res
+                          ? res.outcome === 'correct'
+                            ? 'board-cell board-cell-correct'
+                            : res.outcome === 'wrong'
+                              ? 'board-cell board-cell-wrong'
+                              : 'board-cell board-cell-answered'
+                          : 'board-cell'
+                      }`}
+                      style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
+                    >
+                      {res
+                        ? res.outcome === 'correct' ? '✓' : res.outcome === 'wrong' ? '✗' : ''
+                        : `$${values[r]}`}
+                    </button>
+                  )
+                }),
+              )}
             </div>
-          ))}
-          {[0, 1, 2].map((r) =>
-            game.categories.map((_, c) => {
-              const done = resolvedKeys.has(`${c}:${r}`)
-              const res = clueResults.find((x) => x.c === c && x.r === r)
-              return (
-                <button
-                  key={`${c}:${r}`}
-                  onClick={() => openClue(c, r)}
-                  disabled={done}
-                  className={`min-h-[72px] text-2xl md:min-h-[88px] md:text-4xl ${
-                    done
-                      ? res?.outcome === 'correct'
-                        ? 'board-cell board-cell-correct'
-                        : res?.outcome === 'wrong'
-                          ? 'board-cell board-cell-wrong'
-                          : 'board-cell board-cell-answered'
-                      : 'board-cell'
-                  }`}
-                  style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
-                >
-                  {done
-                    ? res?.outcome === 'correct' ? '✓' : res?.outcome === 'wrong' ? '✗' : ''
-                    : `$${CHALLENGE_CLUE_VALUES[r]}`}
-                </button>
-              )
-            }),
-          )}
-        </div>
-      </div>
+          </div>
 
-      <p className="mt-3 text-center text-[11px] text-ink-stage-2">
-        {9 - clueResults.length} clue{9 - clueResults.length === 1 ? '' : 's'} left — pick any cell.
-      </p>
+          <p className="mt-3 text-center text-[11px] text-ink-stage-2">
+            {currentRound === 1
+              ? `${9 - r1Count} clue${9 - r1Count === 1 ? '' : 's'} left, then Double Jeopardy.`
+              : `${9 - r2Count} clue${9 - r2Count === 1 ? '' : 's'} left, then Final Jeopardy.`}
+          </p>
+        </>
+      )}
 
-      {/* The clue, full screen — answer it or let the clock run out. */}
+      {/* The clue, full screen. */}
       {active && (
         <ClueOverlay
           game={game}
+          rd={active.rd}
           c={active.c}
           r={active.r}
           stage={overlayStage}
           typed={typed}
           setTyped={setTyped}
+          wagerText={wagerText}
+          setWagerText={setWagerText}
+          stake={stake}
+          ddMax={ddMax(active.rd)}
           secondsLeft={secondsLeft}
           outcome={lastOutcome}
           opponents={opponents}
           myScore={myScore}
-          isLast={clueResults.length >= 9}
+          onWagerConfirm={confirmWager}
           onAnswer={() => resolveClue('answer', typed)}
           onPass={() => resolveClue('pass', '')}
           onClose={closeClue}
+        />
+      )}
+
+      {/* Final Jeopardy. */}
+      {fjStage && (
+        <FinalJeopardy
+          game={game}
+          stage={fjStage}
+          typed={typed}
+          setTyped={setTyped}
+          wagerText={wagerText}
+          setWagerText={setWagerText}
+          stake={stake}
+          maxWager={Math.max(0, scoreOf(clueResults.filter((x) => x.rd !== 3)))}
+          secondsLeft={secondsLeft}
+          outcome={lastOutcome}
+          opponents={opponents}
+          myScore={myScore}
+          onWagerConfirm={confirmFjWager}
+          onAnswer={() => resolveFinal(typed)}
+          onClose={closeFinal}
         />
       )}
     </Shell>
@@ -486,8 +630,32 @@ function BoardHeading({ game, compact }: { game: ChallengeGame; compact?: boolea
       <h1 className={`display-chrome leading-none ${compact ? 'mt-1 text-2xl' : 'mt-2 text-3xl md:text-4xl'}`}>
         {game.title}
       </h1>
-      {!compact && <p className="mt-2 text-sm text-ink-stage-2">{game.blurb}</p>}
+      {!compact && (
+        <>
+          <p className="mt-2 text-sm text-ink-stage-2">{game.blurb}</p>
+          {game.episode && (
+            <p className="mt-1 text-xs text-copper">
+              {game.episode.note} · {game.episode.show}, aired {formatAirDate(game.episode.airDate)}
+            </p>
+          )}
+          {!game.episode && (
+            <p className="mt-1 text-xs text-copper">
+              Real clues from real games — each one shows the date it aired.
+            </p>
+          )}
+        </>
+      )}
     </div>
+  )
+}
+
+/** The small provenance line on every clue screen: which game this aired in. */
+function SourceLine({ show, airDate }: { show: string | null; airDate: string | null }) {
+  if (!airDate && !show) return null
+  return (
+    <p className="mt-6 text-[10px] uppercase tracking-[0.2em] text-white/45">
+      {show ? `${show} · ` : ''}aired {formatAirDate(airDate)}
+    </p>
   )
 }
 
@@ -575,7 +743,7 @@ function MatchupIntro({
 
       <p className="mt-4 text-[11px] text-ink-stage-2">
         These are real players and real games — as you clear each clue you&apos;ll see
-        who of them got it, and their money lands as you go.
+        who of them got it, and their money (wagers included) lands as you go.
       </p>
     </div>
   )
@@ -600,60 +768,294 @@ function ScoreCard({ name, score, you }: { name: string; score: number; you?: bo
   )
 }
 
-function ClueOverlay({
-  game, c, r, stage, typed, setTyped, secondsLeft, outcome, opponents, myScore, isLast,
-  onAnswer, onPass, onClose,
+/** "Sarah got it for $2,000 · Rob missed it" — the table's record on one clue. */
+function GhostOutcomes({
+  opponents,
+  rd,
+  c,
+  r,
+  showAmounts,
 }: {
-  game: ChallengeGame
+  opponents: ChallengeResult[]
+  rd: number
   c: number
   r: number
-  stage: 'answering' | 'reveal'
+  showAmounts: boolean
+}) {
+  if (opponents.length === 0) return null
+  const rows = opponents.map((o) => ({ o, res: ghostResultOn(o, rd, c, r) }))
+  return (
+    <div className="mt-5 space-y-1 rounded-lg bg-black/30 px-4 py-3 text-left text-sm">
+      {rows.map(({ o, res }) => (
+        <p
+          key={o.id}
+          className={
+            res?.outcome === 'correct' ? 'text-green-300' : res?.outcome === 'wrong' ? 'text-red-300' : 'text-white/50'
+          }
+        >
+          {res?.outcome === 'correct' ? '✓' : res?.outcome === 'wrong' ? '✗' : '—'}{' '}
+          {o.player_name}{' '}
+          {res?.outcome === 'correct' ? 'got it' : res?.outcome === 'wrong' ? 'missed it' : 'let it go'}
+          {showAmounts && res && res.outcome !== 'pass' ? ` for ${formatMoney(res.value)}` : ''}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function TimerBar({ secondsLeft, total }: { secondsLeft: number; total: number }) {
+  return (
+    <>
+      <div className="mx-auto mt-8 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-black/40">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${secondsLeft <= 5 ? 'bg-red-500' : 'bg-jeopardy-gold-light'}`}
+          style={{ width: `${(secondsLeft / total) * 100}%` }}
+        />
+      </div>
+      <p className={`mt-1 text-xs tabular-nums ${secondsLeft <= 5 ? 'text-red-300' : 'text-white/60'}`}>
+        {secondsLeft}s
+      </p>
+    </>
+  )
+}
+
+function ClueOverlay({
+  game, rd, c, r, stage, typed, setTyped, wagerText, setWagerText, stake, ddMax,
+  secondsLeft, outcome, opponents, myScore, onWagerConfirm, onAnswer, onPass, onClose,
+}: {
+  game: ChallengeGame
+  rd: number
+  c: number
+  r: number
+  stage: OverlayStage
   typed: string
   setTyped: (s: string) => void
+  wagerText: string
+  setWagerText: (s: string) => void
+  stake: number
+  ddMax: number
   secondsLeft: number
   outcome: ClueOutcome
   opponents: ChallengeResult[]
   myScore: number
-  isLast: boolean
+  onWagerConfirm: () => void
   onAnswer: () => void
   onPass: () => void
   onClose: () => void
 }) {
-  const clue = game.categories[c].clues[r]
-  const value = CHALLENGE_CLUE_VALUES[r]
+  const cat = game.rounds[rd - 1][c]
+  const clue = cat.clues[r]
+  const dd = isDailyDouble(game, rd, c, r)
   const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    if (stage === 'answering') inputRef.current?.focus()
+    inputRef.current?.focus()
   }, [stage])
 
-  const gotIt = opponents.filter((o) => ghostOutcomeOn(o, c, r) === 'correct')
-  const missedIt = opponents.filter((o) => ghostOutcomeOn(o, c, r) === 'wrong')
-  const passedIt = opponents.filter((o) => ghostOutcomeOn(o, c, r) === 'pass')
-
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#060CE9] px-5 py-8">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#060CE9] px-5 py-8">
       <div className="w-full max-w-2xl text-center">
-        <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/80">
-          {game.categories[c].name} · <span className="text-jeopardy-gold-light">${value}</span>
-        </p>
-
-        <p className="clue-type mx-auto mt-6 max-w-xl text-xl uppercase text-white md:text-2xl" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}>
-          {clue.question}
-        </p>
-
-        {stage === 'answering' ? (
+        {stage === 'wager' ? (
+          /* ── DAILY DOUBLE wager ── */
           <>
-            {/* The clock, draining. */}
-            <div className="mx-auto mt-8 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-black/40">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${secondsLeft <= 5 ? 'bg-red-500' : 'bg-jeopardy-gold-light'}`}
-                style={{ width: `${(secondsLeft / CLUE_SECONDS) * 100}%` }}
+            <h2
+              className="text-4xl font-bold uppercase tracking-wide text-jeopardy-gold-light md:text-5xl"
+              style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '3px 3px 6px rgba(0,0,0,0.7)' }}
+            >
+              Daily Double!
+            </h2>
+            <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.28em] text-white/80">{cat.name}</p>
+            <p className="mt-3 text-sm text-white/85">
+              You have <span className="font-bold text-jeopardy-gold-light">{formatMoney(myScore)}</span>.
+              Wager from $5 up to <span className="font-bold text-jeopardy-gold-light">{formatMoney(ddMax)}</span> —
+              then the clue appears and the money rides on it.
+            </p>
+            <div className="mx-auto mt-5 max-w-xs">
+              <input
+                ref={inputRef}
+                type="number"
+                inputMode="numeric"
+                min={5}
+                max={ddMax}
+                value={wagerText}
+                onChange={(e) => setWagerText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && wagerText.trim()) onWagerConfirm() }}
+                placeholder="Your wager"
+                className="field-stage text-center"
               />
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => setWagerText(String(ddMax))}
+                  className="btn-stage btn-stage-sm btn-stage-ghost"
+                >
+                  True Daily Double
+                </button>
+                <button
+                  onClick={onWagerConfirm}
+                  disabled={!wagerText.trim()}
+                  className="btn-stage btn-copper btn-stage-sm"
+                >
+                  Lock it in
+                </button>
+              </div>
             </div>
-            <p className={`mt-1 text-xs tabular-nums ${secondsLeft <= 5 ? 'text-red-300' : 'text-white/60'}`}>
-              {secondsLeft}s
+            <SourceLine show={cat.show} airDate={cat.airDate} />
+          </>
+        ) : (
+          <>
+            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/80">
+              {cat.name} ·{' '}
+              <span className="text-jeopardy-gold-light">
+                {dd ? `Daily Double — ${formatMoney(stake)}` : `$${stake}`}
+              </span>
             </p>
 
+            <p className="clue-type mx-auto mt-6 max-w-xl text-xl uppercase text-white md:text-2xl" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}>
+              {clue.q}
+            </p>
+
+            {stage === 'answering' ? (
+              <>
+                <TimerBar secondsLeft={secondsLeft} total={CLUE_SECONDS} />
+                <div className="mx-auto mt-5 max-w-md">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={typed}
+                    onChange={(e) => setTyped(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim()) onAnswer() }}
+                    placeholder="What is…?"
+                    className="field-stage text-center"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <div className="mt-3 flex justify-center gap-2">
+                    <button onClick={onAnswer} disabled={!typed.trim()} className="btn-stage btn-copper">
+                      Answer
+                    </button>
+                    {/* No passing on a Daily Double — the wager rides regardless. */}
+                    {!dd && (
+                      <button onClick={onPass} className="btn-stage btn-stage-ghost">
+                        Pass
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <SourceLine show={cat.show} airDate={cat.airDate} />
+              </>
+            ) : (
+              /* ── reveal ── */
+              <div className="mx-auto mt-8 max-w-md">
+                <p
+                  className={`text-2xl font-bold ${
+                    outcome === 'correct' ? 'text-green-400' : outcome === 'wrong' ? 'text-red-400' : 'text-white/70'
+                  }`}
+                >
+                  {outcome === 'correct'
+                    ? `Right! +${formatMoney(stake)}`
+                    : outcome === 'wrong'
+                      ? `No — that's -${formatMoney(stake)}`
+                      : 'Time / passed'}
+                </p>
+                <p className="mt-2 text-sm text-white/85">
+                  Correct response: <span className="font-bold text-jeopardy-gold-light">{clue.a}</span>
+                </p>
+
+                <GhostOutcomes opponents={opponents} rd={rd} c={c} r={r} showAmounts={dd} />
+
+                <p className="mt-4 text-xs text-white/60">
+                  Your total: <span className="font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(myScore)}</span>
+                </p>
+
+                <button onClick={onClose} className="btn-stage btn-copper mt-5">
+                  Back to the board
+                </button>
+                <SourceLine show={cat.show} airDate={cat.airDate} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function FinalJeopardy({
+  game, stage, typed, setTyped, wagerText, setWagerText, stake, maxWager,
+  secondsLeft, outcome, opponents, myScore, onWagerConfirm, onAnswer, onClose,
+}: {
+  game: ChallengeGame
+  stage: OverlayStage
+  typed: string
+  setTyped: (s: string) => void
+  wagerText: string
+  setWagerText: (s: string) => void
+  stake: number
+  maxWager: number
+  secondsLeft: number
+  outcome: ClueOutcome
+  opponents: ChallengeResult[]
+  myScore: number
+  onWagerConfirm: () => void
+  onAnswer: () => void
+  onClose: () => void
+}) {
+  const fj = game.finalJeopardy
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [stage])
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#060CE9] px-5 py-8">
+      <div className="w-full max-w-2xl text-center">
+        <h2
+          className="text-4xl font-bold uppercase tracking-wide text-white md:text-5xl"
+          style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '3px 3px 6px rgba(0,0,0,0.7)' }}
+        >
+          Final Jeopardy!
+        </h2>
+        <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.28em] text-jeopardy-gold-light">
+          {fj.category}
+        </p>
+
+        {stage === 'wager' ? (
+          <>
+            <p className="mt-4 text-sm text-white/85">
+              That&apos;s the category. You have{' '}
+              <span className="font-bold text-jeopardy-gold-light">{formatMoney(myScore)}</span> — wager
+              anything up to {formatMoney(maxWager)} before you see the clue.
+            </p>
+            <div className="mx-auto mt-5 max-w-xs">
+              <input
+                ref={inputRef}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={maxWager}
+                value={wagerText}
+                onChange={(e) => setWagerText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onWagerConfirm() }}
+                placeholder="Your wager"
+                className="field-stage text-center"
+              />
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <button onClick={() => setWagerText(String(maxWager))} className="btn-stage btn-stage-sm btn-stage-ghost">
+                  Everything
+                </button>
+                <button onClick={onWagerConfirm} className="btn-stage btn-copper btn-stage-sm">
+                  Lock it in
+                </button>
+              </div>
+            </div>
+            <SourceLine show={fj.show} airDate={fj.airDate} />
+          </>
+        ) : stage === 'answering' ? (
+          <>
+            <p className="clue-type mx-auto mt-6 max-w-xl text-xl uppercase text-white md:text-2xl" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}>
+              {fj.q}
+            </p>
+            <TimerBar secondsLeft={secondsLeft} total={FJ_SECONDS} />
             <div className="mx-auto mt-5 max-w-md">
               <input
                 ref={inputRef}
@@ -667,57 +1069,37 @@ function ClueOverlay({
                 autoCorrect="off"
                 spellCheck={false}
               />
-              <div className="mt-3 flex justify-center gap-2">
-                <button onClick={onAnswer} disabled={!typed.trim()} className="btn-stage btn-copper">
-                  Answer
-                </button>
-                <button onClick={onPass} className="btn-stage btn-stage-ghost">
-                  Pass
-                </button>
-              </div>
+              <button onClick={onAnswer} disabled={!typed.trim()} className="btn-stage btn-copper mt-3">
+                Final answer
+              </button>
+              <p className="mt-2 text-[11px] text-white/50">
+                Wagered: {formatMoney(stake)} — no answer counts as a miss.
+              </p>
             </div>
+            <SourceLine show={fj.show} airDate={fj.airDate} />
           </>
         ) : (
-          <div className="mx-auto mt-8 max-w-md">
+          <div className="mx-auto mt-6 max-w-md">
+            <p className="clue-type mx-auto max-w-xl text-base uppercase text-white/80">{fj.q}</p>
             <p
-              className={`text-2xl font-bold ${
-                outcome === 'correct' ? 'text-green-400' : outcome === 'wrong' ? 'text-red-400' : 'text-white/70'
-              }`}
+              className={`mt-5 text-2xl font-bold ${outcome === 'correct' ? 'text-green-400' : 'text-red-400'}`}
             >
-              {outcome === 'correct' ? `Right! +$${value}` : outcome === 'wrong' ? `No — that's -$${value}` : 'Time / passed'}
+              {outcome === 'correct' ? `Right! +${formatMoney(stake)}` : `No — that's -${formatMoney(stake)}`}
             </p>
             <p className="mt-2 text-sm text-white/85">
-              Correct response: <span className="font-bold text-jeopardy-gold-light">{clue.answer}</span>
+              Correct response: <span className="font-bold text-jeopardy-gold-light">{fj.a}</span>
             </p>
 
-            {/* Who at THIS table got it — real players, real records. */}
-            {opponents.length > 0 && (
-              <div className="mt-5 space-y-1 rounded-lg bg-black/30 px-4 py-3 text-left text-sm">
-                {gotIt.length > 0 && (
-                  <p className="text-green-300">
-                    ✓ {gotIt.map((o) => o.player_name).join(', ')} got this one
-                  </p>
-                )}
-                {missedIt.length > 0 && (
-                  <p className="text-red-300">
-                    ✗ {missedIt.map((o) => o.player_name).join(', ')} missed it
-                  </p>
-                )}
-                {passedIt.length > 0 && (
-                  <p className="text-white/50">
-                    — {passedIt.map((o) => o.player_name).join(', ')} let it go
-                  </p>
-                )}
-              </div>
-            )}
+            <GhostOutcomes opponents={opponents} rd={3} c={0} r={0} showAmounts />
 
             <p className="mt-4 text-xs text-white/60">
-              Your total: <span className="font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(myScore)}</span>
+              Your final score: <span className="font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(myScore)}</span>
             </p>
 
             <button onClick={onClose} className="btn-stage btn-copper mt-5">
-              {isLast ? 'Final scores' : 'Back to the board'}
+              Final scores
             </button>
+            <SourceLine show={fj.show} airDate={fj.airDate} />
           </div>
         )}
       </div>
@@ -766,7 +1148,7 @@ function Standings({
                     )}
                   </td>
                   <td className="py-2 pr-2 text-right font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(row.score)}</td>
-                  <td className="py-2 text-right tabular-nums text-ink-stage-2">{row.correct_count}/9</td>
+                  <td className="py-2 text-right tabular-nums text-ink-stage-2">{row.correct_count}/{CLUES_PER_GAME}</td>
                 </tr>
               ))}
             </tbody>

@@ -6,8 +6,8 @@ import { ProfileMenu } from '@/components/ProfileMenu'
 import {
   LINEUP_GAMES,
   MICHAELS_GAMES,
-  CHALLENGE_MAX_SCORE,
   TIER_LABELS,
+  formatAirDate,
   type ChallengeGame,
 } from '@/lib/challenge-data'
 import {
@@ -62,10 +62,12 @@ export default function ChallengePage() {
 
         <h1 className="display-chrome text-3xl leading-none md:text-4xl">Jeopardy Challenge</h1>
         <p className="mt-3 max-w-2xl text-sm text-ink-stage">
-          Solo 3×3 boards — nine clues, type your answers, keep the money. Each board is
-          <strong className="text-white"> one shot</strong>: play it once and your score
-          stands forever. You&apos;re racing the real people who played before you, and a
-          perfect board is {formatMoney(CHALLENGE_MAX_SCORE)}.
+          Solo boards, played like the real show: a 3×3 Jeopardy round, a 3×3 Double
+          Jeopardy round with a hidden Daily Double in each, then a Final Jeopardy
+          wager. Every clue is a real clue from a real episode — the screen shows the
+          date it aired. Each board is <strong className="text-white">one shot</strong>:
+          play it once and your score stands forever, racing the real people who
+          played before you.
         </p>
 
         {!userLoading && !user && (
@@ -87,7 +89,8 @@ export default function ChallengePage() {
         <div className="mt-10">
           <div className="eyebrow-copper mb-1">The Lineup</div>
           <p className="mb-4 text-center text-xs text-ink-stage-2">
-            Kids, Teen, College — and five standard boards for everyone.
+            Kids Week, the Teen Tournament, the College Championship — and five
+            Standard Games, each from a famous episode.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             {LINEUP_GAMES.map((g) => (
@@ -100,7 +103,8 @@ export default function ChallengePage() {
         <div className="mt-12">
           <div className="eyebrow-copper mb-1">Michael&apos;s Jeopardy Challenge</div>
           <p className="mb-4 text-center text-xs text-ink-stage-2">
-            Ten boards. All geography. Run the table.
+            Ten boards, all geography — capitals, rivers, islands, states, deserts,
+            the lot — with categories pulled from real games across four decades.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             {MICHAELS_GAMES.map((g) => (
@@ -195,6 +199,11 @@ function GameCard({
         <div>
           <h2 className="text-lg font-bold leading-tight text-white">{game.title}</h2>
           <p className="mt-1 text-xs text-ink-stage-2">{game.blurb}</p>
+          {game.episode && (
+            <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-copper">
+              {game.episode.show} · aired {formatAirDate(game.episode.airDate)}
+            </p>
+          )}
         </div>
         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${TIER_CHIP[game.tier]}`}>
           {TIER_LABELS[game.tier]}
@@ -246,7 +255,7 @@ function GameCard({
           </>
         ) : (
           <>
-            <p className="text-[11px] text-ink-stage-2">One shot. 9 clues.</p>
+            <p className="text-[11px] text-ink-stage-2">One shot. 2 rounds + Final.</p>
             <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-copper">
               Play
             </a>

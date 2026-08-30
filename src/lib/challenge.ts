@@ -25,8 +25,14 @@ import { CHALLENGE_GAMES } from './challenge-data'
 
 export type ClueOutcome = 'correct' | 'wrong' | 'pass'
 
-/** One clue of one person's game: category index, row index, what happened. */
+/**
+ * One clue of one person's game. rd 1 = Jeopardy round, 2 = Double Jeopardy,
+ * 3 = Final Jeopardy (where c and r are 0). value is the money actually at
+ * stake for THIS player — the cell value normally, the wager on a Daily
+ * Double or Final Jeopardy — which is why ghost totals replay exactly.
+ */
 export type ClueResult = {
+  rd: number
   c: number
   r: number
   outcome: ClueOutcome
@@ -89,6 +95,10 @@ function rowFromDb(r: any): ChallengeResult {
  * runs off this one query: the hub computes per-board top lists, the overall
  * table, and your own locked/unlocked states from a single fetch instead of
  * nineteen.
+ *
+ * Rows whose key no longer matches a live board are dropped — a board that
+ * was re-keyed (e.g. when the format changed) leaves its old scores behind,
+ * and they must not haunt the overall table.
  */
 export async function fetchAllChallengeResults(): Promise<ChallengeResult[]> {
   const { data, error } = await supabase
@@ -97,7 +107,8 @@ export async function fetchAllChallengeResults(): Promise<ChallengeResult[]> {
     .order('created_at', { ascending: false })
     .limit(4000)
   if (error) throw error
-  return (data ?? []).map(rowFromDb)
+  const known = new Set(CHALLENGE_GAMES.map((g) => g.key))
+  return (data ?? []).map(rowFromDb).filter((r) => known.has(r.game_key))
 }
 
 /** Results for one board, best money first; ties broken by who got there first. */

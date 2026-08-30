@@ -1,0 +1,2680 @@
+[
+ {
+  "key": "kids",
+  "title": "Kids' Challenge",
+  "tier": "kids",
+  "series": "lineup",
+  "blurb": "A real Kids Week game, clue for clue.",
+  "episode": {
+   "show": "Show #6955",
+   "airDate": "2014-12-05",
+   "note": "Kids Week"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Hi, Tech!",
+     "airDate": "2014-12-05",
+     "show": "Show #6955",
+     "clues": [
+      {
+       "q": "\"Bad Piggies\" & \"Seasons\" are offshoots of this Rovio game app",
+       "a": "Angry Birds"
+      },
+      {
+       "q": "The makers of the Spark-Renault SRT_01E race car, which runs on this, claim it can hit 62 mph in under 3 seconds",
+       "a": "electricity"
+      },
+      {
+       "q": "No. 6 of Forbes' Top 7 Tech Trends That Will Dominate 2014: this type of \"printing will begin to revolutionize production\"",
+       "a": "3-D printing"
+      }
+     ]
+    },
+    {
+     "name": "Non-Common Core Math",
+     "airDate": "2014-12-05",
+     "show": "Show #6955",
+     "clues": [
+      {
+       "q": "1 + 2 + 3 + 4 + 5",
+       "a": "15"
+      },
+      {
+       "q": "1 - 2 + 3 - 4 + 5",
+       "a": "3"
+      },
+      {
+       "q": "1 x 2 x 3 x 4 x 5",
+       "a": "120"
+      }
+     ]
+    },
+    {
+     "name": "Song Lyrics",
+     "airDate": "2014-12-05",
+     "show": "Show #6955",
+     "clues": [
+      {
+       "q": "\"Oh my darling, oh my darling, oh my darling\", this person",
+       "a": "Clementine"
+      },
+      {
+       "q": "\"Where the buffalo roam\" is also where these 2 animals \"play\"",
+       "a": "the deer & the antelope"
+      },
+      {
+       "q": "We can't help repeating ourselves--it's what we'll say \"When Johnny comes marching home again\"",
+       "a": "hurrah"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Analogies",
+     "airDate": "2014-12-05",
+     "show": "Show #6955",
+     "clues": [
+      {
+       "q": "Dog is to bark as duck is to this",
+       "a": "quack"
+      },
+      {
+       "q": "A ruler is to length as this is to body temperature",
+       "a": "a thermometer"
+      },
+      {
+       "q": "Foot is to feet as datum is to this",
+       "a": "data"
+      }
+     ]
+    },
+    {
+     "name": "Fruits, Vegetables & Cake",
+     "airDate": "2014-12-05",
+     "show": "Show #6955",
+     "clues": [
+      {
+       "q": "Emeril has a tasty recipe for the upside down cake made from this fruit associated with Hawaii",
+       "a": "pineapple"
+      },
+      {
+       "q": "Despite its name, it's not usually served scrambled or poached",
+       "a": "an eggplant"
+      },
+      {
+       "q": "I know you kids say thanks, Belgium, for these sprouts with small, cabbage-like heads",
+       "a": "Brussels sprouts"
+      }
+     ]
+    },
+    {
+     "name": "The Olympic Games",
+     "airDate": "2014-12-05",
+     "show": "Show #6955",
+     "clues": [
+      {
+       "q": "The Olympic torch relay begins when this natural source is used to light the flame",
+       "a": "the sun"
+      },
+      {
+       "q": "There are this many rings in the official Olympic symbol",
+       "a": "5"
+      },
+      {
+       "q": "In 2000, 2008 & 2012 Africans swept the medals in this longest men's running race",
+       "a": "the marathon"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Health & Medicine",
+   "q": "In 1985 the Surgeon General called this \"the best rescue technique in any choking situation\"",
+   "a": "the Heimlich maneuver",
+   "airDate": "2014-12-05",
+   "show": "Show #6955"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "teen",
+  "title": "Teen Challenge",
+  "tier": "teen",
+  "series": "lineup",
+  "blurb": "Straight out of the 1994 Teen Tournament.",
+  "episode": {
+   "show": "Show #2181",
+   "airDate": "1994-02-14",
+   "note": "Teen Tournament"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Transportation",
+     "airDate": "1994-02-14",
+     "show": "Show #2181",
+     "clues": [
+      {
+       "q": "Term for the person who drives a train",
+       "a": "an engineer"
+      },
+      {
+       "q": "On Chrysler's 1994 minivans, a canister of argon gas was added to help inflate these faster",
+       "a": "airbags"
+      },
+      {
+       "q": "They propel a scull",
+       "a": "oars (rowers)"
+      }
+     ]
+    },
+    {
+     "name": "The Beach",
+     "airDate": "1994-02-14",
+     "show": "Show #2181",
+     "clues": [
+      {
+       "q": "The Guinness record for the height of one of these built with just hands, buckets & shovels is 19'6\"",
+       "a": "a sand castle"
+      },
+      {
+       "q": "Top players in the beach version of this sport include Sinjin Smith & Randy Stoklos",
+       "a": "volleyball"
+      },
+      {
+       "q": "This toy was originally called the Pluto Platter, but that name was tossed out",
+       "a": "the Frisbee"
+      }
+     ]
+    },
+    {
+     "name": "The \"Last\" Category",
+     "airDate": "1994-02-14",
+     "show": "Show #2181",
+     "clues": [
+      {
+       "q": "Something about to tumble down is standing on these",
+       "a": "its last legs"
+      },
+      {
+       "q": "It breaks a camel's back",
+       "a": "the last straw"
+      },
+      {
+       "q": "It's what you have when your joke succeeds when all told you it would fail",
+       "a": "the last laugh"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Nutrition",
+     "airDate": "1994-02-14",
+     "show": "Show #2181",
+     "clues": [
+      {
+       "q": "It's our most critical nutrient, since we can't go much more than a week without it",
+       "a": "water"
+      },
+      {
+       "q": "Eggs with shells of this color are nutritionally the same as the white ones",
+       "a": "brown"
+      },
+      {
+       "q": "This \"complex\" includes 8 individual vitamins",
+       "a": "the B complex"
+      }
+     ]
+    },
+    {
+     "name": "Around the World",
+     "airDate": "1994-02-14",
+     "show": "Show #2181",
+     "clues": [
+      {
+       "q": "Sri Lanka is one of the world's leading producers of these beverage leaves",
+       "a": "tea"
+      },
+      {
+       "q": "Many descendants of the ancient Maya still live in the northern part of this Mexican peninsula",
+       "a": "Yucatan Peninsula"
+      },
+      {
+       "q": "The Avon River flows through Christchurch, a picturesque city in this South Pacific country",
+       "a": "New Zealand"
+      }
+     ]
+    },
+    {
+     "name": "The 20th Century",
+     "airDate": "1994-02-14",
+     "show": "Show #2181",
+     "clues": [
+      {
+       "q": "During the century Spain created the fifth column & this country the Fifth Republic",
+       "a": "France"
+      },
+      {
+       "q": "He was Soviet premier during the Cuban Missile Crisis",
+       "a": "(Nikita) Khrushchev"
+      },
+      {
+       "q": "In July 1937 papers headlined the disappearance of Frederick Noonan & this person",
+       "a": "Amelia Earhart"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "The 1970s",
+   "q": "In August 1993 the last of the contaminated water from this 1979 accident site was evaporated",
+   "a": "Three Mile Island",
+   "airDate": "1994-02-14",
+   "show": "Show #2181"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "college",
+  "title": "College Challenge",
+  "tier": "college",
+  "series": "lineup",
+  "blurb": "From the 2022 National College Championship.",
+  "episode": {
+   "show": "National College Championship game #18",
+   "airDate": "2022-02-22",
+   "note": "National College Championship"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Numb With Numbers",
+     "airDate": "2022-02-22",
+     "show": "National College Championship game #18",
+     "clues": [
+      {
+       "q": "One half minus one sixth equals this amount when reduced to its simplest fraction",
+       "a": "one third"
+      },
+      {
+       "q": "If the legs of a right triangle are 6 inches & 8 inches, this is the length of the hypotenuse",
+       "a": "10 inches"
+      },
+      {
+       "q": "There are this many spots total on 2 standard dice",
+       "a": "42"
+      }
+     ]
+    },
+    {
+     "name": "Food Combos",
+     "airDate": "2022-02-22",
+     "show": "National College Championship game #18",
+     "clues": [
+      {
+       "q": "They're the 3 flavors in Neapolitan ice cream",
+       "a": "vanilla, chocolate & strawberry"
+      },
+      {
+       "q": "Lobster & filet mignon are often paired as this rhyming combo",
+       "a": "surf & turf"
+      },
+      {
+       "q": "An iconic Southern pairing is shrimp & this side dish made from ground corn & boiled",
+       "a": "grits"
+      }
+     ]
+    },
+    {
+     "name": "Historic Potpourri",
+     "airDate": "2022-02-22",
+     "show": "National College Championship game #18",
+     "clues": [
+      {
+       "q": "In 1603 the warlord Tokugawa Ieyasu was awarded this title, recognizing him as \"barbarian-quelling generalissimo\"",
+       "a": "shogun"
+      },
+      {
+       "q": "This first permanent English settlement in America was named for a king across the pond",
+       "a": "Jamestown"
+      },
+      {
+       "q": "His life came to an end in 1805 after being hit by enemy fire on the deck of his flagship, the HMS Victory",
+       "a": "Horatio Nelson"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "A State Capitol Idea",
+     "airDate": "2022-02-22",
+     "show": "National College Championship game #18",
+     "clues": [
+      {
+       "q": "Rhode Island's Capitol has one of these last fired in 1863; until 1962 it was dangerously still loaded with gunpowder",
+       "a": "a cannon"
+      },
+      {
+       "q": "Utah's Capitol is abuzz with 2 large sculptures of these structures, symbolizing the hard work done by the state's citizens",
+       "a": "beehives"
+      },
+      {
+       "q": "Kansas' Capitol displays the sword of this abolitionist who was executed in 1859",
+       "a": "John Brown"
+      }
+     ]
+    },
+    {
+     "name": "Scary Stories",
+     "airDate": "2022-02-22",
+     "show": "National College Championship game #18",
+     "clues": [
+      {
+       "q": "The title ghost of this Toni Morrison novel gets her name from a headstone that's missing the word \"Dearly\"",
+       "a": "Beloved"
+      },
+      {
+       "q": "Critics have long debated the \"reality\" of the ghosts that visit 2 children in this classic Henry James novella",
+       "a": "The Turn of the Screw"
+      },
+      {
+       "q": "A dead girl observes her family, friends & killer in this 2002 bestseller by Alice Sebold, later a movie",
+       "a": "The Lovely Bones"
+      }
+     ]
+    },
+    {
+     "name": "Classical Music",
+     "airDate": "2022-02-22",
+     "show": "National College Championship game #18",
+     "clues": [
+      {
+       "q": "In 2021 Yo-Yo Ma & Emanuel Ax released an album of Beethoven's complete works for piano & this instrument",
+       "a": "cello"
+      },
+      {
+       "q": "It's an arrangement performed in a slow & easy manner, like Samuel Barber's one \"for Strings\"",
+       "a": "adagio"
+      },
+      {
+       "q": "Composed in the 1700s, \"The Four Seasons\" concertos by this composer are meant to convey different times of the year",
+       "a": "Vivaldi"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "The 19th Century",
+   "q": "An 1873 book title gave us this phrase for the period in the late 1800s of growth & prosperity & also greed & corruption",
+   "a": "the Gilded Age",
+   "airDate": "2022-02-22",
+   "show": "National College Championship game #18"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "standard-1",
+  "title": "Standard Game 1",
+  "tier": "standard",
+  "series": "lineup",
+  "blurb": "Show #1 — the very first episode, September 10, 1984.",
+  "episode": {
+   "show": "Show #1",
+   "airDate": "1984-09-10",
+   "note": "The series premiere"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Inventions",
+     "airDate": "1984-09-10",
+     "show": "Show #1",
+     "clues": [
+      {
+       "q": "Marconi's wonderful wireless",
+       "a": "a radio"
+      },
+      {
+       "q": "In 1869 an American minister created this \"oriental\" transportation",
+       "a": "a rickshaw"
+      },
+      {
+       "q": "A 1920's hunting trip to Canada inspired Birdseye's food preserving method",
+       "a": "freezing"
+      }
+     ]
+    },
+    {
+     "name": "Animals",
+     "airDate": "1984-09-10",
+     "show": "Show #1",
+     "clues": [
+      {
+       "q": "These rodents first got to America by stowing away on ships",
+       "a": "rats"
+      },
+      {
+       "q": "There are about 40,000 muscles & tendons in this part of an elephant's body",
+       "a": "the trunk"
+      },
+      {
+       "q": "When husbands \"pop\" for an ermine coat, they're actually buying this fur",
+       "a": "a weasel"
+      }
+     ]
+    },
+    {
+     "name": "Foreign Cuisine",
+     "airDate": "1984-09-10",
+     "show": "Show #1",
+     "clues": [
+      {
+       "q": "The \"coq\" in coq au vin",
+       "a": "chicken"
+      },
+      {
+       "q": "A British variety is called \"bangers\", a Mexican variety, \"chorizo\"",
+       "a": "sausages"
+      },
+      {
+       "q": "Jewish crepe filled with cheese",
+       "a": "a blintz"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "National Landmarks",
+     "airDate": "1984-09-10",
+     "show": "Show #1",
+     "clues": [
+      {
+       "q": "She came from France to harbor America's freedom",
+       "a": "the Statue of Liberty"
+      },
+      {
+       "q": "When he was home, George Washington slept here",
+       "a": "Mount Vernon"
+      },
+      {
+       "q": "The cornerstone of Massachusetts, it bears the date 1620",
+       "a": "Plymouth Rock"
+      }
+     ]
+    },
+    {
+     "name": "'50's TV",
+     "airDate": "1984-09-10",
+     "show": "Show #1",
+     "clues": [
+      {
+       "q": "Occupation of Richard Diamond, Peter Gunn & Mike Hammer",
+       "a": "private eyes (or private detectives)"
+      },
+      {
+       "q": "She was \"Our Miss Brooks\"",
+       "a": "Eve Arden"
+      },
+      {
+       "q": "Amount Michael Anthony gave out each week on behalf of John Beresford Tipton",
+       "a": "$1 million"
+      }
+     ]
+    },
+    {
+     "name": "4-Letter Words",
+     "airDate": "1984-09-10",
+     "show": "Show #1",
+     "clues": [
+      {
+       "q": "Pulled the trigger or what's in a jigger",
+       "a": "a shot"
+      },
+      {
+       "q": "Basketball defense or Serling's twilight area",
+       "a": "a zone"
+      },
+      {
+       "q": "Little girls do it with a rope, Van Halen does it in a song",
+       "a": "to jump"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Holidays",
+   "q": "The third Monday of January starting in 1986",
+   "a": "Martin Luther King Day",
+   "airDate": "1984-09-10",
+   "show": "Show #1"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "standard-2",
+  "title": "Standard Game 2",
+  "tier": "standard",
+  "series": "lineup",
+  "blurb": "Show #2665, aired March 15, 1996.",
+  "episode": {
+   "show": "Show #2665",
+   "airDate": "1996-03-15",
+   "note": "A Season 12 classic"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Languages",
+     "airDate": "1996-03-15",
+     "show": "Show #2665",
+     "clues": [
+      {
+       "q": "This language also known as Siamese is predominantly monosyllabic",
+       "a": "Thai"
+      },
+      {
+       "q": "Languages no longer spoken are described as this, from the Latin for \"to extinguish\"",
+       "a": "extinct"
+      },
+      {
+       "q": "Mali's national anthem, \"A ton appel Mali\", is sung in this official language",
+       "a": "French"
+      }
+     ]
+    },
+    {
+     "name": "Proverbs",
+     "airDate": "1996-03-15",
+     "show": "Show #2665",
+     "clues": [
+      {
+       "q": "\"Don't swap\" these animals \"in midstream\"",
+       "a": "horses"
+      },
+      {
+       "q": "This creature \"wins the race while the hare is sleeping\"",
+       "a": "the tortoise"
+      },
+      {
+       "q": "\"Man proposes,\" he \"disposes\"",
+       "a": "God"
+      }
+     ]
+    },
+    {
+     "name": "Common Bonds",
+     "airDate": "1996-03-15",
+     "show": "Show #2665",
+     "clues": [
+      {
+       "q": "Band,Coconut,Puka",
+       "a": "shells"
+      },
+      {
+       "q": "Legal,launch,lily",
+       "a": "pads"
+      },
+      {
+       "q": "Balboa,Mountains,Graziano",
+       "a": "Rocky"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Presidential Trivia",
+     "airDate": "1996-03-15",
+     "show": "Show #2665",
+     "clues": [
+      {
+       "q": "The only president to win a Pulitzer Prize, for \"Profiles in Courage\"",
+       "a": "(John F.) Kennedy"
+      },
+      {
+       "q": "Cleveland's great-great- grandfather died at the Philadelphia home of this statesman in 1757",
+       "a": "Benjamin Franklin"
+      },
+      {
+       "q": "Before becoming president of Princeton, he was a professor & football coach at Wesleyan",
+       "a": "Woodrow Wilson"
+      }
+     ]
+    },
+    {
+     "name": "Women",
+     "airDate": "1996-03-15",
+     "show": "Show #2665",
+     "clues": [
+      {
+       "q": "The coloratura soprano Dame Nellie Melba was a native of this country; \"Melba\" is a variation of Melbourne",
+       "a": "Australia"
+      },
+      {
+       "q": "In the 1960s this stick-thin British model was so popular Mattel made a doll in her likeness",
+       "a": "Twiggy"
+      },
+      {
+       "q": "Royal reaction to Andrew Morton's 1992 book about her inspired People's headline \"The Empire Strikes Back\"",
+       "a": "Princess Diana"
+      }
+     ]
+    },
+    {
+     "name": "Mississippi",
+     "airDate": "1996-03-15",
+     "show": "Show #2665",
+     "clues": [
+      {
+       "q": "At Rosemont Plantation, roses grown by this Confederate president's mother still bloom",
+       "a": "Jefferson Davis"
+      },
+      {
+       "q": "During the Civil War, the Governor's Mansion in this city served as headquarters for General Sherman",
+       "a": "Jackson"
+      },
+      {
+       "q": "Each September Greenville hosts a festival featuring the \"Delta\" type of this musical form",
+       "a": "the blues"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Publishing Firsts",
+   "q": "In 1570 Abraham Ortelius produced the first modern book of this type: \"Theatrum Orbis Terrarum\"",
+   "a": "an atlas",
+   "airDate": "1996-03-15",
+   "show": "Show #2665"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "standard-3",
+  "title": "Standard Game 3",
+  "tier": "standard",
+  "series": "lineup",
+  "blurb": "Show #4558 — the first night of Ken Jennings' 74-game streak, June 2, 2004.",
+  "episode": {
+   "show": "Show #4558",
+   "airDate": "2004-06-02",
+   "note": "Ken Jennings' debut"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Pardon Me",
+     "airDate": "2004-06-02",
+     "show": "Show #4558",
+     "clues": [
+      {
+       "q": "He was presidentially pardoned September 8, 1974",
+       "a": "Nixon"
+      },
+      {
+       "q": "Though Thomas Blood stole this object important to Charles II from the Tower of London, Charles pardoned him",
+       "a": "his crown"
+      },
+      {
+       "q": "In 1992 President Bush pardoned 6 Iran-Contra figures, saying this was their main motivation",
+       "a": "patriotism"
+      }
+     ]
+    },
+    {
+     "name": "\"Epi\"Sodes",
+     "airDate": "2004-06-02",
+     "show": "Show #4558",
+     "clues": [
+      {
+       "q": "A fast-spreading outbreak of a disease",
+       "a": "an epidemic"
+      },
+      {
+       "q": "A short section at the end of a book",
+       "a": "an epilogue"
+      },
+      {
+       "q": "From the Greek for \"seizure\", it's a medical condition involving abnormal electrical brain activity",
+       "a": "epilepsy"
+      }
+     ]
+    },
+    {
+     "name": "Quotable Recent Movies",
+     "airDate": "2004-06-02",
+     "show": "Show #4558",
+     "clues": [
+      {
+       "q": "2002:\"Nice Greek girls who don't find a husband work in the family restaurant\"",
+       "a": "My Big Fat Greek Wedding"
+      },
+      {
+       "q": "2003:\"I shall take you to the Black Pearl and your bonny lass\"",
+       "a": "Pirates of the Caribbean"
+      },
+      {
+       "q": "2001:\"Keep an eye on the staircases.  They like to change\"",
+       "a": "Harry Potter and the Sorcerer's Stone"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Vocabulary",
+     "airDate": "2004-06-02",
+     "show": "Show #4558",
+     "clues": [
+      {
+       "q": "Bovine means resembling cattle; this word that's 1 letter shorter means resembling sheep",
+       "a": "ovine"
+      },
+      {
+       "q": "When in England, if asked to snog, be aware it means this",
+       "a": "to kiss"
+      },
+      {
+       "q": "This word for circumstances that lessen a punishment comes from the Latin for \"soft\"",
+       "a": "mitigating"
+      }
+     ]
+    },
+    {
+     "name": "Country Time",
+     "airDate": "2004-06-02",
+     "show": "Show #4558",
+     "clues": [
+      {
+       "q": "Nepal's western, eastern & southern boundaries are with this country",
+       "a": "India"
+      },
+      {
+       "q": "The U.S. Ambassador to Samoa is stationed in Wellington in this country",
+       "a": "New Zealand"
+      },
+      {
+       "q": "In April 1939 this country absorbed Albania",
+       "a": "Italy"
+      }
+     ]
+    },
+    {
+     "name": "Actresses & Playwrights",
+     "airDate": "2004-06-02",
+     "show": "Show #4558",
+     "clues": [
+      {
+       "q": "He never forgave Mrs. Patrick Campbell for going off on her honeymoon while rehearsing his \"Pygmalion\"",
+       "a": "Shaw"
+      },
+      {
+       "q": "As a student at Brown University, this actress appeared in a play written by her father, Romulus Linney",
+       "a": "Laura Linney"
+      },
+      {
+       "q": "Chapter One of her life with Neil Simon began in 1973, when she was cast in his play \"The Good Doctor\"",
+       "a": "Marsha Mason"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "The 2000 Olympics",
+   "q": "She's the first female track & field athlete to win medals in 5 different events at a single Olympics",
+   "a": "Marion Jones",
+   "airDate": "2004-06-02",
+   "show": "Show #4558"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "standard-4",
+  "title": "Standard Game 4",
+  "tier": "standard",
+  "series": "lineup",
+  "blurb": "Show #7973 — the night Holzhauer won a record $131,127, April 17, 2019.",
+  "episode": {
+   "show": "Show #7973",
+   "airDate": "2019-04-17",
+   "note": "James Holzhauer's record game"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Presidents by Dog",
+     "airDate": "2019-04-17",
+     "show": "Show #7973",
+     "clues": [
+      {
+       "q": "His service dog Sully was seen by his casket in the U.S. Capitol in December 2018",
+       "a": "Bush 41"
+      },
+      {
+       "q": "He had a dog named Grits he liked to skritch",
+       "a": "(Jimmy) Carter"
+      },
+      {
+       "q": "Buddy, his Lab, was struck & killed by a car in New York in 2002",
+       "a": "Clinton"
+      }
+     ]
+    },
+    {
+     "name": "Rhyme Time",
+     "airDate": "2019-04-17",
+     "show": "Show #7973",
+     "clues": [
+      {
+       "q": "A nursery rhyme pumpkin eater's units of measure",
+       "a": "Peter's meters"
+      },
+      {
+       "q": "Paddy grain cost",
+       "a": "rice price"
+      },
+      {
+       "q": "An overconfident thoroughbred rider",
+       "a": "a cocky jockey"
+      }
+     ]
+    },
+    {
+     "name": "Children's Books",
+     "airDate": "2019-04-17",
+     "show": "Show #7973",
+     "clues": [
+      {
+       "q": "\"A God Buys Us Cheeseburgers\" is a chapter in \"The Lightning Thief\", book 1 about this kid \"& the Olympians\"",
+       "a": "Percy Jackson"
+      },
+      {
+       "q": "Dr. Seuss books with rhyming titles include \"Fox in Socks\" & this one that also has the line \"Dad is sad\"",
+       "a": "Hop on Pop"
+      },
+      {
+       "q": "Crockett Johnson colored our world with his tale of this boy \"and the Purple Crayon\"",
+       "a": "Harold"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Abbreviated Magazines",
+     "airDate": "2019-04-17",
+     "show": "Show #7973",
+     "clues": [
+      {
+       "q": "With sections called \"Leading Off\" & \"Scorecard\": SI",
+       "a": "Sports Illustrated"
+      },
+      {
+       "q": "Decorating & household tips, recipes & more from the woman who knows it all: MSL",
+       "a": "Martha Stewart Living"
+      },
+      {
+       "q": "Showcasing innovative homes & design since 1920: AD",
+       "a": "Architectural Digest"
+      }
+     ]
+    },
+    {
+     "name": "5, 5",
+     "airDate": "2019-04-17",
+     "show": "Show #7973",
+     "clues": [
+      {
+       "q": "Wonder bakes loaves of this, also an adjective meaning bland",
+       "a": "white bread"
+      },
+      {
+       "q": "Traffic signal term that also means permission to proceed on a project",
+       "a": "green light"
+      },
+      {
+       "q": "It's the smart-sounding name for a group of experts who serve unofficially as advisers; FDR had his own",
+       "a": "brain trust"
+      }
+     ]
+    },
+    {
+     "name": "Trouble in River City",
+     "airDate": "2019-04-17",
+     "show": "Show #7973",
+     "clues": [
+      {
+       "q": "Early in 2018, Paris was on alert as this river's banks became swollen with flood waters",
+       "a": "the Seine"
+      },
+      {
+       "q": "Even though pollution levels are high, Kolkata residents bathe in the Hugli, an arm of this holy river of Hinduism",
+       "a": "the Ganges"
+      },
+      {
+       "q": "\"Blue\" in a Strauss waltz, in reality it's a different hue altogether when it reaches Budapest",
+       "a": "the Danube"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "20th Century Literary Characters",
+   "q": "His first name refers to the ancient district in which you'd find the Greek capital; his surname is a bird",
+   "a": "Atticus Finch",
+   "airDate": "2019-04-17",
+   "show": "Show #7973"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 2,
+    "r": 1
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "standard-5",
+  "title": "Standard Game 5",
+  "tier": "standard",
+  "series": "lineup",
+  "blurb": "Show #8513 — the start of Amy Schneider's 40-game streak, November 17, 2021.",
+  "episode": {
+   "show": "Show #8513",
+   "airDate": "2021-11-17",
+   "note": "Amy Schneider's debut"
+  },
+  "rounds": [
+   [
+    {
+     "name": "Nations by World Heritage Sites",
+     "airDate": "2021-11-17",
+     "show": "Show #8513",
+     "clues": [
+      {
+       "q": "Agra Fort & Nanda Devi National Park",
+       "a": "India"
+      },
+      {
+       "q": "Head-Smashed-In Buffalo Jump & L'anse aux Meadows National Historic Site",
+       "a": "Canada"
+      },
+      {
+       "q": "The Cave of Altamira & the Old City of Salamanca",
+       "a": "Spain"
+      }
+     ]
+    },
+    {
+     "name": "Italian Arts & Culture",
+     "airDate": "2021-11-17",
+     "show": "Show #8513",
+     "clues": [
+      {
+       "q": "For many years Arturo Toscanini was the principal conductor & music director at this famed Milan opera house",
+       "a": "La Scala"
+      },
+      {
+       "q": "1950's \"Luci del varieta\", or \"Variety Lights\", was his first feature film as director",
+       "a": "Fellini"
+      },
+      {
+       "q": "It's the Italian name for the lively folk dance also known as \"the dance of the spider\"",
+       "a": "the tarantella"
+      }
+     ]
+    },
+    {
+     "name": "1985 in Entertainment",
+     "airDate": "2021-11-17",
+     "show": "Show #8513",
+     "clues": [
+      {
+       "q": "Richard Dean Anderson starred as the resourceful title agent on this TV series that debuted in 1985",
+       "a": "MacGyver"
+      },
+      {
+       "q": "1985 was a good year for this duo as \"Everything She Wants\" & \"Careless Whisper\" topped the charts",
+       "a": "Wham!"
+      },
+      {
+       "q": "It took place July 13, 1985 at Wembley Stadium & Philadelphia's JFK Stadium",
+       "a": "Live Aid"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Same First & Last Letter",
+     "airDate": "2021-11-17",
+     "show": "Show #8513",
+     "clues": [
+      {
+       "q": "It's the very least you can do",
+       "a": "the minimum"
+      },
+      {
+       "q": "A small vending stand, perhaps for newspapers",
+       "a": "a kiosk"
+      },
+      {
+       "q": "This adjective for some stockings also refers to anything conducted in a smooth & continuous manner",
+       "a": "seamless"
+      }
+     ]
+    },
+    {
+     "name": "It's History",
+     "airDate": "2021-11-17",
+     "show": "Show #8513",
+     "clues": [
+      {
+       "q": "It began to tilt in 1178, while still under construction; luckily (for us), war interrupted & gave time for the soil to settle",
+       "a": "the Leaning Tower of Pisa"
+      },
+      {
+       "q": "This dread tribunal passed its judgments in a ceremony called the auto-da-fé, or act of faith",
+       "a": "the Inquisition"
+      },
+      {
+       "q": "In 1756 Voltaire wrote that this, which had lasted nearly a thousand years, was none of the 3 elements in its name",
+       "a": "the Holy Roman Empire"
+      }
+     ]
+    },
+    {
+     "name": "Grammy's Album of the Year",
+     "airDate": "2021-11-17",
+     "show": "Show #8513",
+     "clues": [
+      {
+       "q": "The soundtrack to this film won for 1993; Record of the Year was \"I Will Always Love You\"",
+       "a": "The Bodyguard"
+      },
+      {
+       "q": "\"The Miseducation of\" her got the nod for 1998",
+       "a": "(Lauryn) Hill"
+      },
+      {
+       "q": "The first country artist to win the award was him, for 1968 & \"By the Time I Get to Phoenix\"",
+       "a": "Glen Campbell"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Final Resting Places",
+   "q": "A cemetery on this island has the graves of Robert Fulton & 2 of the first 4 Treasury Secretaries",
+   "a": "Manhattan",
+   "airDate": "2021-11-17",
+   "show": "Show #8513"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "michaels-1",
+  "title": "Game 1",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "The 50 States · Capital Cities · World Geography — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "The 50 States",
+     "airDate": "1988-03-04",
+     "show": "Show #815 - Friday, March 4, 1988",
+     "clues": [
+      {
+       "q": "The 2 states that begin with \"S\" each have this word in their name",
+       "a": "South"
+      },
+      {
+       "q": "The name of this state comes from the French for \"green mountain\"",
+       "a": "Vermont"
+      },
+      {
+       "q": "In this state, you can visit Watchaug Pond, Weekapaug Point, & Woonsocket Hill",
+       "a": "Rhode Island"
+      }
+     ]
+    },
+    {
+     "name": "Capital Cities",
+     "airDate": "1990-04-16",
+     "show": "Show #1306 - Monday, April 16, 1990",
+     "clues": [
+      {
+       "q": "The name of this West German capital sounds \"good\" in French",
+       "a": "Bonn"
+      },
+      {
+       "q": "The Vigeland Sculpture Park & Museum in this Norwegian city has been called both \"obscene\" & \"unforgettable\"",
+       "a": "Oslo"
+      },
+      {
+       "q": "In 1968 this city's \"Spring\" lasted until August when Warsaw Pact troops invaded",
+       "a": "Prague"
+      }
+     ]
+    },
+    {
+     "name": "World Geography",
+     "airDate": "1985-01-01",
+     "show": "Show #82 - Tuesday, January 1, 1985",
+     "clues": [
+      {
+       "q": "Capital of Sri Lanka, it sounds like Peter Falk's been there",
+       "a": "Colombo"
+      },
+      {
+       "q": "Continent Greenland is considered part of",
+       "a": "North America"
+      },
+      {
+       "q": "As Cape Horn is to South America, this is to Africa",
+       "a": "the Cape of Good Hope"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Island Nations",
+     "airDate": "2018-02-09",
+     "show": "Show #7695 - Friday, February 9, 2018",
+     "clues": [
+      {
+       "q": "Cyprus is the legendary home of this Greek goddess of love",
+       "a": "Aphrodite"
+      },
+      {
+       "q": "7 miles east of Venezuela is this island, the larger of the 2 that make up a nation",
+       "a": "Trinidad"
+      },
+      {
+       "q": "This capital of an island nation is at the extreme south of North Island",
+       "a": "Wellington"
+      }
+     ]
+    },
+    {
+     "name": "Deserts",
+     "airDate": "1991-12-02",
+     "show": "Show #1671 - Monday, December 2, 1991",
+     "clues": [
+      {
+       "q": "The eastern part of this desert is often called the Arabian desert",
+       "a": "the Sahara Desert"
+      },
+      {
+       "q": "Joshua Tree Nat'l Monument is on the border between the Colorado Desert and this California one",
+       "a": "the Mojave"
+      },
+      {
+       "q": "The Chinese call it \"Shamo\", sand desert, or \"Hanhai\", dry sea",
+       "a": "the Gobi Desert"
+      }
+     ]
+    },
+    {
+     "name": "State Capitals",
+     "airDate": "1985-03-13",
+     "show": "Show #133 - Wednesday, March 13, 1985",
+     "clues": [
+      {
+       "q": "There were no witch trials at this Oregon capital",
+       "a": "Salem"
+      },
+      {
+       "q": "West Virginia's capital, not South Carolina's",
+       "a": "Charleston"
+      },
+      {
+       "q": "The capital of this state is named for our 3rd President",
+       "a": "Missouri"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Geography",
+   "q": "The name of this Greek mountain pass means \"hot gates\"",
+   "a": "Thermopylae",
+   "airDate": "1992-02-19",
+   "show": "Show #1728"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 2,
+    "r": 1
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "michaels-2",
+  "title": "Game 2",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Asia · The 50 States · Mountains — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Asia",
+     "airDate": "1985-04-10",
+     "show": "Show #153 - Wednesday, April 10, 1985",
+     "clues": [
+      {
+       "q": "Holy cow! It has the most cattle of any country in the world",
+       "a": "India"
+      },
+      {
+       "q": "A pilgrimage to Mecca ends in this country",
+       "a": "Saudi Arabia"
+      },
+      {
+       "q": "Two of three Asian countries Crosby/Hope \"Road\" pictures went \"to\"",
+       "a": "(2 of) Bali, Singapore & Hong Kong"
+      }
+     ]
+    },
+    {
+     "name": "The 50 States",
+     "airDate": "1989-02-02",
+     "show": "Show #1024 - Thursday, February 2, 1989",
+     "clues": [
+      {
+       "q": "Wyoming's capital, its name means \"red talkers\", not Clint Walker",
+       "a": "Cheyenne"
+      },
+      {
+       "q": "Delaware is the only state in which these are subdivided into \"hundreds\"",
+       "a": "counties"
+      },
+      {
+       "q": "You can visit a resort on the Mescalero Apache Reservation in this \"Land of Enchantment\"",
+       "a": "New Mexico"
+      }
+     ]
+    },
+    {
+     "name": "Mountains",
+     "airDate": "1984-11-06",
+     "show": "Show #42 - Tuesday, November 6, 1984",
+     "clues": [
+      {
+       "q": "Hannibal & his Punic War pachyderms crossed these into Italy",
+       "a": "the Alps"
+      },
+      {
+       "q": "Disney made it the highest peak in Anaheim",
+       "a": "the Matterhorn"
+      },
+      {
+       "q": "Mountain where Iran, Russia & Turkey meet and Noah's Ark supposedly landed",
+       "a": "Mount Ararat"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "The Middle East",
+     "airDate": "1985-01-21",
+     "show": "Show #96 - Monday, January 21, 1985",
+     "clues": [
+      {
+       "q": "Pop Singer Pat Boone wrote lyrics to this song about Israel",
+       "a": "\"Exodus\""
+      },
+      {
+       "q": "Members of Muslim religious order given to frenzied dancing",
+       "a": "the (Whirling) Dervishes"
+      },
+      {
+       "q": "Country known as \"The United Arab Republic\" from 1958-71",
+       "a": "Egypt"
+      }
+     ]
+    },
+    {
+     "name": "The Caribbean",
+     "airDate": "1986-05-26",
+     "show": "Show #446 - Monday, May 26, 1986",
+     "clues": [
+      {
+       "q": "The Caribbean sea is technically part of this ocean",
+       "a": "the Atlantic"
+      },
+      {
+       "q": "1 of the 2 U.S. dependencies in the Caribbean",
+       "a": "the Virgin Islands (or Puerto Rico)"
+      },
+      {
+       "q": "The Biminis, part of these islands, lie only 60 miles east of Florida",
+       "a": "the Bahamas"
+      }
+     ]
+    },
+    {
+     "name": "Rivers",
+     "airDate": "1987-01-14",
+     "show": "Show #548 - Wednesday, January 14, 1987",
+     "clues": [
+      {
+       "q": "The Robert E. Lee beat the Natchez in a famous 1870 steamboat race on this river",
+       "a": "the Mississippi"
+      },
+      {
+       "q": "It's said the ashes of Joan of Arc were thrown into this river",
+       "a": "the Seine"
+      },
+      {
+       "q": "River whose course Lewis & Clark followed for the first year of their journey",
+       "a": "the Missouri"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "U.S. Geography",
+   "q": "2 of the 3 U.S. states that have Erie Counties",
+   "a": "New York, Ohio & Pennsylvania",
+   "airDate": "1992-02-03",
+   "show": "Show #1716"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 2,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "michaels-3",
+  "title": "Game 3",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Rivers · Australia · Bodies of Water — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Rivers",
+     "airDate": "1986-01-02",
+     "show": "Show #344 - Thursday, January 2, 1986",
+     "clues": [
+      {
+       "q": "New York's FDR Drive runs along this \"river\" which isn't really a river",
+       "a": "the East River"
+      },
+      {
+       "q": "Right and left banks of a river are determined by facing in this direction",
+       "a": "downstream"
+      },
+      {
+       "q": "It's so heavily tapped by man that in normal years none of it reaches its outlet in the Gulf of Calif.",
+       "a": "the Colorado"
+      }
+     ]
+    },
+    {
+     "name": "Australia",
+     "airDate": "1985-02-08",
+     "show": "Show #110 - Friday, February 8, 1985",
+     "clues": [
+      {
+       "q": "1 of 2 animals on its coat of arms",
+       "a": "(1 of) kangaroo and emu"
+      },
+      {
+       "q": "\"Satanic\" mammal found only on island S. of Australia",
+       "a": "Tasmanian devil"
+      },
+      {
+       "q": "Title of this song, which actually means \"to tramp the roads with a backpack\"",
+       "a": "\"Waltzing Matilda\""
+      }
+     ]
+    },
+    {
+     "name": "Bodies of Water",
+     "airDate": "1984-10-01",
+     "show": "Show #16 - Monday, October 1, 1984",
+     "clues": [
+      {
+       "q": "Originally at Lewiston, NY, this falls has over the years moved 7 times upstream",
+       "a": "Niagara Falls"
+      },
+      {
+       "q": "While Thatcher looks over Parliament, Parliament looks over this",
+       "a": "the Thames"
+      },
+      {
+       "q": "The dam you need to make Lake Mead",
+       "a": "Boulder/Hoover Dam"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Mountains",
+     "airDate": "1984-09-12",
+     "show": "Show #3 - Wednesday, September 12, 1984",
+     "clues": [
+      {
+       "q": "First volcano to erupt in continental U.S. since 1921",
+       "a": "Mount St. Helens"
+      },
+      {
+       "q": "Home to alpacas & llamas",
+       "a": "the Andes"
+      },
+      {
+       "q": "Tibetans call it Chomolunga, Nepalese call it Sagarmatha, both call it theirs",
+       "a": "Mount Everest"
+      }
+     ]
+    },
+    {
+     "name": "Europe",
+     "airDate": "1984-12-05",
+     "show": "Show #63 - Wednesday, December 5, 1984",
+     "clues": [
+      {
+       "q": "\"The Eternal City\"",
+       "a": "Rome"
+      },
+      {
+       "q": "Hitler said this Polish capital \"must cease to exist; level it\"",
+       "a": "Warsaw"
+      },
+      {
+       "q": "Moscow park that was scene of murders investigated in recent best-seller & film",
+       "a": "Gorky Park"
+      }
+     ]
+    },
+    {
+     "name": "European Geography",
+     "airDate": "1994-07-05",
+     "show": "Show #2282 - Tuesday, July 5, 1994",
+     "clues": [
+      {
+       "q": "Cities located in this mountain system include St. Moritz, Switzerland & Innsbruck, Austria",
+       "a": "the Alps"
+      },
+      {
+       "q": "The Strait of Bonifacio separates Sardinia from this French island",
+       "a": "Corsica"
+      },
+      {
+       "q": "This Serbian capital developed from a settlement the Romans called Singidunum",
+       "a": "Belgrade"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "U.S. States",
+   "q": "The names of these 2 adjacent states are Choctaw for \"red people\" & Spanish for \"red\"",
+   "a": "Colorado & Oklahoma",
+   "airDate": "1987-12-08",
+   "show": "Show #752"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "michaels-4",
+  "title": "Game 4",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Island Nations · National Parks · Asia — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Island Nations",
+     "airDate": "2020-09-29",
+     "show": "Show #8247 - Tuesday, September 29, 2020",
+     "clues": [
+      {
+       "q": "Fittingly, this country is home to Europe's largest glacier",
+       "a": "Iceland"
+      },
+      {
+       "q": "The capital & largest city of Indonesia, it's on Java at the mouth of the Ciliwung River",
+       "a": "Jakarta"
+      },
+      {
+       "q": "In 1565 Jean de la Valette led the Knights of St. John in defense of this Mediterranean island",
+       "a": "Malta"
+      }
+     ]
+    },
+    {
+     "name": "National Parks",
+     "airDate": "1984-09-14",
+     "show": "Show #5 - Friday, September 14, 1984",
+     "clues": [
+      {
+       "q": "Due to earthquakes, this Yellowstone geyser no longer erupts on time",
+       "a": "Old Faithful"
+      },
+      {
+       "q": "Logs in this forest may be 150 million years old",
+       "a": "the Petrified Forest"
+      },
+      {
+       "q": "There are still unexplored areas of these New Mexico caves",
+       "a": "Carlsbad Caverns"
+      }
+     ]
+    },
+    {
+     "name": "Asia",
+     "airDate": "1984-11-07",
+     "show": "Show #43 - Wednesday, November 7, 1984",
+     "clues": [
+      {
+       "q": "These cats guarded Thailand’s temples & palaces",
+       "a": "Siamese cats"
+      },
+      {
+       "q": "Founded the dynasty of “Khan men” who ruled the Mongol Empire",
+       "a": "Genghis Kahn"
+      },
+      {
+       "q": "Ornate carvings of this stone, most valuable in dark green, are still done in China",
+       "a": "jade"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "U.S. Cities",
+     "airDate": "1985-02-28",
+     "show": "Show #124 - Thursday, February 28, 1985",
+     "clues": [
+      {
+       "q": "It started out as New Amsterdam",
+       "a": "New York"
+      },
+      {
+       "q": "Of Los Angeles, San Diego & Reno, the furthest west",
+       "a": "Reno"
+      },
+      {
+       "q": "New Mexico town named for a radio program",
+       "a": "Truth or Consequences"
+      }
+     ]
+    },
+    {
+     "name": "Deserts",
+     "airDate": "1995-02-24",
+     "show": "Show #2420 - Friday, February 24, 1995",
+     "clues": [
+      {
+       "q": "These have been artificially created in the Sahara by drilling over 1000' down for water",
+       "a": "oases"
+      },
+      {
+       "q": "Fossilized dinosaur eggs have been found in this desert the Chinese also call Shamo",
+       "a": "the Gobi"
+      },
+      {
+       "q": "In 1974 this country detonated its first nuclear device in its Thar Desert",
+       "a": "India"
+      }
+     ]
+    },
+    {
+     "name": "State Capitals",
+     "airDate": "1985-04-03",
+     "show": "Show #148 - Wednesday, April 3, 1985",
+     "clues": [
+      {
+       "q": "At nearly 7,000 feet, this capital of New Mexico is the highest",
+       "a": "Santa Fe"
+      },
+      {
+       "q": "The capital with the smallest population is Montpelier in this state",
+       "a": "Vermont"
+      },
+      {
+       "q": "The southernmost of all state capitals",
+       "a": "Honolulu"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "South America",
+   "q": "This South American country is named for an Italian city",
+   "a": "Venezuela",
+   "airDate": "1989-02-14",
+   "show": "Show #1032"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 2,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "michaels-5",
+  "title": "Game 5",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Australia · The Caribbean · Volcanoes — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Australia",
+     "airDate": "1985-04-16",
+     "show": "Show #157 - Tuesday, April 16, 1985",
+     "clues": [
+      {
+       "q": "Airline originally called \"Queensland & Northern Territory Aerial Services, Ltd.\"",
+       "a": "Qantas"
+      },
+      {
+       "q": "Australian site of '56 Olympic games",
+       "a": "Melbourne"
+      },
+      {
+       "q": "What the swagman sat by when he sat beside a billabong",
+       "a": "a lake (or a pond)"
+      }
+     ]
+    },
+    {
+     "name": "The Caribbean",
+     "airDate": "1992-05-14",
+     "show": "Show #1789 - Thursday, May 14, 1992",
+     "clues": [
+      {
+       "q": "Damballah is an important deity in this Haitian folk religion",
+       "a": "Voodoo"
+      },
+      {
+       "q": "The tumba, not the rumba, has been called Curacao's national one of these",
+       "a": "a dance"
+      },
+      {
+       "q": "Caribbean islanders sometimes combine peas with this grain also found in arroz con pollo",
+       "a": "rice"
+      }
+     ]
+    },
+    {
+     "name": "Volcanoes",
+     "airDate": "1991-11-19",
+     "show": "Show #1662 - Tuesday, November 19, 1991",
+     "clues": [
+      {
+       "q": "The ash from its 1980 eruption was so rich in silica, commemorative glass ashtrays were made of it",
+       "a": "Mount St. Helens"
+      },
+      {
+       "q": "In Roman mythology, the workshop in which he forged thunderbolts was located under a volcano",
+       "a": "Vulcan"
+      },
+      {
+       "q": "Eruptions are divided into 5 basic groups; the least violent are named after this U.S. island chain",
+       "a": "Hawaii"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Asian Nations",
+     "airDate": "2010-10-05",
+     "show": "Show #5992 - Tuesday, October 5, 2010",
+     "clues": [
+      {
+       "q": "The Chao Phraya, this country's main river, flows to the gulf named for the country",
+       "a": "Thailand"
+      },
+      {
+       "q": "Hey, you! U is a title of respect in this Asian language",
+       "a": "Burmese"
+      },
+      {
+       "q": "Operation Baus Au, Tagalog for \"get it back\", was run by the U.S. military in this nation during World War II",
+       "a": "the Philippines"
+      }
+     ]
+    },
+    {
+     "name": "Central America",
+     "airDate": "2000-09-14",
+     "show": "Show #3684 - Thursday, September 14, 2000",
+     "clues": [
+      {
+       "q": "This fruit crop accounts for a third of Honduras' exports & is the country's leading source of income",
+       "a": "Bananas"
+      },
+      {
+       "q": "The northern border of this country is the southern border of Central America",
+       "a": "Colombia"
+      },
+      {
+       "q": "Guatemala's coat of arms features a scroll with the date of the country's founding & this national bird",
+       "a": "Quetzal"
+      }
+     ]
+    },
+    {
+     "name": "Africa",
+     "airDate": "1985-04-02",
+     "show": "Show #147 - Tuesday, April 2, 1985",
+     "clues": [
+      {
+       "q": "Africa's only permanently frozen peak, Hemingway wrote of its snows",
+       "a": "Mount Kilimanjaro"
+      },
+      {
+       "q": "For over 50 yrs. he operated a jungle hospital in Lambarene, Gabon",
+       "a": "Dr. (Albert) Schweitzer"
+      },
+      {
+       "q": "In 1822, freed American slaves named this country's capital Monrovia, after U.S. pres.",
+       "a": "Liberia"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "World Geography",
+   "q": "2 of 3 world capitals on the Danube River",
+   "a": "(2 of) Vienna, Budapest, and Belgrade",
+   "airDate": "1986-01-30",
+   "show": "Show #364"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 1
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "michaels-6",
+  "title": "Game 6",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Geography · Scandinavia · Peninsulas — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Geography",
+     "airDate": "1985-05-08",
+     "show": "Show #173 - Wednesday, May 8, 1985",
+     "clues": [
+      {
+       "q": "Italy has set $324 million aside to start to repair this water ravaged canal city",
+       "a": "Venice"
+      },
+      {
+       "q": "Country whose southernmost point is Middle Island, Lake Erie",
+       "a": "Canada"
+      },
+      {
+       "q": "River which joins with the Euphrates to form the Shatt-al-Arab before emptying into the Persian Gulf",
+       "a": "the Tigris"
+      }
+     ]
+    },
+    {
+     "name": "Scandinavia",
+     "airDate": "1985-05-03",
+     "show": "Show #170 - Friday, May 3, 1985",
+     "clues": [
+      {
+       "q": "Both Norway's Trygve Lie & Sweden's Dag Hammarskjold have filled this U.N. post",
+       "a": "Secretary General"
+      },
+      {
+       "q": "Narrow, shallow ocean inlets common to Norway",
+       "a": "the fjords"
+      },
+      {
+       "q": "Simple, up-to-date furniture style from the land of Hans Christian Andersen",
+       "a": "Danish modern"
+      }
+     ]
+    },
+    {
+     "name": "Peninsulas",
+     "airDate": "1995-05-18",
+     "show": "Show #2479 - Thursday, May 18, 1995",
+     "clues": [
+      {
+       "q": "The Sinai Peninsula is usually considered part of this continent",
+       "a": "Asia"
+      },
+      {
+       "q": "The southernmost point of this peninsula dips into the Strait of Gibraltar",
+       "a": "the Iberian Peninsula"
+      },
+      {
+       "q": "During an 11-month siege, 1854-55, the city of Sevastopol on this peninsula was heavily damaged",
+       "a": "the Crimean Peninsula"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Central America",
+     "airDate": "1993-12-22",
+     "show": "Show #2143 - Wednesday, December 22, 1993",
+     "clues": [
+      {
+       "q": "In population, this canal country's Darien province is its smallest",
+       "a": "Panama"
+      },
+      {
+       "q": "In 1822-23 5 of the Central American countries were legally part of this North American country",
+       "a": "Mexico"
+      },
+      {
+       "q": "The ruined site of Kaminaljuyo, built by these Indians, lies just outside Guatemala City",
+       "a": "the Mayans"
+      }
+     ]
+    },
+    {
+     "name": "Asian Geography",
+     "airDate": "2017-07-04",
+     "show": "Show #7567 - Tuesday, July 4, 2017",
+     "clues": [
+      {
+       "q": "Hokkaido & this Japanese island are separated by only about 12 miles across the Tsugaru Strait",
+       "a": "Honshu"
+      },
+      {
+       "q": "About a mile off the mainland, Iran's Qeshm Island is the largest in this strait",
+       "a": "the Strait of Hormuz"
+      },
+      {
+       "q": "The Mu Us Desert in north central China lies within a bend of this long river",
+       "a": "the Yellow River"
+      }
+     ]
+    },
+    {
+     "name": "Capital Cities",
+     "airDate": "1991-04-25",
+     "show": "Show #1544 - Thursday, April 25, 1991",
+     "clues": [
+      {
+       "q": "This city has a Tolstoy museum & has restored the author's home as a tourist attraction",
+       "a": "Moscow"
+      },
+      {
+       "q": "This Indonesian capital lies at the mouth of the Liwung River, on the northwest coast of Java",
+       "a": "Jakarta"
+      },
+      {
+       "q": "The new city of Abuja has succeeded Lagos as capital of this African nation",
+       "a": "Nigeria"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "European Geography",
+   "q": "Once a residence of rulers of Austria, this city on the Danube less than 20 miles from Vienna became a national capital in 1993",
+   "a": "Bratislava",
+   "airDate": "2020-12-10",
+   "show": "Show #8299"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 2,
+    "r": 1
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "michaels-7",
+  "title": "Game 7",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "U.S. Cities · American Geography · Australia — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "U.S. Cities",
+     "airDate": "1985-04-26",
+     "show": "Show #165 - Friday, April 26, 1985",
+     "clues": [
+      {
+       "q": "It recently moved ahead of Chicago to become our 2nd largest",
+       "a": "Los Angeles"
+      },
+      {
+       "q": "It has more Italians than Venice, more Irish than Dublin & more Jews than Jerusalem",
+       "a": "New York City"
+      },
+      {
+       "q": "Florida's largest city, it's named after our 7th president",
+       "a": "Jacksonville"
+      }
+     ]
+    },
+    {
+     "name": "American Geography",
+     "airDate": "2006-06-20",
+     "show": "Show #5027 - Tuesday, June 20, 2006",
+     "clues": [
+      {
+       "q": "This Great Lake is the lowest in elevation & the only one of the 5 sharing its name with a province",
+       "a": "Ontario"
+      },
+      {
+       "q": "We're sure the Berkshires are a chain of hills centered in the western part of this state",
+       "a": "Massachusetts"
+      },
+      {
+       "q": "These largest cities of Michigan & Iowa were both given French names",
+       "a": "Detroit & Des Moines"
+      }
+     ]
+    },
+    {
+     "name": "Australia",
+     "airDate": "1986-05-02",
+     "show": "Show #430 - Friday, May 2, 1986",
+     "clues": [
+      {
+       "q": "Set in Australia, this torrid tale starred Richard Chamberlain & Rachel Ward",
+       "a": "The Thornbirds"
+      },
+      {
+       "q": "By royal proclamation, she created the new nation of Australia on the 1st day of the 20th century",
+       "a": "Queen Victoria"
+      },
+      {
+       "q": "These trees help fill both the country's newsprint needs & koalas' stomachs",
+       "a": "eucalyptus trees"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "World Cities",
+     "airDate": "1985-05-14",
+     "show": "Show #177 - Tuesday, May 14, 1985",
+     "clues": [
+      {
+       "q": "City Anna would have to go to today to visit the king of \"Siam\" at home",
+       "a": "Bangkok"
+      },
+      {
+       "q": "English town named for a tree belonging to a man named \"Cofa\", it got a treat with Godiva's ride",
+       "a": "Coventry"
+      },
+      {
+       "q": "Brazilian city name which is Portuguese equivalent to Minnesota's capital",
+       "a": "São Paulo"
+      }
+     ]
+    },
+    {
+     "name": "Seas",
+     "airDate": "1993-01-19",
+     "show": "Show #1932 - Tuesday, January 19, 1993",
+     "clues": [
+      {
+       "q": "The greatest depth in this arm of the Mediterranean is about 7,000' just north of Crete",
+       "a": "the Aegean"
+      },
+      {
+       "q": "The Crimean Mountains form the only cliffs found on the northern coast of this sea",
+       "a": "the Black Sea"
+      },
+      {
+       "q": "Major ports on this sea include Jidda, in Saudi Arabia, & Port Sudan",
+       "a": "the Red Sea"
+      }
+     ]
+    },
+    {
+     "name": "South America",
+     "airDate": "1985-04-30",
+     "show": "Show #167 - Tuesday, April 30, 1985",
+     "clues": [
+      {
+       "q": "Juan Valdez grows his coffee there",
+       "a": "Colombia"
+      },
+      {
+       "q": "Country that's South America's biggest oil producer by far",
+       "a": "Venezuela"
+      },
+      {
+       "q": "This South American capital didn't exist until 1956",
+       "a": "Brasilia"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "World Capitals",
+   "q": "This Mideast city gave its name to a type of cloth, steel & a jeweler's technique",
+   "a": "Damascus",
+   "airDate": "1985-05-09",
+   "show": "Show #174"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "michaels-8",
+  "title": "Game 8",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Volcanoes · World Capitals · Asian Nations — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Volcanoes",
+     "airDate": "1987-10-12",
+     "show": "Show #711 - Monday, October 12, 1987",
+     "clues": [
+      {
+       "q": "In early times, Europeans believed that Hekla, a fiery volcano in Iceland, was the gate to this",
+       "a": "hell"
+      },
+      {
+       "q": "The largest volcano on this continent is Mount Erebus, thereby combining fire & ice",
+       "a": "Antarctica"
+      },
+      {
+       "q": "This highly fluid substance hardens into pahoehoe & aa",
+       "a": "lava"
+      }
+     ]
+    },
+    {
+     "name": "World Capitals",
+     "airDate": "1985-04-15",
+     "show": "Show #156 - Monday, April 15, 1985",
+     "clues": [
+      {
+       "q": "Also called Kampuchea, its capital is Phnom Penh",
+       "a": "Cambodia"
+      },
+      {
+       "q": "This \"Saintly\" city is the capital of Chile",
+       "a": "Santiago"
+      },
+      {
+       "q": "The ancient ruins of Carthage lie near this capital of Tunisia",
+       "a": "Tunis"
+      }
+     ]
+    },
+    {
+     "name": "Asian Nations",
+     "airDate": "2003-07-08",
+     "show": "Show #4357 - Tuesday, July 8, 2003",
+     "clues": [
+      {
+       "q": "In 1949 a Nationalist government in exile was established in this Asian island nation",
+       "a": "Taiwan"
+      },
+      {
+       "q": "\"The Adventures of Milo & Otis\" was filmed in this country where it was known as \"Koneko Monogatari\"",
+       "a": "Japan"
+      },
+      {
+       "q": "Angkor Thom, a Buddhist temple complex in this country, is modeled on the Hindu complex of Angkor Wat",
+       "a": "Cambodia (Kampuchea)"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Africa",
+     "airDate": "1985-01-22",
+     "show": "Show #97 - Tuesday, January 22, 1985",
+     "clues": [
+      {
+       "q": "He found his \"Roots\" in Gambia",
+       "a": "Alex Haley"
+      },
+      {
+       "q": "It's made areas uninhabitable because its bite causes African sleeping sickness",
+       "a": "tsetse fly"
+      },
+      {
+       "q": "Living in proximity to the Pygmies, they're the world's tallest people",
+       "a": "the Watusi"
+      }
+     ]
+    },
+    {
+     "name": "Asian Geography",
+     "airDate": "2009-04-02",
+     "show": "Show #5664 - Thursday, April 2, 2009",
+     "clues": [
+      {
+       "q": "This capital city lies on the Han River, about 22 miles east of Inchon",
+       "a": "Seoul"
+      },
+      {
+       "q": "This peninsula extends from the Isthmus of Kra in southern Thailand to the Johor Strait",
+       "a": "the Malay Peninsula"
+      },
+      {
+       "q": "This region in the northeast, also called Tungpei, or \"the northeast\", is a \"candidate\" for having China's best forests",
+       "a": "Manchuria"
+      }
+     ]
+    },
+    {
+     "name": "Central America",
+     "airDate": "1992-09-30",
+     "show": "Show #1853 - Wednesday, September 30, 1992",
+     "clues": [
+      {
+       "q": "In 1980, Arch. Oscar Romero was assassinated while saying mass in this El Salvador capital",
+       "a": "San Salvador"
+      },
+      {
+       "q": "In 1974, Hurricane Fifi destroyed three-quarters of Honduras' crop of this fruit, a major export",
+       "a": "bananas"
+      },
+      {
+       "q": "Central America encompasses the area between Mexico & the N.W. border of this S. Amer. country",
+       "a": "Colombia"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "African Geography",
+   "q": "From 1889 until 1961, this mountain's highest point was known as Kaiser-Wilhelm-Spitze",
+   "a": "Mount Kilimanjaro",
+   "airDate": "2007-10-29",
+   "show": "Show #5321"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 1
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "michaels-9",
+  "title": "Game 9",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Geography · U.S. Geography · Australia — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Geography",
+     "airDate": "1985-03-14",
+     "show": "Show #134 - Thursday, March 14, 1985",
+     "clues": [
+      {
+       "q": "Asian country with Seoul",
+       "a": "Korea"
+      },
+      {
+       "q": "Country with the most land within the Arctic circle",
+       "a": "Russia"
+      },
+      {
+       "q": "Some of the seas that surround this area are the Wendell, Ross, Amundsen & Davis",
+       "a": "Antarctica"
+      }
+     ]
+    },
+    {
+     "name": "U.S. Geography",
+     "airDate": "1985-02-27",
+     "show": "Show #123 - Wednesday, February 27, 1985",
+     "clues": [
+      {
+       "q": "Baltimore, MD & Norfolk, VA, are the 2 largest ports on this bay",
+       "a": "the Chesapeake Bay"
+      },
+      {
+       "q": "This real Georgia-Florida swamp is home to the comics' Pogo",
+       "a": "the Okefenokee Swamp"
+      },
+      {
+       "q": "Rip Van Winkle slept for 20 years in these southern N.Y. state mountains",
+       "a": "the Catskills"
+      }
+     ]
+    },
+    {
+     "name": "Australia",
+     "airDate": "1987-06-12",
+     "show": "Show #655 - Friday, June 12, 1987",
+     "clues": [
+      {
+       "q": "1988 marks this sort of milestone for Australia which the U.S. celebrated in 1976",
+       "a": "bicentennial"
+      },
+      {
+       "q": "Australia is world's leading producer of this, which some merino sheep wear \"dust jackets\" to protect",
+       "a": "wool"
+      },
+      {
+       "q": "In Australia, a 38 hr. work week is common, & 4 weeks of this a year are required by law",
+       "a": "vacations"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "State Capitals",
+     "airDate": "1985-04-19",
+     "show": "Show #160 - Friday, April 19, 1985",
+     "clues": [
+      {
+       "q": "This state's capital is named after prospector Joe Juneau",
+       "a": "Alaska"
+      },
+      {
+       "q": "\"Pig's Eye\" was 1st name of Minnesota capital until a church was built there, dedicated to him",
+       "a": "St. Paul"
+      },
+      {
+       "q": "State capital that was originally called \"Michigan\"",
+       "a": "Lansing"
+      }
+     ]
+    },
+    {
+     "name": "European Cities",
+     "airDate": "1988-10-03",
+     "show": "Show #936 - Monday, October 3, 1988",
+     "clues": [
+      {
+       "q": "This Polish capital's coat of arms depicts a mermaid brandishing a sword & shield",
+       "a": "Warsaw"
+      },
+      {
+       "q": "This Belgian city is famous as one of the world's major seaports & as the home of Peter Paul Rubens",
+       "a": "Antwerp"
+      },
+      {
+       "q": "In 1783 this Irish town began making the fine cut glassware that bears its name",
+       "a": "Waterford"
+      }
+     ]
+    },
+    {
+     "name": "U.S. Cities",
+     "airDate": "1985-05-30",
+     "show": "Show #189 - Thursday, May 30, 1985",
+     "clues": [
+      {
+       "q": "In both 1884 & 1984, this city's World's Fairs were financial disasters",
+       "a": "New Orleans"
+      },
+      {
+       "q": "It's the largest city in both Maine & Oregon",
+       "a": "Portland"
+      },
+      {
+       "q": "Town in NY named for ancient Ilium",
+       "a": "Troy"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Islands",
+   "q": "3 of the world's 10 largest islands are in the Arctic Ocean & belong to this country",
+   "a": "Canada",
+   "airDate": "1991-01-07",
+   "show": "Show #1466"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "michaels-10",
+  "title": "Game 10",
+  "tier": "geography",
+  "series": "michaels",
+  "blurb": "Lakes & Rivers · U.S. Geography · World Capitals — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Lakes & Rivers",
+     "airDate": "1984-12-05",
+     "show": "Show #63 - Wednesday, December 5, 1984",
+     "clues": [
+      {
+       "q": "A German river or the wine grown on its banks",
+       "a": "the Rhine"
+      },
+      {
+       "q": "The end of a river that empties into a lake or ocean",
+       "a": "the mouth"
+      },
+      {
+       "q": "Sam Rayburn Reservoir is this state's largest lake",
+       "a": "Texas"
+      }
+     ]
+    },
+    {
+     "name": "U.S. Geography",
+     "airDate": "1985-02-11",
+     "show": "Show #111 - Monday, February 11, 1985",
+     "clues": [
+      {
+       "q": "Not home to \"The Tonight Show\", it's capital of Nevada",
+       "a": "Carson City"
+      },
+      {
+       "q": "Lanai, Hawaii's \"Pineapple Island\", is owned by this company",
+       "a": "the Dole Company"
+      },
+      {
+       "q": "In 1602, Gosnold named this resort island off Mass. for his daughter & the grapes grown there",
+       "a": "Martha's Vineyard"
+      }
+     ]
+    },
+    {
+     "name": "World Capitals",
+     "airDate": "1985-05-27",
+     "show": "Show #186 - Monday, May 27, 1985",
+     "clues": [
+      {
+       "q": "In 1857, Queen Victoria   chose this city to be Canada's capital",
+       "a": "Ottawa"
+      },
+      {
+       "q": "In 1976, the Philippines moved its capital from Quezon City back to this city",
+       "a": "Manila"
+      },
+      {
+       "q": "The oldest part of Washington, D.C., or the capital of Guyana",
+       "a": "Georgetown"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Mountains",
+     "airDate": "1985-03-04",
+     "show": "Show #126 - Monday, March 4, 1985",
+     "clues": [
+      {
+       "q": "Mt. Logan was thought the highest on this continent till someone measured Mt. McKinley",
+       "a": "North America"
+      },
+      {
+       "q": "Different surveys have reported its height as 29,002, 29,141 and 29,028 feet",
+       "a": "Mount Everest"
+      },
+      {
+       "q": "A mountain chain in the Sahara bears the name of this mythical man who \"bears the world\"",
+       "a": "Atlas"
+      }
+     ]
+    },
+    {
+     "name": "Geography",
+     "airDate": "1985-03-18",
+     "show": "Show #136 - Monday, March 18, 1985",
+     "clues": [
+      {
+       "q": "Island west of South America discovered by a Dutch captain Easter Sunday, 1722",
+       "a": "Easter Island"
+      },
+      {
+       "q": "Country Bogie traveled to in search of the Treasure of the Sierra Madre",
+       "a": "Mexico"
+      },
+      {
+       "q": "Site of world's 3rd largest church, it's Italy's 2nd largest city",
+       "a": "Milan"
+      }
+     ]
+    },
+    {
+     "name": "Peninsulas",
+     "airDate": "1999-06-21",
+     "show": "Show #3421 - Monday, June 21, 1999",
+     "clues": [
+      {
+       "q": "The region of Apulia occupies the \"heel\" of this peninsula",
+       "a": "Italy"
+      },
+      {
+       "q": "Colombia & Venezuela share the Guajira Peninsula, which juts into this sea",
+       "a": "Caribbean Sea"
+      },
+      {
+       "q": "Mention the east side of Australia's Cape York Peninsula & you're \"reef\"erring to this sea",
+       "a": "Coral Sea"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Rivers",
+   "q": "2 of the 3 European rivers that begin with \"T\" on which a national capital is located",
+   "a": "(2 of) Thames, Tiber or Tagus",
+   "airDate": "1988-05-18",
+   "show": "Show #868"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 2
+   }
+  ]
+ }
+]
