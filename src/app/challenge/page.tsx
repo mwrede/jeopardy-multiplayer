@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useUser, signInWithGoogle } from '@/lib/auth'
 import { ProfileMenu } from '@/components/ProfileMenu'
+import { ChallengeShare } from '@/components/ChallengeShare'
 import {
   LINEUP_GAMES,
   MICHAELS_GAMES,
@@ -251,16 +252,31 @@ function GameCard({
               Played — <span className="font-bold text-jeopardy-gold-light">{formatMoney(mine.score)}</span>
               {myRank > 0 && <> · #{myRank} of {results.length}</>}
             </p>
-            <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-stage-ghost">
-              Standings
-            </a>
+            <span className="flex shrink-0 gap-1.5">
+              <ChallengeShare
+                game={game}
+                small
+                result={{
+                  score: mine.score,
+                  correct: mine.correct_count,
+                  rank: myRank || undefined,
+                  players: results.length,
+                }}
+              />
+              <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-stage-ghost">
+                Standings
+              </a>
+            </span>
           </>
         ) : (
           <>
             <p className="text-[11px] text-ink-stage-2">One shot. 2 rounds + Final.</p>
-            <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-copper">
-              Play
-            </a>
+            <span className="flex shrink-0 gap-1.5">
+              <ChallengeShare game={game} small />
+              <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-copper">
+                Play
+              </a>
+            </span>
           </>
         )}
       </div>

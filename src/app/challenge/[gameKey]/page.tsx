@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useUser } from '@/lib/auth'
 import { checkAnswerDetailed } from '@/lib/answer-check'
+import { ChallengeShare } from '@/components/ChallengeShare'
 import {
   getChallengeGame,
   isDailyDouble,
@@ -386,6 +387,20 @@ export default function ChallengeGamePage() {
           <p className="mt-1 text-sm text-ink-stage-2">
             {mine.correct_count} of {CLUES_PER_GAME} right · #{rank} of {allResults.length} — this board is done for you.
           </p>
+          <div className="mt-4">
+            <ChallengeShare
+              game={game}
+              result={{
+                score: mine.score,
+                correct: mine.correct_count,
+                rank: rank || undefined,
+                players: allResults.length,
+              }}
+            />
+            <p className="mt-2 text-[11px] text-ink-stage-2">
+              Copies your result and a link so someone else can play this exact board.
+            </p>
+          </div>
         </div>
         <Standings results={allResults} identity={identity} title="Leaderboard" />
         <BackToHub />
@@ -458,6 +473,22 @@ export default function ChallengeGamePage() {
               </div>
             ))}
           </div>
+          {!submitting && (
+            <div className="mt-4">
+              <ChallengeShare
+                game={game}
+                result={{
+                  score: myScore,
+                  correct: clueResults.filter((x) => x.outcome === 'correct').length,
+                  rank: mine ? allResults.findIndex((x) => x.id === mine.id) + 1 || undefined : undefined,
+                  players: allResults.length,
+                }}
+              />
+              <p className="mt-2 text-[11px] text-ink-stage-2">
+                Copies your result and a link so someone else can play this exact board.
+              </p>
+            </div>
+          )}
         </div>
         {error && <p className="mt-4 text-center text-sm text-copper-glow">{error}</p>}
         <Standings results={allResults} identity={identity} title="Leaderboard" />
