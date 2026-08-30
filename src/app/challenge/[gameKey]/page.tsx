@@ -231,6 +231,15 @@ export default function ChallengeGamePage() {
     }
   }, [phase, boardDone, fjResult, fjStage, active])
 
+  // Game over: present the final screen from the top, standings in view —
+  // the page can be left mid-scroll by the board, and the whole point of
+  // finishing is seeing where you landed.
+  useEffect(() => {
+    if (phase === 'done' || phase === 'played') {
+      try { window.scrollTo({ top: 0 }) } catch {}
+    }
+  }, [phase])
+
   // ── Actions ──────────────────────────────────────────────────────────
   function begin() {
     const trimmed = name.trim()
@@ -472,6 +481,15 @@ export default function ChallengeGamePage() {
               </div>
             ))}
           </div>
+          {!submitting && mine && (
+            <p className="mt-3 text-sm text-white">
+              You&apos;re now{' '}
+              <span className="font-bold text-jeopardy-gold-light">
+                #{allResults.findIndex((x) => x.id === mine.id) + 1} of {allResults.length}
+              </span>{' '}
+              on this board.
+            </p>
+          )}
           {!submitting && (
             <div className="mt-4">
               <ChallengeShare
@@ -485,7 +503,7 @@ export default function ChallengeGamePage() {
           )}
         </div>
         {error && <p className="mt-4 text-center text-sm text-copper-glow">{error}</p>}
-        <Standings results={allResults} identity={identity} title="Leaderboard" />
+        <Standings results={allResults} identity={identity} title="Final standings" />
         <BackToHub />
       </Shell>
     )
