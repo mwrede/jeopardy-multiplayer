@@ -30,7 +30,11 @@ export function ChallengeShare({
     const url = `${window.location.origin}/challenge/${game.key}`
     // "Game 3" means nothing outside its section — carry the series name.
     const label =
-      game.series === 'michaels' ? `Michael's Jeopardy Challenge · ${game.title}` : game.title
+      game.series === 'michaels'
+        ? `Michael's Jeopardy Challenge · ${game.title}`
+        : game.series === 'politics'
+          ? `The Politics Challenge · ${game.title}`
+          : game.title
 
     let text: string
     if (result) {

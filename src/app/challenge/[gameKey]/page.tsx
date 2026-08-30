@@ -668,7 +668,11 @@ function BoardHeading({ game, compact }: { game: ChallengeGame; compact?: boolea
   return (
     <div className="text-center">
       <p className="text-[10px] uppercase tracking-[0.3em] text-jeopardy-gold-light">
-        {game.series === 'michaels' ? "Michael's Jeopardy Challenge" : 'Jeopardy Challenge'} · {TIER_LABELS[game.tier]}
+        {game.series === 'michaels'
+          ? "Michael's Jeopardy Challenge"
+          : game.series === 'politics'
+            ? 'The Politics Challenge'
+            : 'Jeopardy Challenge'} · {TIER_LABELS[game.tier]}
       </p>
       <h1 className={`display-chrome leading-none ${compact ? 'mt-1 text-2xl' : 'mt-2 text-3xl md:text-4xl'}`}>
         {game.title}

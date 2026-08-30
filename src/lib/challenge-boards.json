@@ -2676,5 +2676,1475 @@
     "r": 2
    }
   ]
+ },
+ {
+  "key": "politics-1",
+  "title": "Game 1",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "First Ladies · Presidential Trivia · The Constitution — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "First Ladies",
+     "airDate": "1993-02-25",
+     "show": "Show #1959",
+     "clues": [
+      {
+       "q": "Raised as a Methodist, she adopted Jimmy's Baptist faith when they married",
+       "a": "Rosalynn Carter"
+      },
+      {
+       "q": "Thelma Catherine Ryan Nixon was born on the eve of this holiday, hence she's known as Pat",
+       "a": "St. Patrick's Day"
+      },
+      {
+       "q": "She was in the top 10 of her graduating class at the University of Texas in 1933",
+       "a": "Lady Bird Johnson"
+      }
+     ]
+    },
+    {
+     "name": "Presidential Trivia",
+     "airDate": "1994-05-03",
+     "show": "Show #2237",
+     "clues": [
+      {
+       "q": "This president, the son of a pres., was such a fine orator that he was nicknamed \"Old Man Eloquent\"",
+       "a": "John Quincy Adams"
+      },
+      {
+       "q": "He was a member of Delta Kappa Epsilon at the University of Michigan",
+       "a": "Gerald Ford"
+      },
+      {
+       "q": "He was president of the American Philosophical Society from 1797 until 1815",
+       "a": "Thomas Jefferson"
+      }
+     ]
+    },
+    {
+     "name": "The Constitution",
+     "airDate": "1993-06-09",
+     "show": "Show #2033",
+     "clues": [
+      {
+       "q": "Article I, Section 1 puts all legislative power in these 2 bodies",
+       "a": "the Senate & the House of Representatives"
+      },
+      {
+       "q": "This little state was told to ratify the Constitution or be treated as a foreign nation in commerce",
+       "a": "Rhode Island"
+      },
+      {
+       "q": "In 1787 it took this group almost 4 months to draft the Constitution",
+       "a": "the Constitutional Convention"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "The Electoral College",
+     "airDate": "2016-07-20",
+     "show": "Show #7348",
+     "clues": [
+      {
+       "q": "Under the 23rd Amendment, it's allocated 3 electoral votes & treated like a state",
+       "a": "the District of Columbia"
+      },
+      {
+       "q": "The meeting of the electors takes place on the first Monday after the second Wednesday in this month",
+       "a": "December"
+      },
+      {
+       "q": "In 1796 Samuel Miles became the first elector to switch his vote, voting for Thomas Jefferson instead of this man",
+       "a": "John Adams"
+      }
+     ]
+    },
+    {
+     "name": "Kings & Queens",
+     "airDate": "1994-03-22",
+     "show": "Show #2207",
+     "clues": [
+      {
+       "q": "During his reign, 1953-1964, King Saud nearly bankrupted this country",
+       "a": "Saudi Arabia"
+      },
+      {
+       "q": "2 members of this Florentine family, Catherine & Marie, became queens of France",
+       "a": "the de Medici"
+      },
+      {
+       "q": "Named Franco's successor in 1969, he became king in 1975",
+       "a": "Juan Carlos"
+      }
+     ]
+    },
+    {
+     "name": "Political Parties",
+     "airDate": "1989-03-16",
+     "show": "Show #1054",
+     "clues": [
+      {
+       "q": "One of the oldest 3rd parties, it was founded in Chicago in 1869 to get liquor outlawed",
+       "a": "the Prohibition Party"
+      },
+      {
+       "q": "In 1984 this party nominated Gus Hall for President, Angela Davis for Vice President",
+       "a": "the Communist Party"
+      },
+      {
+       "q": "The 1st of 3 Progressive Parties, its nickname came from its standard-bearer, Teddy Roosevelt",
+       "a": "the Bull Moose Party"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Presidents",
+   "q": "1 of 2 20th century presidents who were the only 2 ever sworn in during August",
+   "a": "(1 of) Gerald Ford or Calvin Coolidge",
+   "airDate": "1988-04-26",
+   "show": "Show #852"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "politics-2",
+  "title": "Game 2",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "Political Quotes · Elections · The Constitution — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Political Quotes",
+     "airDate": "1997-11-19",
+     "show": "Show #3043",
+     "clues": [
+      {
+       "q": "\"Tom Sawyer\" author who said, \"There is no distincly Native American criminal class, except Congress\"",
+       "a": "Mark Twain"
+      },
+      {
+       "q": "Louisiana \"Kingfish\" who reportedly said, \"The time has come for all good men to rise above principle\"",
+       "a": "Huey Long"
+      },
+      {
+       "q": "Rope-spinning humorist who said, \"I am not a member of any organized party; I am a Democrat\"",
+       "a": "Will Rogers"
+      }
+     ]
+    },
+    {
+     "name": "Elections",
+     "airDate": "1988-06-28",
+     "show": "Show #897",
+     "clues": [
+      {
+       "q": "Since the Reconstruction era, all governors of Georgia have been from this party",
+       "a": "the Democratic Party"
+      },
+      {
+       "q": "Of 22, 44, or 66, the number of congressmen who in 1986 ran for the U.S. House of Representatives unopposed",
+       "a": "66"
+      },
+      {
+       "q": "\"Tippecanoe & Tyler too!\" was an 1840 campaign slogan of this party",
+       "a": "the Whig Party"
+      }
+     ]
+    },
+    {
+     "name": "The Constitution",
+     "airDate": "1994-09-13",
+     "show": "Show #2302",
+     "clues": [
+      {
+       "q": "This nickname of the 20th Amendment sounds like a wounded mallard",
+       "a": "lame duck"
+      },
+      {
+       "q": "To expel a member, Article 1, Section 5.2 says that this fraction of the House must vote yes",
+       "a": "two-thirds"
+      },
+      {
+       "q": "Secret meetings were held in 1787 to draw up the Constitution in order to replace these",
+       "a": "Articles of Confederation"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "The Supreme Court",
+     "airDate": "1993-09-28",
+     "show": "Show #2082",
+     "clues": [
+      {
+       "q": "Justices can be removed from the court by this legal process, though it hasn't happened yet",
+       "a": "impeachment"
+      },
+      {
+       "q": "In 1944's Korematsu v. U.S. the court upheld the detention of people of this ancestry",
+       "a": "Japanese"
+      },
+      {
+       "q": "In Engel v. Vitale in 1962, the court prohibited this practice in public schools",
+       "a": "prayer"
+      }
+     ]
+    },
+    {
+     "name": "Governors",
+     "airDate": "1991-10-28",
+     "show": "Show #1646",
+     "clues": [
+      {
+       "q": "This Maryland governor was the son of a Greek immigrant whose name originally was Anagnostopoulos",
+       "a": "Spiro Agnew"
+      },
+      {
+       "q": "Though seriously wounded when Pres. Kennedy was shot, he was able to resume his duties as gov. of Texas",
+       "a": "Connally"
+      },
+      {
+       "q": "In 1929 the Louisiana House of Representatives voted to impeach him on charges of misusing funds",
+       "a": "Huey Long"
+      }
+     ]
+    },
+    {
+     "name": "Presidents",
+     "airDate": "1985-04-23",
+     "show": "Show #162",
+     "clues": [
+      {
+       "q": "Benjamin Harrison was this relation to William Henry Harrison",
+       "a": "the grandson"
+      },
+      {
+       "q": "Only president to be impeached",
+       "a": "Andrew Johnson"
+      },
+      {
+       "q": "Our 28th president's last, or President Reagan's middle name",
+       "a": "Wilson"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Vice Presidents",
+   "q": "The only 2 vice presidents who previously represented Minnesota in the Senate",
+   "a": "(Hubert) Humphrey & (Walter) Mondale",
+   "airDate": "1989-02-08",
+   "show": "Show #1028"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 2,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "politics-3",
+  "title": "Game 3",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "Political Quotes · Washington, D.C. · First Ladies — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Political Quotes",
+     "airDate": "2013-05-15",
+     "show": "Show #6608",
+     "clues": [
+      {
+       "q": "Soliciting business in California in 2013, this Texas governor said Austin is poised to be the \"next Silicon Valley\"",
+       "a": "Rick Perry"
+      },
+      {
+       "q": "This 1848 manifesto's theory \"may be summed up in the single sentence: abolition of private property\"",
+       "a": "The Communist Manifesto"
+      },
+      {
+       "q": "De Gaulle warned JFK that America would step \"into a bottomless military and political quagmire\" in this place",
+       "a": "Vietnam"
+      }
+     ]
+    },
+    {
+     "name": "Washington, D.C.",
+     "airDate": "1987-05-01",
+     "show": "Show #625",
+     "clues": [
+      {
+       "q": "Of larger or smaller, area of D.C. now as compared to when it was first established",
+       "a": "smaller"
+      },
+      {
+       "q": "The 2 individuals honored in the name Washington, D.C.",
+       "a": "George Washington & Christopher Columbus"
+      },
+      {
+       "q": "Washington's famed cherry trees were a gift   from  this country",
+       "a": "Japan"
+      }
+     ]
+    },
+    {
+     "name": "First Ladies",
+     "airDate": "1993-05-13",
+     "show": "Show #2014",
+     "clues": [
+      {
+       "q": "She was born Anne Frances Robbins & nicknamed Nancy in infancy",
+       "a": "Nancy Reagan"
+      },
+      {
+       "q": "For her strong will, this first lady from Georgia is sometimes called the Steel Magnolia",
+       "a": "Rosalynn Carter"
+      },
+      {
+       "q": "Under her prodding, Congress passed the Highway Beautification Act in 1965",
+       "a": "Lady Bird Johnson"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Politics",
+     "airDate": "1991-12-05",
+     "show": "Show #1674",
+     "clues": [
+      {
+       "q": "A commissioner allegedly called this retirement program \"the most complex... God and Congress ever created\"",
+       "a": "Social Security"
+      },
+      {
+       "q": "From the Latin meaning \"to rest on\", it's a candidate for an office who already holds the position",
+       "a": "incumbent"
+      },
+      {
+       "q": "In Congress, the assistants to the majority & minority floor leaders are called this",
+       "a": "whips"
+      }
+     ]
+    },
+    {
+     "name": "Secretaries of State",
+     "airDate": "1987-05-15",
+     "show": "Show #635",
+     "clues": [
+      {
+       "q": "Sec'y of Labor & later of the Treasury under Nixon, he's now Sec'y of State under Reagan",
+       "a": "Schultz"
+      },
+      {
+       "q": "With John Foster Dulles mortally ill, this President appointed Christian Herter Sec'y of State",
+       "a": "Eisenhower"
+      },
+      {
+       "q": "This FDR appointee held the office longer than anyone else, nearly 12 years",
+       "a": "Cordell Hull"
+      }
+     ]
+    },
+    {
+     "name": "Presidents",
+     "airDate": "1985-04-26",
+     "show": "Show #165",
+     "clues": [
+      {
+       "q": "In \"My Story\", Judith Campbell Exner describes her affair with this '60s president",
+       "a": "John Kennedy"
+      },
+      {
+       "q": "In 1928 he said, \"I do not choose to run\"",
+       "a": "Calvin Coolidge"
+      },
+      {
+       "q": "Called \"His Accidency\" he was first vice-president to replace a president who died in office",
+       "a": "John Tyler"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "U.S. Presidents",
+   "q": "2 of the 3 presidents elected in a year ending with \"0\" who did not die in office",
+   "a": "(2 of) Ronald Reagan, Thomas Jefferson, or James Monroe",
+   "airDate": "1994-03-29",
+   "show": "Show #2212"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "politics-4",
+  "title": "Game 4",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "Presidential Elections · Senators · The Presidency — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Presidential Elections",
+     "airDate": "2005-07-18",
+     "show": "Show #4821",
+     "clues": [
+      {
+       "q": "This 1968 candidate reportedly urged South Vietnam's President Thieu to scuttle possible peace talks",
+       "a": "(Richard) Nixon"
+      },
+      {
+       "q": "William Henry Harrison really had lived in one of these, his symbol in the 1840 campaign, but he added 12 rooms",
+       "a": "a log cabin"
+      },
+      {
+       "q": "In early October 1992 he was spending $2 million a day, most of it his own money",
+       "a": "(Ross) Perot"
+      }
+     ]
+    },
+    {
+     "name": "Senators",
+     "airDate": "2025-02-04",
+     "show": "Show #9262",
+     "clues": [
+      {
+       "q": "In 2024 he won a fourth term representing Vermont",
+       "a": "Sanders"
+      },
+      {
+       "q": "The son of Cuban immigrants, he began representing Florida in the Senate in 2011",
+       "a": "Rubio"
+      },
+      {
+       "q": "In 2012 Tammy Baldwin of this state became the first openly gay person elected to the Senate",
+       "a": "Wisconsin"
+      }
+     ]
+    },
+    {
+     "name": "The Presidency",
+     "airDate": "1994-02-25",
+     "show": "Show #2190",
+     "clues": [
+      {
+       "q": "Unless he dies or resigns, the only way to remove a president from office is by this process",
+       "a": "impeachment"
+      },
+      {
+       "q": "It's the minimum age required to be president",
+       "a": "35"
+      },
+      {
+       "q": "Among the president's perks are the use of Camp David & this jet",
+       "a": "Air Force One"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Presidential Trivia",
+     "airDate": "1993-03-22",
+     "show": "Show #1976",
+     "clues": [
+      {
+       "q": "He was the first president over 6' tall; 6'2\" to be exact, no lie",
+       "a": "George Washington"
+      },
+      {
+       "q": "He was returning from Potsdam when he heard that the first A-bomb had been dropped on Japan",
+       "a": "Truman"
+      },
+      {
+       "q": "Between his terms as president he lived on Madison Ave. in New York & took the train to his job at a law firm",
+       "a": "(Grover) Cleveland"
+      }
+     ]
+    },
+    {
+     "name": "Secretaries of State",
+     "airDate": "1990-06-27",
+     "show": "Show #1358",
+     "clues": [
+      {
+       "q": "This co-winner of the 1973 Nobel Peace Prize was America's 1st foreign-born Sec'y of State",
+       "a": "Henry Kissinger"
+      },
+      {
+       "q": "In December 1985 he threatened to resign if required to take a polygraph test",
+       "a": "George Shultz"
+      },
+      {
+       "q": "In April 1980 Pres. Carter selected this Maine senator to succeed Cyrus Vance as Sec'y of State",
+       "a": "(Edmund) Muskie"
+      }
+     ]
+    },
+    {
+     "name": "British Prime Ministers",
+     "airDate": "2016-05-02",
+     "show": "Show #7291",
+     "clues": [
+      {
+       "q": "In 2015 he apologized for \"mistakes in planning\" but found it hard to apologize \"for removing Saddam\"",
+       "a": "Tony Blair"
+      },
+      {
+       "q": "One of his infamous decisions was signing the Munich Agreement",
+       "a": "Neville Chamberlain"
+      },
+      {
+       "q": "This guy, the Younger, was prime minister during the French Revolutionary era",
+       "a": "William Pitt"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Politicians",
+   "q": "A current U.S. governor, he hosted the game show \"Grudge Match\" in 1991",
+   "a": "Jesse Ventura",
+   "airDate": "2001-02-08",
+   "show": "Show #3789"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "politics-5",
+  "title": "Game 5",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "U.S. Presidents · Political Parties · The Electoral College — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "U.S. Presidents",
+     "airDate": "1993-07-21",
+     "show": "Show #2063",
+     "clues": [
+      {
+       "q": "In 1976 he became the first Deep Southerner elected president since before the Civil War",
+       "a": "Jimmy Carter"
+      },
+      {
+       "q": "In Feb. 1993 Margaret Thatcher was on hand to help this former president celebrate his 82nd birthday",
+       "a": "Ronald Reagan"
+      },
+      {
+       "q": "After resigning as Assistant Secretary of the Navy in 1898, he helped organize the Rough Riders",
+       "a": "Teddy Roosevelt"
+      }
+     ]
+    },
+    {
+     "name": "Political Parties",
+     "airDate": "1986-09-15",
+     "show": "Show #461",
+     "clues": [
+      {
+       "q": "Though party traces its origins to Jefferson, Andrew Jackson was 1st president to be called this",
+       "a": "Democrat"
+      },
+      {
+       "q": "Founders of this minor 1870s party would be pleased to learn our dollar is no longer backed by gold",
+       "a": "Greenback"
+      },
+      {
+       "q": "In '68, this group's \"non-leader\" Abbie Hoffman said it's \"A party -- not a political movement\"",
+       "a": "Yippies"
+      }
+     ]
+    },
+    {
+     "name": "The Electoral College",
+     "airDate": "1999-07-13",
+     "show": "Show #3437",
+     "clues": [
+      {
+       "q": "With 54 this state has more electoral votes than any other",
+       "a": "California"
+      },
+      {
+       "q": "The presidential electors cast their votes on the first Monday after the second Wednesday in this month",
+       "a": "December"
+      },
+      {
+       "q": "In 1976 an elector from the state of Washington cast a lone vote for this man; 4 years later he received 489 votes",
+       "a": "Ronald Reagan"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Politicians",
+     "airDate": "1991-10-25",
+     "show": "Show #1645",
+     "clues": [
+      {
+       "q": "In May 1991 this former Sec'y of State turned up as a weatherman on \"CBS This Morning\"",
+       "a": "Henry Kissinger"
+      },
+      {
+       "q": "Senate Majority Leader from 1980-84, he became Pres. Reagan's Chief of Staff in 1987",
+       "a": "Howard Baker"
+      },
+      {
+       "q": "In recognition of his 48 years in the House of Representatives, he was known affectionately as \"Mr. Sam\"",
+       "a": "Sam Rayburn"
+      }
+     ]
+    },
+    {
+     "name": "Governors",
+     "airDate": "1994-12-30",
+     "show": "Show #2380",
+     "clues": [
+      {
+       "q": "In 1886 Robert Love Taylor defeated his brother Alfred to become governor of this \"Volunteer State\"",
+       "a": "Tennessee"
+      },
+      {
+       "q": "This former governor was chairman of the Democratic Party in California from 1989 to 1991",
+       "a": "Jerry Brown"
+      },
+      {
+       "q": "In 1980 ill health forced Ella Grasso to resign as governor of this state",
+       "a": "Connecticut"
+      }
+     ]
+    },
+    {
+     "name": "Government",
+     "airDate": "1985-04-12",
+     "show": "Show #155",
+     "clues": [
+      {
+       "q": "Director of public health service whose title appears on cigarette packages",
+       "a": "Surgeon General"
+      },
+      {
+       "q": "According to slogan in \"1984\", what Big Brother was always doing",
+       "a": "watching you"
+      },
+      {
+       "q": "Speech delivered by the President each Jan. to a joint session of Congress",
+       "a": "the State of the Union Address"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Prime Ministers",
+   "q": "2 of the 4 countries that have had prime ministers who were father & daughter",
+   "a": "(2 of) India, Pakistan, Bangladesh & Sri Lanka",
+   "airDate": "1998-09-07",
+   "show": "Show #3216"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 2,
+    "r": 1
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "politics-6",
+  "title": "Game 6",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "Prime Ministers · The White House · U.S. Presidents — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Prime Ministers",
+     "airDate": "1996-07-17",
+     "show": "Show #2753",
+     "clues": [
+      {
+       "q": "This current French president served as prime minister under both Giscard d'Estaing & Mitterrand",
+       "a": "Jacques Chirac"
+      },
+      {
+       "q": "Pham Van Dong served as prime minister of this country from unification until 1986",
+       "a": "Vietnam"
+      },
+      {
+       "q": "Tunku Abdul Rahman was the 1st prime minister of the federation of Malaya & of this successor state",
+       "a": "Malaysia"
+      }
+     ]
+    },
+    {
+     "name": "The White House",
+     "airDate": "1995-05-26",
+     "show": "Show #2485",
+     "clues": [
+      {
+       "q": "Originally in the center of the West Wing, this office of the president is now in a corner",
+       "a": "the Oval Office"
+      },
+      {
+       "q": "In 1965 a garden on the east side of the mansion was named for this first lady by Mrs. Johnson",
+       "a": "the Jackie Kennedy Garden"
+      },
+      {
+       "q": "Formerly a study, this bedroom displays the only signed & dated copy of the Gettysburg Address",
+       "a": "the Lincoln Bedroom"
+      }
+     ]
+    },
+    {
+     "name": "U.S. Presidents",
+     "airDate": "1993-05-17",
+     "show": "Show #2016",
+     "clues": [
+      {
+       "q": "His mother, Lillian, joined the Peace Corps in 1966 & served for 2 years",
+       "a": "Jimmy Carter"
+      },
+      {
+       "q": "He won the 1860 G.O.P. nomination on the 3rd ballot after trailing William H. Seward on the 1st 2 ballots",
+       "a": "Lincoln"
+      },
+      {
+       "q": "From 1922-24 & 1926-34, he served as a judge in Jackson County, Missouri",
+       "a": "Truman"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Vice Presidents",
+     "airDate": "1993-11-22",
+     "show": "Show #2121",
+     "clues": [
+      {
+       "q": "After serving in Vietnam, he worked as a reporter for the Tennesseean newspaper",
+       "a": "Al Gore"
+      },
+      {
+       "q": "He was the first vice president who didn't go on to become president",
+       "a": "Aaron Burr"
+      },
+      {
+       "q": "In 1993 this vice president under Carter was appointed ambassador to Japan",
+       "a": "Walter Mondale"
+      }
+     ]
+    },
+    {
+     "name": "U.S. Government",
+     "airDate": "1985-01-17",
+     "show": "Show #94",
+     "clues": [
+      {
+       "q": "Founded in 1800, copies of each copyrighted document are stored here",
+       "a": "the Library of Congress"
+      },
+      {
+       "q": "Federal agency which protects the holdings of your savings account",
+       "a": "the FDIC (the Federal Deposit Insurance Corporation)"
+      },
+      {
+       "q": "Title later given to 85 essays written by Hamilton, Madison & Jay to clarify Constitution",
+       "a": "the Federalist Papers"
+      }
+     ]
+    },
+    {
+     "name": "Political Parties",
+     "airDate": "1990-09-18",
+     "show": "Show #1387",
+     "clues": [
+      {
+       "q": "John Greenleaf Whittier supported the Liberty Party founded in 1840 to oppose this",
+       "a": "slavery"
+      },
+      {
+       "q": "This party, named for the paper money issued during & after the Civil War, elected 18 men to Congress in 1878",
+       "a": "the Greenbacks"
+      },
+      {
+       "q": "In 1948 the Progressive Party chose this FDR VP as its presidential candidate",
+       "a": "Henry Wallace"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "American History",
+   "q": "Virginia's motto since 1776; it was shouted in another context on April 14, 1865",
+   "a": "\"Sic Semper Tyrannis\"",
+   "airDate": "1990-04-09",
+   "show": "Show #1301"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 2,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "politics-7",
+  "title": "Game 7",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "Congress · British Prime Ministers · Political Parties — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Congress",
+     "airDate": "1995-09-05",
+     "show": "Show #2527",
+     "clues": [
+      {
+       "q": "In 1995, on the 1st day of the 104th Congress, 3 full standing & 25 \"sub\" ones of these were abolished",
+       "a": "committees"
+      },
+      {
+       "q": "Frederick A.C. Muhlenberg of Pennsylvania was the first to hold this top congressional post",
+       "a": "Speaker of the House"
+      },
+      {
+       "q": "The last of these rejected by the Senate was the Montreal Aviation Protocols in 1983",
+       "a": "a treaty"
+      }
+     ]
+    },
+    {
+     "name": "British Prime Ministers",
+     "airDate": "2019-10-22",
+     "show": "Show #8077",
+     "clues": [
+      {
+       "q": "At the gov.uk site in the Past Prime Ministers section, there is only one listed as \"Baroness\"--this person",
+       "a": "Margaret Thatcher"
+      },
+      {
+       "q": "Before his PM-ship Robert Peel organized the London police force & his nickname gave the cops this moniker",
+       "a": "Bobbies"
+      },
+      {
+       "q": "A few months after quitting as prime minister in 2016, this Conservative gave up his seat in the House of Commons",
+       "a": "(David) Cameron"
+      }
+     ]
+    },
+    {
+     "name": "Political Parties",
+     "airDate": "1990-03-16",
+     "show": "Show #1285",
+     "clues": [
+      {
+       "q": "The nation's oldest existing 3rd party, it was founded in 1869 to prevent the manufacture & sale of liquor",
+       "a": "Prohibition Party"
+      },
+      {
+       "q": "In 1968 this American Independent Party candidate received almost 10 million votes & won 5 states",
+       "a": "George Wallace"
+      },
+      {
+       "q": "Norman Thomas was this party's presidential candidate in every election from 1928 to 1948",
+       "a": "Socialist Party"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "U.S. Government",
+     "airDate": "1985-01-23",
+     "show": "Show #98",
+     "clues": [
+      {
+       "q": "Usual number of members on a petit jury",
+       "a": "12"
+      },
+      {
+       "q": "What \"U.S.D.A.\" on meats stands for",
+       "a": "United States Department of Agriculture"
+      },
+      {
+       "q": "From \"crowner\", representative of the crown, in some states this official doesn't have to be a doctor",
+       "a": "coroner"
+      }
+     ]
+    },
+    {
+     "name": "Vice Presidents",
+     "airDate": "1992-12-25",
+     "show": "Show #1915",
+     "clues": [
+      {
+       "q": "In 1801, after 36 ballots, the House of Representatives chose Jefferson President & this man vice president",
+       "a": "Aaron Burr"
+      },
+      {
+       "q": "In 1969 he said that TV's power over public opinion was in the hands of \"a small and unelected elite\"",
+       "a": "Spiro Agnew"
+      },
+      {
+       "q": "In November 1975 this vice president announced that he wouldn't be Gerald Ford's running mate",
+       "a": "Rockefeller"
+      }
+     ]
+    },
+    {
+     "name": "Washington, D.C.",
+     "airDate": "1988-10-19",
+     "show": "Show #948",
+     "clues": [
+      {
+       "q": "When completed in 1884, it was the tallest masonry structure in the world",
+       "a": "the Washington Monument"
+      },
+      {
+       "q": "The first pope to visit the White House",
+       "a": "John Paul II"
+      },
+      {
+       "q": "It's where you'd go to see the original of the Declaration of Independence",
+       "a": "the National Archives"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "The Presidency",
+   "q": "With a combined age of just 90 years, this president & vice president were the youngest team ever inaugurated",
+   "a": "Bill Clinton & Al Gore",
+   "airDate": "2011-03-18",
+   "show": "Show #6110"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 1
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "politics-8",
+  "title": "Game 8",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "The White House · Presidential Nicknames · Governors — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "The White House",
+     "airDate": "1996-02-13",
+     "show": "Show #2642",
+     "clues": [
+      {
+       "q": "The Harrisons were afraid to turn off these, installed during their stay, for fear of shock",
+       "a": "the electric lights"
+      },
+      {
+       "q": "The grounds contain \"The Jacqueline Kennedy Garden & this famous garden named for a flower",
+       "a": "the Rose Garden"
+      },
+      {
+       "q": "This president planted the magnolia, not hickory, trees that shade the South Portico",
+       "a": "Andrew Jackson"
+      }
+     ]
+    },
+    {
+     "name": "Presidential Nicknames",
+     "airDate": "1996-10-09",
+     "show": "Show #2783",
+     "clues": [
+      {
+       "q": "\"Give 'Em Hell Harry\"",
+       "a": "Truman"
+      },
+      {
+       "q": "\"Fireside Chatterer\"",
+       "a": "FDR"
+      },
+      {
+       "q": "He called himself \"Jinx of the Links\"",
+       "a": "(Gerald) Ford"
+      }
+     ]
+    },
+    {
+     "name": "Governors",
+     "airDate": "2006-11-29",
+     "show": "Show #5113",
+     "clues": [
+      {
+       "q": "This governor played Prince Hapi in Jackie Chan's 2004 film \"Around the World in 80 Days\"",
+       "a": "Schwarzenegger"
+      },
+      {
+       "q": "This son of Greek immigrants was elected governor of Massachusetts 3 times in the '70s & '80s",
+       "a": "(Michael) Dukakis"
+      },
+      {
+       "q": "When it became a state in 1912, William C. McDonald was its governor",
+       "a": "New Mexico"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "The Senate",
+     "airDate": null,
+     "show": "Trebek pilot #1",
+     "clues": [
+      {
+       "q": "The Constitution makes him \"president of the Senate\"",
+       "a": "the vice president of the U.S."
+      },
+      {
+       "q": "In a letter, the correct form of address for a senator",
+       "a": "Honorable"
+      },
+      {
+       "q": "Former Rhodes scholar and basketball star now senator from New Jersey",
+       "a": "Bill Bradley"
+      }
+     ]
+    },
+    {
+     "name": "Kings & Queens",
+     "airDate": "1991-09-09",
+     "show": "Show #1611",
+     "clues": [
+      {
+       "q": "Gustav III was king of this Scandinavian country during the American Revolution",
+       "a": "Sweden"
+      },
+      {
+       "q": "Stephen I, first crowned king of this country, was the son of Gejza the supreme Magyar chieftain",
+       "a": "Hungary"
+      },
+      {
+       "q": "Erik Bloodax of this land of the midnight sun earned his name by killing 7 of his 8 brothers",
+       "a": "Norway"
+      }
+     ]
+    },
+    {
+     "name": "Elections",
+     "airDate": "1985-02-14",
+     "show": "Show #114",
+     "clues": [
+      {
+       "q": "Sen. Nancy Kassebaum's father, Alf Landon, lost a presidential election to him",
+       "a": "FDR"
+      },
+      {
+       "q": "Independent candidate who received nearly 6 million votes in '80 presidential election",
+       "a": "John Anderson"
+      },
+      {
+       "q": "Civil War gen. who said, \"If nominated I will not run, if elected, I will not serve\"",
+       "a": "(William Tecumseh) Sherman"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "Presidential Elections",
+   "q": "In the 1912 election these 2 parties on the left of the political spectrum finished 2nd & 4th, totaling 1/3 of the votes",
+   "a": "Bull Moose Progressive & Socialist",
+   "airDate": "2021-03-17",
+   "show": "Show #8358"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 0,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 2
+   }
+  ]
+ },
+ {
+  "key": "politics-9",
+  "title": "Game 9",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "Presidential Nicknames · Presidential Elections · Washington, D.C. — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Presidential Nicknames",
+     "airDate": "1994-12-21",
+     "show": "Show #2373",
+     "clues": [
+      {
+       "q": "The \"Sage of Mount Vernon\"",
+       "a": "George Washington"
+      },
+      {
+       "q": "The \"Philosopher of Democracy\"",
+       "a": "Thomas Jefferson"
+      },
+      {
+       "q": "The \"Kansas Cyclone\"",
+       "a": "Dwight David Eisenhower"
+      }
+     ]
+    },
+    {
+     "name": "Presidential Elections",
+     "airDate": "1994-09-28",
+     "show": "Show #2313",
+     "clues": [
+      {
+       "q": "Though he received 19,742,267 votes in 1992, he won no electoral votes",
+       "a": "Ross Perot"
+      },
+      {
+       "q": "According to the World Almanac, he's the last president to win with \"no opposition\"",
+       "a": "Washington"
+      },
+      {
+       "q": "In 1992 2,537 Nevadans cast their votes for this choice, an option available only in Nevada",
+       "a": "none of the above"
+      }
+     ]
+    },
+    {
+     "name": "Washington, D.C.",
+     "airDate": "1989-04-05",
+     "show": "Show #1068",
+     "clues": [
+      {
+       "q": "The 2 states that border Washington, D.C.",
+       "a": "Virginia & Maryland"
+      },
+      {
+       "q": "Directional name of the largest room in the White House",
+       "a": "East Room"
+      },
+      {
+       "q": "Created by Congress in 1846, it's called the \"Attic of the Nation\"",
+       "a": "Smithsonian Institution"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Politics",
+     "airDate": "1995-07-19",
+     "show": "Show #2523",
+     "clues": [
+      {
+       "q": "This masked animal was used as the emblem of the Whig Party",
+       "a": "a raccoon"
+      },
+      {
+       "q": "Daniel Inouye, who represents this state in the Senate, lost his right arm during World War II",
+       "a": "Hawaii"
+      },
+      {
+       "q": "He served as Gerald Ford's Secretary of State",
+       "a": "(Henry) Kissinger"
+      }
+     ]
+    },
+    {
+     "name": "Elections",
+     "airDate": "1986-11-14",
+     "show": "Show #505",
+     "clues": [
+      {
+       "q": "The only 2 individuals to run for president unopposed were James Monroe & this man",
+       "a": "George Washington"
+      },
+      {
+       "q": "It's been said Martin van Buren's son John was 1st to advise, \"Vote early & ...\" this",
+       "a": "often"
+      },
+      {
+       "q": "\"As Maine goes, so goes Vermont\" refers to only 2 states won by him in 1936 election",
+       "a": "Alf Landon"
+      }
+     ]
+    },
+    {
+     "name": "Congress",
+     "airDate": "1994-12-16",
+     "show": "Show #2370",
+     "clues": [
+      {
+       "q": "These young people who carry messages around the Capitol are all high school juniors",
+       "a": "pages"
+      },
+      {
+       "q": "Before 1913 senators were selected by these, not directly elected by voters",
+       "a": "state legislators"
+      },
+      {
+       "q": "Joseph W. Martin Jr. held this House position 1947-49 & 1953-55, the only Republican since 1931 to do so",
+       "a": "Speaker of the House"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "The Supreme Court",
+   "q": "This president appointed more Supreme Court justices than any other",
+   "a": "George Washington",
+   "airDate": "1985-11-21",
+   "show": "Show #314"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 0,
+    "r": 1
+   }
+  ]
+ },
+ {
+  "key": "politics-10",
+  "title": "Game 10",
+  "tier": "politics",
+  "series": "politics",
+  "blurb": "Presidential Firsts · Presidential Nicknames · The White House — and more.",
+  "episode": null,
+  "rounds": [
+   [
+    {
+     "name": "Presidential Firsts",
+     "airDate": "2006-07-25",
+     "show": "Show #5052",
+     "clues": [
+      {
+       "q": "He was the first president to preside over 50 states",
+       "a": "Eisenhower"
+      },
+      {
+       "q": "It was no act; he was the first president to have been divorced",
+       "a": "Reagan"
+      },
+      {
+       "q": "He was the first former Boy Scout to become president, as well as the first Catholic",
+       "a": "John Kennedy"
+      }
+     ]
+    },
+    {
+     "name": "Presidential Nicknames",
+     "airDate": "1998-04-21",
+     "show": "Show #3152",
+     "clues": [
+      {
+       "q": "\"The Great Emancipator\"",
+       "a": "Abraham Lincoln"
+      },
+      {
+       "q": "The \"Errol Flynn of B Movies\"",
+       "a": "Ronald Reagan"
+      },
+      {
+       "q": "The \"Trust Buster\"",
+       "a": "Teddy Roosevelt"
+      }
+     ]
+    },
+    {
+     "name": "The White House",
+     "airDate": "1993-01-11",
+     "show": "Show #1926",
+     "clues": [
+      {
+       "q": "A crystal one which belonged to James Fenimore Cooper's family hangs from the ceiling of the Library",
+       "a": "a chandelier"
+      },
+      {
+       "q": "The White House's original design was inspired by Leinster House, where the Irish Parliament meets in this city",
+       "a": "Dublin"
+      },
+      {
+       "q": "She was the first First Lady to live in the White House, & she used to hang her laundry in the East Room",
+       "a": "Abigail Adams"
+      }
+     ]
+    }
+   ],
+   [
+    {
+     "name": "Government",
+     "airDate": "1985-05-22",
+     "show": "Show #183",
+     "clues": [
+      {
+       "q": "British P.M. who said \"Democracy is the worst system devised by man, except for the others\"",
+       "a": "Winston Churchill"
+      },
+      {
+       "q": "A representative government, or what Plato called his ideal state",
+       "a": "the republic"
+      },
+      {
+       "q": "Chief executive of a Canadian province, or the French equivalent of prime minister",
+       "a": "a premier"
+      }
+     ]
+    },
+    {
+     "name": "Congress",
+     "airDate": "2000-09-22",
+     "show": "Show #3690",
+     "clues": [
+      {
+       "q": "Between 1789 & 1865 this group invalidated only 2 of the statutes passed by Congress; since 1865, over 100",
+       "a": "Supreme Court"
+      },
+      {
+       "q": "The man in this post swears in new senators",
+       "a": "Vice president"
+      },
+      {
+       "q": "The Majority Leader is second to this person in power in the House",
+       "a": "Speaker of the House"
+      }
+     ]
+    },
+    {
+     "name": "First Ladies",
+     "airDate": "1993-06-04",
+     "show": "Show #2030",
+     "clues": [
+      {
+       "q": "In 1961 & 1962 she received an estimated 8,000 fan letters a week",
+       "a": "Jackie Kennedy"
+      },
+      {
+       "q": "After returning to Quincy in 1801, she wrote that she resumed her \"operations of dairy-woman\"",
+       "a": "Abigail Adams"
+      },
+      {
+       "q": "Part of her Meissen collection is on display at her family home in Lexington, Kentucky",
+       "a": "Mary Todd Lincoln"
+      }
+     ]
+    }
+   ]
+  ],
+  "finalJeopardy": {
+   "category": "The Constitution",
+   "q": "Word completing the line \"Nor shall any person be subject for the same offense to be twice put in\" this",
+   "a": "jeopardy",
+   "airDate": "1997-11-10",
+   "show": "Show #3036"
+  },
+  "dailyDoubles": [
+   {
+    "rd": 1,
+    "c": 1,
+    "r": 2
+   },
+   {
+    "rd": 2,
+    "c": 1,
+    "r": 2
+   }
+  ]
  }
 ]

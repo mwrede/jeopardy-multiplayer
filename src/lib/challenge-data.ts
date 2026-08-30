@@ -31,7 +31,7 @@
 
 import boards from './challenge-boards.json'
 
-export type ChallengeTier = 'kids' | 'teen' | 'college' | 'standard' | 'geography'
+export type ChallengeTier = 'kids' | 'teen' | 'college' | 'standard' | 'geography' | 'politics'
 
 export interface ChallengeClue {
   q: string
@@ -52,7 +52,7 @@ export interface ChallengeGame {
   key: string
   title: string
   tier: ChallengeTier
-  series: 'lineup' | 'michaels'
+  series: 'lineup' | 'michaels' | 'politics'
   blurb: string
   /** Set when the whole board comes from one episode. */
   episode: { show: string; airDate: string; note: string } | null
@@ -86,6 +86,7 @@ export const TIER_LABELS: Record<ChallengeTier, string> = {
   college: 'College',
   standard: 'Standard',
   geography: 'Geography',
+  politics: 'Politics',
 }
 
 export function getChallengeGame(key: string): ChallengeGame | undefined {
@@ -107,3 +108,4 @@ export function formatAirDate(iso: string | null): string {
 
 export const LINEUP_GAMES = CHALLENGE_GAMES.filter((g) => g.series === 'lineup')
 export const MICHAELS_GAMES = CHALLENGE_GAMES.filter((g) => g.series === 'michaels')
+export const POLITICS_GAMES = CHALLENGE_GAMES.filter((g) => g.series === 'politics')

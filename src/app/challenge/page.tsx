@@ -7,6 +7,7 @@ import { ChallengeShare } from '@/components/ChallengeShare'
 import {
   LINEUP_GAMES,
   MICHAELS_GAMES,
+  POLITICS_GAMES,
   TIER_LABELS,
   formatAirDate,
   type ChallengeGame,
@@ -114,6 +115,21 @@ export default function ChallengePage() {
           </div>
         </div>
 
+        {/* The Politics Challenge */}
+        <div className="mt-12">
+          <div className="eyebrow-copper mb-1">The Politics Challenge</div>
+          <p className="mb-4 text-center text-xs text-ink-stage-2">
+            Ten boards of presidents, first ladies, world leaders, the Court and the
+            campaign trail — categories pulled from real games. No clue repeats
+            anywhere in the challenge.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {POLITICS_GAMES.map((g) => (
+              <GameCard key={g.key} game={g} results={byGame.get(g.key) ?? []} identity={identity} loaded={loaded} />
+            ))}
+          </div>
+        </div>
+
         {/* Overall standings */}
         <div className="mt-14">
           <div className="eyebrow-copper mb-1">Overall Leaderboard</div>
@@ -173,6 +189,7 @@ const TIER_CHIP: Record<string, string> = {
   college: 'bg-sky-500/20 text-sky-300 border-sky-400/40',
   standard: 'bg-white/10 text-ink-stage border-white/25',
   geography: 'bg-amber-500/20 text-amber-300 border-amber-400/40',
+  politics: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/40',
 }
 
 /**
