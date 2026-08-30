@@ -171,7 +171,12 @@ export default function Home() {
                 <TileBadge>Private games</TileBadge>
                 <TileChampion champ={friendsChamp} />
                 <div className="tile-body">
-                  <h2 className="tile-title text-3xl md:text-4xl">Play with Friends &#10084;&#65039;</h2>
+                  {/* A size down from the other tiles: three words, a heart,
+                      and the archive line all have to clear the champion. */}
+                  <h2 className="tile-title text-2xl md:text-3xl">Play with Friends &#10084;&#65039;</h2>
+                  <p className="mt-1.5 text-xs font-semibold text-blue-100/80">
+                    9,400+ real games to choose from
+                  </p>
                 </div>
               </a>
             </div>
@@ -190,6 +195,9 @@ export default function Home() {
                 />
                 <div className="tile-body">
                   <h2 className="tile-title text-3xl md:text-4xl">Play Strangers</h2>
+                  <p className="mt-1.5 text-xs font-semibold text-blue-100/80">
+                    9,400+ real games to choose from
+                  </p>
                 </div>
               </a>
             </div>
