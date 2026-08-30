@@ -45,6 +45,56 @@ export type LeaderboardRow = {
  * carries your history with it. Rows with no account are ignored — they'd be
  * unattributable.
  */
+/**
+ * The winningest player across finished PRIVATE games — the friends-and-
+ * family champion, shown on the home page's Play with Friends tile.
+ *
+ * Private games are mostly played signed-out, so unlike the community
+ * standings this groups by account when there is one and by name when there
+ * isn't. Between friends that's honest enough — the same crew reuses the
+ * same names — and the alternative is a tile that's forever empty.
+ */
+export async function getFriendsChampion(): Promise<{ name: string; wins: number } | null> {
+  const { data: games, error } = await supabase
+    .from('games')
+    .select('id, settings, status')
+    .eq('status', 'finished')
+    .order('created_at', { ascending: false })
+    .limit(400)
+  if (error) throw error
+
+  const privateIds = (games ?? [])
+    .filter((g: any) => (g.settings as any)?.community !== true)
+    .map((g: any) => g.id)
+  if (privateIds.length === 0) return null
+
+  const { data: players } = await supabase
+    .from('players')
+    .select('game_id, name, score, user_id')
+    .in('game_id', privateIds)
+  if (!players?.length) return null
+
+  const best = new Map<string, number>()
+  for (const p of players as any[]) {
+    const cur = best.get(p.game_id)
+    if (cur === undefined || p.score > cur) best.set(p.game_id, p.score)
+  }
+
+  const agg = new Map<string, { name: string; wins: number }>()
+  for (const p of players as any[]) {
+    const name = (p.name ?? '').trim()
+    if (!name || name === 'Presenter') continue
+    const key = p.user_id ? `user:${p.user_id}` : `name:${name.toLowerCase()}`
+    const row = agg.get(key) ?? { name, wins: 0 }
+    row.name = name
+    if ((p.score ?? 0) > 0 && p.score === best.get(p.game_id)) row.wins += 1
+    agg.set(key, row)
+  }
+
+  const top = [...agg.values()].sort((a, b) => b.wins - a.wins)[0]
+  return top && top.wins > 0 ? top : null
+}
+
 export async function getCommunityLeaderboard(limit = 25): Promise<LeaderboardRow[]> {
   const { data: games, error } = await supabase
     .from('games')

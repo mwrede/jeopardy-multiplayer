@@ -228,6 +228,12 @@ export function overallLeaderboard(results: ChallengeResult[]): OverallRow[] {
   )
 }
 
+/** The overall challenge champion — most total money across all boards. */
+export async function getChallengeChampion(): Promise<{ name: string; totalScore: number } | null> {
+  const rows = overallLeaderboard(await fetchAllChallengeResults())
+  return rows[0] ? { name: rows[0].name, totalScore: rows[0].totalScore } : null
+}
+
 /** Group a flat result list by board, each list best-first. */
 export function resultsByGame(results: ChallengeResult[]): Map<string, ChallengeResult[]> {
   const map = new Map<string, ChallengeResult[]>()

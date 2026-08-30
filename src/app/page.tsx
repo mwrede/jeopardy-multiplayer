@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { deleteCustomBoard, createGameFromCustomBoard, createPresentationGame, loadCustomBoard } from '@/lib/game-api'
 import { useUser } from '@/lib/auth'
 import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
+import { getFriendsChampion } from '@/lib/leaderboard'
+import { getChallengeChampion, formatMoney } from '@/lib/challenge'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { TypingClue } from '@/components/TypingClue'
 import { ProfileMenu } from '@/components/ProfileMenu'
@@ -14,6 +16,30 @@ function TileBadge({ children }: { children: React.ReactNode }) {
   return (
     <span className="absolute right-2 top-2 z-10 rounded-full border border-white/25 bg-black/50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-jeopardy-gold-light shadow-md">
       {children}
+    </span>
+  )
+}
+
+/**
+ * A tile's artwork spot, given over to a real person: the reigning champion
+ * of that mode, crowned. Until someone holds the crown, it's "up for grabs".
+ */
+function TileChampion({ champ }: { champ: { name: string; stat: string } | null }) {
+  return (
+    // justify-start, not center: a three-line tile title climbs into the
+    // art area, so the champion stack hugs the top to stay clear of it.
+    <span className="tile-art flex flex-col items-center justify-start gap-0.5 pt-6" aria-hidden="true">
+      <span style={{ fontSize: 40, lineHeight: 1.1, filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.5))' }}>&#128081;</span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-jeopardy-gold-light">
+        Top Player
+      </span>
+      {champ ? (
+        <span className="max-w-[92%] truncate text-base font-bold text-white">
+          {champ.name} <span className="font-bold tabular-nums text-jeopardy-gold-light">· {champ.stat}</span>
+        </span>
+      ) : (
+        <span className="text-sm font-semibold text-blue-100/70">Up for grabs</span>
+      )}
     </span>
   )
 }
@@ -37,6 +63,18 @@ export default function Home() {
   const [busyBoard, setBusyBoard] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [rejoinCode, setRejoinCode] = useState('')
+  // The reigning champions shown on the tiles — real names, real records.
+  const [friendsChamp, setFriendsChamp] = useState<{ name: string; stat: string } | null>(null)
+  const [soloChamp, setSoloChamp] = useState<{ name: string; stat: string } | null>(null)
+
+  useEffect(() => {
+    getFriendsChampion()
+      .then((c) => c && setFriendsChamp({ name: c.name, stat: `${c.wins} win${c.wins === 1 ? '' : 's'}` }))
+      .catch(() => {})
+    getChallengeChampion()
+      .then((c) => c && setSoloChamp({ name: c.name, stat: formatMoney(c.totalScore) }))
+      .catch(() => {})
+  }, [])
 
   /**
    * Room codes are the only thing you need to get back in — the game
@@ -131,7 +169,7 @@ export default function Home() {
             <div className="board-panel-inner">
               <a href="/find" className="tile">
                 <TileBadge>Private games</TileBadge>
-                <span className="tile-art tile-art-glyph" aria-hidden="true">&#127918;</span>
+                <TileChampion champ={friendsChamp} />
                 <div className="tile-body">
                   <h2 className="tile-title text-3xl md:text-4xl">Play with Friends &#10084;&#65039;</h2>
                 </div>
@@ -161,7 +199,7 @@ export default function Home() {
             <div className="board-panel-inner">
               <a href="/challenge" className="tile">
                 <TileBadge>Solo</TileBadge>
-                <span className="tile-art tile-art-glyph" aria-hidden="true">&#127942;</span>
+                <TileChampion champ={soloChamp} />
                 <div className="tile-body">
                   <h2 className="tile-title text-3xl md:text-4xl">Solo Challenge</h2>
                 </div>
