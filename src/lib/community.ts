@@ -1,8 +1,9 @@
 /**
  * Community Play — drop-in games with strangers.
  *
- * Three players to a game; it starts the moment the third joins, so nobody
- * waits on a host.
+ * Up to three players to a game; a full table starts the moment the third
+ * joins, and a pair starts on its own after a short countdown, so nobody
+ * waits on a host — or on a third player who never shows.
  *
  * Lobbies are made on demand rather than kept open in a pool. Holding five
  * empty rooms sounds tidier but goes wrong quickly: every visitor would have
@@ -26,6 +27,17 @@ import { joinGame, removePlayer } from './game-api'
 import { DEFAULT_CASUAL_SETTINGS } from '@/types/game'
 
 export const LOBBY_SEATS = 3
+
+/**
+ * Two is enough to play. A full table of three still starts instantly, but a
+ * pair shouldn't sit waiting forever for a third who may never come: when the
+ * second player sits down a short countdown is stamped on the game row, and
+ * when it runs out the game starts two-handed. A third player arriving during
+ * the countdown starts it immediately, and either seated player can skip the
+ * wait with "Start now".
+ */
+export const MIN_START_SEATS = 2
+export const DUO_START_DELAY_MS = 25_000
 
 /**
  * A hung Supabase call leaves the UI spinning with nothing to show for it —
@@ -273,7 +285,7 @@ export async function joinCommunityLobby(
     .eq('game_id', game.id)
 
   if ((count ?? 0) >= LOBBY_SEATS) {
-    // Full: open the vote rather than starting. Three strangers should agree
+    // Full: open the vote rather than starting. The players should agree
     // on what they're playing before a board appears.
     await supabase
       .from('games')
@@ -283,7 +295,56 @@ export async function joinCommunityLobby(
     return { roomCode, started: true, playerId: player.id }
   }
 
+  if ((count ?? 0) >= MIN_START_SEATS) {
+    // Two seated: wind up the two-player countdown. The deadline lives on the
+    // game row so every client counts down the same clock; a third player
+    // arriving before it runs out starts the game the instant they sit.
+    await stampDuoDeadline(game.id)
+  }
+
   return { roomCode, started: false, playerId: player.id }
+}
+
+/**
+ * Write the moment a two-player game may start onto the row. Re-stamped on
+ * every join that lands the table at two — if someone left and the pair
+ * re-formed, the clock should start fresh, not be inherited half-spent.
+ */
+async function stampDuoDeadline(gameId: string): Promise<void> {
+  const { data: g } = await supabase
+    .from('games').select('settings, phase').eq('id', gameId).maybeSingle()
+  if (!g || (g as any).phase !== 'lobby') return
+
+  const settings = typeof (g as any).settings === 'string'
+    ? JSON.parse((g as any).settings)
+    : ((g as any).settings ?? {})
+
+  await supabase
+    .from('games')
+    .update({
+      settings: { ...settings, duo_deadline: new Date(Date.now() + DUO_START_DELAY_MS).toISOString() },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+    .eq('phase', 'lobby')
+}
+
+/**
+ * Start a lobby that hasn't filled — the countdown expired, or someone seated
+ * hit "Start now". Requires two present; guarded on phase so the clients that
+ * all reach the deadline together race harmlessly (one flips it, the rest
+ * no-op).
+ */
+export async function startLobbyNow(gameId: string): Promise<void> {
+  const { count } = await supabase
+    .from('players').select('id', { count: 'exact', head: true }).eq('game_id', gameId)
+  if ((count ?? 0) < MIN_START_SEATS) return
+
+  await supabase
+    .from('games')
+    .update({ phase: 'game_voting', updated_at: new Date().toISOString() })
+    .eq('id', gameId)
+    .eq('phase', 'lobby')
 }
 
 /**
@@ -359,10 +420,12 @@ export async function getLobbyState(roomCode: string): Promise<{
   gameId: string
   phase: string
   status: string
+  /** ISO time after which a two-player table may start itself, if stamped. */
+  duoDeadline: string | null
   players: { id: string; name: string }[]
 } | null> {
   const { data: game, error } = await supabase
-    .from('games').select('id, phase, status').eq('room_code', roomCode).maybeSingle()
+    .from('games').select('id, phase, status, settings').eq('room_code', roomCode).maybeSingle()
   if (error) throw error
   if (!game) return null
 
@@ -370,10 +433,15 @@ export async function getLobbyState(roomCode: string): Promise<{
     .from('players').select('id, name').eq('game_id', game.id).order('join_order')
   if (playersError) throw playersError
 
+  const settings = typeof (game as any).settings === 'string'
+    ? JSON.parse((game as any).settings)
+    : (game as any).settings
+
   return {
     gameId: game.id,
     phase: (game as any).phase,
     status: (game as any).status,
+    duoDeadline: typeof settings?.duo_deadline === 'string' ? settings.duo_deadline : null,
     players: (players ?? []) as any,
   }
 }

@@ -14,16 +14,19 @@ import {
   getLobbyState,
   touchLobby,
   isUnderway,
+  startLobbyNow,
   LOBBY_SEATS,
+  MIN_START_SEATS,
   type CommunityLobby,
 } from '@/lib/community'
 
 /**
  * COMMUNITY PLAY — drop into a game with strangers.
  *
- * Three to a game, starting the moment the third player sits down. Plays
- * exactly like any other multiplayer game once it begins; the only difference
- * is that you didn't have to know anybody to get in.
+ * Up to three to a game. A full table starts instantly; a pair starts itself
+ * after a short countdown (or on "Start now"). Plays exactly like any other
+ * multiplayer game once it begins; the only difference is that you didn't
+ * have to know anybody to get in.
  */
 export default function CommunityPage() {
   const router = useRouter()
@@ -41,6 +44,11 @@ export default function CommunityPage() {
   const [seatMates, setSeatMates] = useState<{ id: string; name: string }[]>([])
   // A game past the lobby: you're offered the way back in, or the way out.
   const [underway, setUnderway] = useState(false)
+  // Two seated: when this clock runs out the game starts without a third.
+  const [duoDeadline, setDuoDeadline] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  const [gameId, setGameId] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
 
   useEffect(() => {
     setName(localStorage.getItem('playerName') || '')
@@ -142,10 +150,23 @@ export default function CommunityPage() {
       if (!state || !state.players.some((p) => p.id === seat.playerId)) {
         setSeat(null)
         setSeatMates([])
+        setDuoDeadline(null)
         return
       }
       setSeatMates(state.players)
       setUnderway(isUnderway(state))
+      setDuoDeadline(state.duoDeadline)
+      setGameId(state.gameId)
+      // Two seated and the countdown has run out: start without the third.
+      // Guarded on phase server-side, so both clients firing is harmless.
+      if (
+        state.phase === 'lobby' &&
+        state.players.length >= MIN_START_SEATS &&
+        state.duoDeadline &&
+        Date.parse(state.duoDeadline) <= Date.now()
+      ) {
+        startLobbyNow(state.gameId).catch(() => {})
+      }
       // The vote is time-critical, so everyone is moved through together the
       // moment the table fills. A game already underway is NOT auto-entered:
       // being bounced straight back in left no way to reach the Leave button,
@@ -167,6 +188,25 @@ export default function CommunityPage() {
     return () => { cancelled = true; clearInterval(t) }
   }, [seat, router])
 
+  // A one-second heartbeat for the countdown display while seated.
+  useEffect(() => {
+    if (!seat) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [seat])
+
+  /** Skip the countdown — two is enough, start the game now. */
+  async function startNow() {
+    if (!gameId || seatMates.length < MIN_START_SEATS) return
+    setStarting(true)
+    try {
+      await startLobbyNow(gameId)
+    } catch (e) {
+      console.warn('[community] start now failed:', e)
+      setStarting(false)
+    }
+  }
+
   return (
     <main className="stage-page-deep px-4 pb-24 md:px-8">
       <div className="mx-auto w-full max-w-2xl px-1 pt-8 md:pt-12">
@@ -179,8 +219,9 @@ export default function CommunityPage() {
 
         <h1 className="display-chrome text-3xl leading-none md:text-4xl">Community Play</h1>
         <p className="mt-3 text-sm text-ink-stage">
-          {LOBBY_SEATS} players a game. It starts the moment the third person sits down —
-          then it plays like any other multiplayer game.
+          Up to {LOBBY_SEATS} players a game. A full table starts instantly — and two
+          players start on their own after a short countdown, so nobody waits on a
+          third who never shows.
         </p>
 
         {/* Playing needs no account. Signing in only adds the leaderboard —
@@ -242,7 +283,7 @@ export default function CommunityPage() {
                   </button>
                 </div>
                 <p className="mt-3 text-[11px] text-ink-stage-2">
-                  Leaving ends it for the others too — three-handed is the format.
+                  Whoever stays plays on — leaving just gives up your seat.
                 </p>
               </>
             ) : (
@@ -258,20 +299,43 @@ export default function CommunityPage() {
                   ))}
                 </div>
 
-                <p className="mt-3 text-sm text-white">
-                  {seatMates.length === LOBBY_SEATS
-                    ? 'Starting…'
-                    : `Waiting for ${LOBBY_SEATS - seatMates.length} more`}
-                </p>
+                {(() => {
+                  const secondsLeft = duoDeadline
+                    ? Math.max(0, Math.ceil((Date.parse(duoDeadline) - now) / 1000))
+                    : null
+                  const canStart = seatMates.length >= MIN_START_SEATS
+                  return (
+                    <p className="mt-3 text-sm text-white">
+                      {seatMates.length >= LOBBY_SEATS
+                        ? 'Starting…'
+                        : canStart && secondsLeft !== null
+                          ? secondsLeft > 0
+                            ? `Starting in ${secondsLeft}s — a third can still jump in`
+                            : 'Starting…'
+                          : 'Waiting for one more — starts when a second person sits down'}
+                    </p>
+                  )
+                })()}
                 {seatMates.length > 0 && (
                   <p className="mt-1 text-xs text-ink-stage-2">
                     {seatMates.map((p) => p.name).join(' · ')}
                   </p>
                 )}
 
-                <button onClick={leave} className="btn-stage btn-stage-sm btn-stage-ghost mt-4">
-                  Leave this game
-                </button>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {seatMates.length >= MIN_START_SEATS && seatMates.length < LOBBY_SEATS && (
+                    <button
+                      onClick={startNow}
+                      disabled={starting}
+                      className="btn-stage btn-copper btn-stage-sm"
+                    >
+                      {starting ? 'Starting…' : `Start now with ${seatMates.length}`}
+                    </button>
+                  )}
+                  <button onClick={leave} className="btn-stage btn-stage-sm btn-stage-ghost">
+                    Leave this game
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -301,7 +365,7 @@ export default function CommunityPage() {
           {!loading && lobbies.length === 0 && (
             <p className="rounded-lg border border-white/10 bg-black/30 px-4 py-6 text-center text-sm text-ink-stage-2">
               Nobody&apos;s waiting right now. Hit Play now and you&apos;ll be first —
-              the game starts when two more join.
+              the game starts as soon as one more person joins.
             </p>
           )}
 

@@ -2,12 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { deleteCustomBoard, createGameFromCustomBoard, loadCustomBoard } from '@/lib/game-api'
+import { deleteCustomBoard, createGameFromCustomBoard, createPresentationGame, loadCustomBoard } from '@/lib/game-api'
 import { useUser } from '@/lib/auth'
 import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { TypingClue } from '@/components/TypingClue'
 import { ProfileMenu } from '@/components/ProfileMenu'
+
+/** Corner chip naming a tile's mode — private, public, or solo. */
+function TileBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="absolute right-2 top-2 z-10 rounded-full border border-white/25 bg-black/50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-jeopardy-gold-light shadow-md">
+      {children}
+    </span>
+  )
+}
 
 /**
  * LANDING PAGE
@@ -65,14 +74,24 @@ export default function Home() {
     setMyBoards((prev) => prev.filter((b) => b.id !== boardId))
   }
 
-  /** Start a game on a board straight from the list. */
-  async function handlePlayBoard(boardId: string) {
+  // Play used to hardwire TV mode. Now it asks — the same three ways the
+  // board editor offers: shared screen, everyone on phones, or hosted.
+  const [pickerBoard, setPickerBoard] = useState<{ id: string; title: string } | null>(null)
+
+  /** Start a game on a board from the list, in the chosen mode. */
+  async function launchBoard(boardId: string, mode: 'party' | 'multiplayer' | 'present') {
     setBusyBoard(boardId)
     setError('')
+    setPickerBoard(null)
     try {
       const board = await loadCustomBoard(boardId)
-      const roomCode = await createGameFromCustomBoard(board.board_data, 'party')
-      router.push(`/game/${roomCode}/display`)
+      if (mode === 'present') {
+        const roomCode = await createPresentationGame(board.board_data)
+        router.push(`/game/${roomCode}/present`)
+        return
+      }
+      const roomCode = await createGameFromCustomBoard(board.board_data, mode)
+      router.push(`/game/${roomCode}/${mode === 'multiplayer' ? 'play' : 'display'}`)
     } catch (e: any) {
       setError(e.message || 'Could not start that board')
       setBusyBoard(null)
@@ -104,12 +123,14 @@ export default function Home() {
           <ChromeWordmark className="mx-auto h-auto w-full max-w-[300px] md:max-w-[420px]" />
         </header>
 
-        {/* Two separately framed buttons — each a board cell in its own
-            walnut panel, rather than one board split down the middle. */}
-        <div className="mt-10 grid gap-5 md:mt-14 md:grid-cols-3">
+        {/* Four separately framed buttons — each a board cell in its own
+            walnut panel, rather than one board split down the middle. Each
+            carries a corner badge naming its mode: private, public, or solo. */}
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 md:mt-14 xl:grid-cols-4">
           <div className="board-panel">
             <div className="board-panel-inner">
               <a href="/find" className="tile">
+                <TileBadge>Private games</TileBadge>
                 <img
                   src="/contestants.png"
                   alt=""
@@ -119,7 +140,7 @@ export default function Home() {
                 <div className="tile-body">
                   <h2 className="tile-title text-3xl md:text-4xl">Play Jeopardy!</h2>
                   <p className="mt-2 text-sm text-blue-100/75">
-                    Forty-two seasons, themed boards, and community games.
+                    Forty-two seasons, themed boards, and your own private games.
                   </p>
                 </div>
               </a>
@@ -129,11 +150,29 @@ export default function Home() {
           <div className="board-panel">
             <div className="board-panel-inner">
               <a href="/community" className="tile">
+                <TileBadge>Public · vs real people</TileBadge>
                 <span className="tile-art tile-art-glyph" aria-hidden="true">&#127918;</span>
                 <div className="tile-body">
                   <h2 className="tile-title text-3xl md:text-4xl">Community Play</h2>
                   <p className="mt-2 text-sm text-blue-100/75">
-                    Drop into a game with strangers. Three players, starts when it fills.
+                    Drop into a game with strangers. Starts with two or three.
+                  </p>
+                </div>
+              </a>
+            </div>
+          </div>
+
+          <div className="board-panel">
+            <div className="board-panel-inner">
+              <a href="/challenge" className="tile">
+                <TileBadge>Solo</TileBadge>
+                {/* Slightly smaller than the default glyph — this tile's
+                    three-line title needs the extra headroom. */}
+                <span className="tile-art tile-art-glyph" style={{ fontSize: 64 }} aria-hidden="true">&#127942;</span>
+                <div className="tile-body">
+                  <h2 className="tile-title text-3xl md:text-4xl">Solo Challenge Play</h2>
+                  <p className="mt-2 text-sm text-blue-100/75">
+                    One-shot 3×3 boards. Race the leaderboard — every rival is a real player.
                   </p>
                 </div>
               </a>
@@ -143,6 +182,7 @@ export default function Home() {
           <div className="board-panel">
             <div className="board-panel-inner">
               <a href="/create" className="tile">
+                <TileBadge>Board builder</TileBadge>
                 {/* A clue being written, live — the authoring loop, shown. */}
                 <TypingClue />
                 <div className="tile-body">
@@ -191,7 +231,7 @@ export default function Home() {
                 </span>
 
                 <button
-                  onClick={() => handlePlayBoard(b.id)}
+                  onClick={() => setPickerBoard({ id: b.id, title: b.title })}
                   disabled={busyBoard === b.id}
                   className="shrink-0 rounded bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-green-300 hover:bg-white/20 disabled:opacity-50"
                 >
@@ -238,6 +278,61 @@ export default function Home() {
         </section>
 
         {error && <p className="mt-6 text-center text-sm text-copper-glow">{error}</p>}
+
+        {/* How do you want to play this board? Same three ways the editor
+            offers, so Play here never silently picks for you. */}
+        {pickerBoard && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            onClick={() => setPickerBoard(null)}
+          >
+            <div className="plate w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="plate-surface p-6">
+                <h3 className="mb-1 text-xl font-bold text-white">Play “{pickerBoard.title}”</h3>
+                <p className="mb-5 text-sm text-ink-stage">
+                  Buzzer modes open a lobby first so people can join.
+                </p>
+
+                <div className="space-y-2.5">
+                  <button
+                    onClick={() => launchBoard(pickerBoard.id, 'party')}
+                    className="w-full rounded-xl border-2 border-white/15 bg-white/5 px-4 py-3.5 text-left transition-all hover:border-jeopardy-gold hover:bg-white/10"
+                  >
+                    <span className="block font-bold text-white">📺 With a TV</span>
+                    <span className="mt-0.5 block text-xs text-gray-400">
+                      Board on one shared screen, everyone buzzes in on their phones.
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => launchBoard(pickerBoard.id, 'multiplayer')}
+                    className="w-full rounded-xl border-2 border-white/15 bg-white/5 px-4 py-3.5 text-left transition-all hover:border-jeopardy-gold hover:bg-white/10"
+                  >
+                    <span className="block font-bold text-white">📱 Just phones</span>
+                    <span className="mt-0.5 block text-xs text-gray-400">
+                      Everyone gets their own board on their own device.
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => launchBoard(pickerBoard.id, 'present')}
+                    className="w-full rounded-xl border-2 border-white/15 bg-white/5 px-4 py-3.5 text-left transition-all hover:border-jeopardy-gold hover:bg-white/10"
+                  >
+                    <span className="block font-bold text-white">🎤 Host It</span>
+                    <span className="mt-0.5 block text-xs text-gray-400">
+                      You run the board and judge answers yourself.
+                    </span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setPickerBoard(null)}
+                  className="btn-secondary mt-5 w-full py-2.5 text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Below everything: the way back into a game you're already in. */}
         <section className="mt-16 border-t border-white/10 pt-8">
