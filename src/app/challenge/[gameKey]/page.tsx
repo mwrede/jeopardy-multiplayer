@@ -23,6 +23,7 @@ import {
   type ChallengeResult,
   type ClueResult,
   type ClueOutcome,
+  type SubmitOutcome,
 } from '@/lib/challenge'
 
 /**
@@ -38,9 +39,10 @@ import {
  * resolve a clue their recorded result lands on their score at the same
  * moment. By the end their total is their true final score.
  *
- * One play per person, enforced by the database. A half-finished run is
- * parked in this browser so a refresh resumes rather than resets — against
- * the same three opponents.
+ * Replayable: the leaderboard keeps your best run on a board, so going again
+ * can improve your score but never damage it. A half-finished run is parked in
+ * this browser so a refresh resumes rather than resets — against the same
+ * opponents.
  */
 
 const CLUE_SECONDS = 30
@@ -104,6 +106,10 @@ export default function ChallengeGamePage() {
   const [clueResults, setClueResults] = useState<ClueResult[]>([])
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  /** This run is a second (or fifth) go at a board already on my record. */
+  const [isReplay, setIsReplay] = useState(false)
+  /** What recording the finished run did to my leaderboard entry. */
+  const [submitOutcome, setSubmitOutcome] = useState<SubmitOutcome | null>(null)
 
   // The open board clue and what's happened inside it.
   const [active, setActive] = useState<{ rd: number; c: number; r: number } | null>(null)
@@ -137,15 +143,13 @@ export default function ChallengeGamePage() {
         setAllResults(results)
         const my = results.find((r) => r.identity_key === id) ?? null
         setMine(my)
-        if (my) {
-          try { localStorage.removeItem(runKey(game.key)) } catch {}
-          setPhase('played')
-          return
-        }
 
+        // A parked run is checked BEFORE the standing result, because having
+        // played this board before no longer rules out being mid-run on it:
+        // a replay refreshed halfway through has to come back to its board,
+        // not to its old scorecard.
         const saved = readRun(game.key)
         if (saved && saved.clueResults.length > 0) {
-          // Resume mid-run, against the same table.
           setName(saved.name)
           setClueResults(saved.clueResults)
           const ops = saved.opponentIds
@@ -155,15 +159,23 @@ export default function ChallengeGamePage() {
           if (saved.clueResults.length >= CLUES_PER_GAME) {
             // Cleared but never recorded — a refresh on the final screen, or
             // a submit that failed. Record it now.
+            setIsReplay(!!my)
             finalize(saved.name, id, saved.clueResults)
           } else {
+            setIsReplay(!!my)
             setPhase('playing')
           }
-        } else {
-          setName(localStorage.getItem('playerName') || profile?.display_name || '')
-          setOpponents(pickOpponents(results, id))
-          setPhase('intro')
+          return
         }
+
+        if (my) {
+          setPhase('played')
+          return
+        }
+
+        setName(localStorage.getItem('playerName') || profile?.display_name || '')
+        setOpponents(pickOpponents(results, id))
+        setPhase('intro')
       })
       .catch((e) => {
         const msg = String(e?.message || '')
@@ -327,16 +339,18 @@ export default function ChallengeGamePage() {
   }
 
   /**
-   * Game over — record it and pull the fresh standings. The unique
-   * constraint is the referee if this somehow runs twice; a rejection for
-   * "already played" is recovered by loading the standing result instead.
+   * Game over — record it and pull the fresh standings.
+   *
+   * On a replay the recorder keeps whichever run went better, and tells us
+   * which it was so the final screen can say so rather than quietly showing a
+   * leaderboard that didn't move.
    */
   async function finalize(nm: string, id: string, res: ClueResult[]) {
     if (!game) return
     setSubmitting(true)
     setPhase('done')
     try {
-      await submitChallengeResult({
+      const outcome = await submitChallengeResult({
         gameKey: game.key,
         identityKey: id,
         userId: user?.id,
@@ -345,25 +359,47 @@ export default function ChallengeGamePage() {
         correctCount: res.filter((x) => x.outcome === 'correct').length,
         clueResults: res,
       })
+      setSubmitOutcome(outcome)
       try { localStorage.removeItem(runKey(game.key)) } catch {}
       const results = await fetchGameResults(game.key)
       setAllResults(results)
       setMine(results.find((x) => x.identity_key === id) ?? null)
     } catch (e: any) {
-      // Already on the books? Show the recorded game rather than an error.
+      setError(e?.message || 'Could not record your score.')
       const results = await fetchGameResults(game.key).catch(() => null)
-      const existing = results?.find((x) => x.identity_key === id)
-      if (existing) {
-        try { localStorage.removeItem(runKey(game.key)) } catch {}
-        setAllResults(results!)
-        setMine(existing)
-        setPhase('played')
-      } else {
-        setError(e?.message || 'Could not record your score.')
+      if (results) {
+        setAllResults(results)
+        setMine(results.find((x) => x.identity_key === id) ?? null)
       }
     } finally {
       setSubmitting(false)
     }
+  }
+
+  /**
+   * Go again on a board already on your record.
+   *
+   * Your standing score stays exactly where it is unless this run beats it, so
+   * there's nothing to lose by playing a board twice — which is the point:
+   * these are fixed boards, and wanting another go at one is the most normal
+   * thing in the world.
+   */
+  function startReplay() {
+    if (!game) return
+    setError('')
+    setSubmitOutcome(null)
+    setIsReplay(true)
+    setClueResults([])
+    setActive(null)
+    setFjStage(null)
+    setDjSeen(false)
+    setTyped('')
+    setWagerText('')
+    setStake(0)
+    try { localStorage.removeItem(runKey(game.key)) } catch {}
+    setName(mine?.player_name || localStorage.getItem('playerName') || profile?.display_name || '')
+    setOpponents(pickOpponents(allResults, identity ?? ''))
+    setPhase('intro')
   }
 
   // ── Views ────────────────────────────────────────────────────────────
@@ -391,10 +427,16 @@ export default function ChallengeGamePage() {
       <Shell>
         <BoardHeading game={game} />
         <div className="mt-6 rounded-xl border-2 border-jeopardy-gold bg-jeopardy-gold/10 p-5 text-center">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-jeopardy-gold-light">Your one shot</p>
+          <p className="text-[10px] uppercase tracking-[0.28em] text-jeopardy-gold-light">Your best on this board</p>
           <p className="mt-2 text-4xl font-bold text-white">{formatMoney(mine.score)}</p>
           <p className="mt-1 text-sm text-ink-stage-2">
-            {mine.correct_count} of {CLUES_PER_GAME} right · #{rank} of {allResults.length} — this board is done for you.
+            {mine.correct_count} of {CLUES_PER_GAME} right · #{rank} of {allResults.length}
+          </p>
+          <button onClick={startReplay} className="btn-stage btn-copper btn-stage-lg mt-4 w-full max-w-xs">
+            Play it again
+          </button>
+          <p className="mt-2 text-[11px] text-ink-stage-2">
+            Your {formatMoney(mine.score)} stands unless you beat it.
           </p>
           <div className="mt-4">
             <ChallengeShare
@@ -431,12 +473,14 @@ export default function ChallengeGamePage() {
             className="field-stage"
           />
           <button onClick={begin} className="btn-stage btn-copper btn-stage-lg mt-4 w-full">
-            Play — one shot
+            {isReplay && mine ? `Play again — beat ${formatMoney(mine.score)}` : 'Play'}
           </button>
           <p className="mt-2 text-center text-[11px] text-ink-stage-2">
             Two 3×3 rounds, a hidden Daily Double in each, then Final Jeopardy.
-            Right answers win the money, wrong ones lose it — and once you start,
-            this board is spent.
+            Right answers win the money, wrong ones lose it.
+            {isReplay && mine
+              ? ` Your ${formatMoney(mine.score)} on the leaderboard only moves if this run beats it.`
+              : ' Come back and play it again whenever you like — the leaderboard keeps your best run.'}
           </p>
           {error && <p className="mt-3 text-center text-sm text-copper-glow">{error}</p>}
         </div>
@@ -483,12 +527,32 @@ export default function ChallengeGamePage() {
           </div>
           {!submitting && mine && (
             <p className="mt-3 text-sm text-white">
-              You&apos;re now{' '}
-              <span className="font-bold text-jeopardy-gold-light">
-                #{allResults.findIndex((x) => x.id === mine.id) + 1} of {allResults.length}
-              </span>{' '}
-              on this board.
+              {submitOutcome === 'kept-best' ? (
+                <>
+                  Your best on this board is still{' '}
+                  <span className="font-bold text-jeopardy-gold-light">{formatMoney(mine.score)}</span>
+                  {' — '}that&apos;s the one on the leaderboard, at{' '}
+                  <span className="font-bold text-jeopardy-gold-light">
+                    #{allResults.findIndex((x) => x.id === mine.id) + 1} of {allResults.length}
+                  </span>
+                  .
+                </>
+              ) : (
+                <>
+                  {submitOutcome === 'improved' && 'New best — '}
+                  You&apos;re now{' '}
+                  <span className="font-bold text-jeopardy-gold-light">
+                    #{allResults.findIndex((x) => x.id === mine.id) + 1} of {allResults.length}
+                  </span>{' '}
+                  on this board.
+                </>
+              )}
             </p>
+          )}
+          {!submitting && (
+            <button onClick={startReplay} className="btn-stage btn-chrome btn-stage-sm mt-4">
+              Play this board again
+            </button>
           )}
           {!submitting && (
             <div className="mt-4">

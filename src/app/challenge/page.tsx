@@ -25,9 +25,9 @@ import {
  * JEOPARDY CHALLENGE — the hub.
  *
  * Every board on the site, each with its own standings, plus the overall
- * table at the bottom. A board you've played shows your money and rank where
- * its Play button used to be — one shot each is the whole game, so the hub is
- * really a leaderboard you climb one board at a time.
+ * table at the bottom. A board you've played shows your money and rank beside
+ * a way back in — boards are replayable and the leaderboard keeps your best
+ * run, so the hub is a leaderboard you climb one board at a time.
  */
 export default function ChallengePage() {
   const { user, loading: userLoading } = useUser()
@@ -67,15 +67,16 @@ export default function ChallengePage() {
           Solo boards, played like the real show: a 3×3 Jeopardy round, a 3×3 Double
           Jeopardy round with a hidden Daily Double in each, then a Final Jeopardy
           wager. Every clue is a real clue from a real episode — the screen shows the
-          date it aired. Each board is <strong className="text-white">one shot</strong>:
-          play it once and your score stands forever, racing the real people who
+          date it aired. Play a board as many times as you like — the leaderboard
+          keeps your <strong className="text-white">best run</strong> on each, so
+          going again can only improve it — and you race the real people who
           played before you.
         </p>
 
         {!userLoading && !user && (
           <div className="mt-6 rounded-xl border border-white/15 bg-black/30 p-4 text-center">
             <p className="text-sm text-ink-stage-2">
-              Playing as a guest works, but your one-shot record lives only in this browser.
+              Playing as a guest works, but your record lives only in this browser.
               Sign in and it follows you everywhere.
             </p>
             <button
@@ -275,14 +276,14 @@ function GameCard({
                 small
                 result={{ score: mine.score, clueResults: mine.clue_results }}
               />
-              <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-stage-ghost">
-                Standings
+              <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-copper">
+                Play again
               </a>
             </span>
           </>
         ) : (
           <>
-            <p className="text-[11px] text-ink-stage-2">One shot. 2 rounds + Final.</p>
+            <p className="text-[11px] text-ink-stage-2">2 rounds + Final.</p>
             <span className="flex shrink-0 gap-1.5">
               <ChallengeShare game={game} small />
               <a href={`/challenge/${game.key}`} className="btn-stage btn-stage-sm btn-copper">

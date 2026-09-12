@@ -4,11 +4,12 @@
  * The boards are fixed (challenge-data.ts); this module is everything that
  * happens around them:
  *
- *   · One play per person per board. The database enforces it with a unique
- *     constraint on (game_key, identity_key), so a second submission is
- *     rejected even from a fresh tab. Signed-in players are keyed by account;
- *     guests by an id minted into their browser — clearing storage does let a
- *     guest start over, which is the honest limit of guest identity.
+ *   · Replay a board as often as you like; the leaderboard keeps your BEST
+ *     run on it. One row per person per board, held by a unique constraint on
+ *     (game_key, identity_key), and a replay updates that row only when it
+ *     scored more — so playing again can never cost you the score you already
+ *     have, and nobody gets two entries on one board. Signed-in players are
+ *     keyed by account; guests by an id minted into their browser.
  *
  *   · Every finished game records HOW it went, clue by clue, not just the
  *     total. That's what makes the ghost race possible: when you play, up to
@@ -140,9 +141,23 @@ export async function fetchMyResult(
 }
 
 /**
- * Record a finished game. Throws a friendly error if this identity already
- * has a result for the board — the unique constraint is the referee, so even
- * two tabs racing can't score twice.
+ * What happened when a finished run was recorded.
+ *
+ * `first`     — nothing on the books for this board yet.
+ * `improved`  — a replay that beat their own standing score, which it replaces.
+ * `kept-best` — a replay that didn't beat it, so the leaderboard is unchanged.
+ */
+export type SubmitOutcome = 'first' | 'improved' | 'kept-best'
+
+/**
+ * Record a finished game.
+ *
+ * A board can be replayed as often as you like. What the leaderboard keeps is
+ * your BEST run on it: the first result goes in, and a later one only replaces
+ * it if it scored more. Replaying therefore can't cost you the score you
+ * already have, and can't give you two entries on the same board either — the
+ * unique constraint on (board, identity) is still the referee, and a replay
+ * simply updates the row it collides with.
  */
 export async function submitChallengeResult(input: {
   gameKey: string
@@ -152,8 +167,8 @@ export async function submitChallengeResult(input: {
   score: number
   correctCount: number
   clueResults: ClueResult[]
-}): Promise<void> {
-  const { error } = await supabase.from('challenge_results').insert({
+}): Promise<SubmitOutcome> {
+  const row = {
     game_key: input.gameKey,
     identity_key: input.identityKey,
     user_id: input.userId ?? null,
@@ -161,18 +176,37 @@ export async function submitChallengeResult(input: {
     score: input.score,
     correct_count: input.correctCount,
     clue_results: input.clueResults,
-  })
-  if (error) {
-    if ((error as any).code === '23505') {
-      throw new Error('You’ve already played this one — each board is one shot.')
-    }
-    if (/challenge_results/.test(error.message) && /not exist|schema/i.test(error.message)) {
-      throw new Error(
-        'The challenge table isn’t set up yet — run supabase-migration-challenge-results.sql in the Supabase dashboard.',
-      )
-    }
-    throw error
   }
+
+  const { error } = await supabase.from('challenge_results').insert(row)
+  if (!error) return 'first'
+
+  if ((error as any).code === '23505') {
+    // Already played this board. Keep whichever run went better.
+    const existing = await fetchMyResult(input.gameKey, input.identityKey)
+    if (existing && existing.score >= input.score) return 'kept-best'
+
+    const { error: updateErr } = await supabase
+      .from('challenge_results')
+      .update({
+        player_name: row.player_name,
+        score: row.score,
+        correct_count: row.correct_count,
+        clue_results: row.clue_results,
+        user_id: row.user_id,
+      })
+      .eq('game_key', input.gameKey)
+      .eq('identity_key', input.identityKey)
+    if (updateErr) throw updateErr
+    return 'improved'
+  }
+
+  if (/challenge_results/.test(error.message) && /not exist|schema/i.test(error.message)) {
+    throw new Error(
+      'The challenge table isn’t set up yet — run supabase-migration-challenge-results.sql in the Supabase dashboard.',
+    )
+  }
+  throw error
 }
 
 /**
