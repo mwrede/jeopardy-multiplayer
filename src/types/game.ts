@@ -7,6 +7,8 @@ export type GamePhase =
   | 'clue_reading'
   | 'buzz_window'
   | 'player_answering'
+  /** Unlimited-buzzer mode: everyone who buzzed answers at once, on their own. */
+  | 'open_answering'
   | 'daily_double_wager'
   | 'daily_double_answering'
   | 'clue_result'
@@ -64,6 +66,23 @@ export interface GameSettings {
   final_answer_ms: number
   /** Seconds to lock in a Final Jeopardy wager before the round moves on. */
   final_wager_ms?: number
+  /**
+   * UNLIMITED BUZZER. Off = the show's rule: fastest buzz wins the clue and
+   * everyone else is locked out. On = the buzzer stops being a race. Everyone
+   * who rings in answers, on their own, and every correct answer scores full
+   * value — so a clue can pay several people at once and the game stops being
+   * about thumb speed. You still buzz, and your time is still recorded.
+   */
+  unlimitedBuzzer?: boolean
+  /**
+   * How long to keep collecting buzzes after the FIRST one lands before
+   * picking a winner. Exists because phones don't all arm at the same instant:
+   * one that missed the realtime push and armed off the 2s poll sends its buzz
+   * seconds later than the rest, and without a collection window its (possibly
+   * faster) reaction never gets compared at all. Raise it if the room still
+   * feels unfair, lower it if resolution feels sluggish.
+   */
+  buzz_collect_ms?: number
 }
 
 export const GAME_LENGTH_CONFIG: Record<GameLength, {
@@ -92,6 +111,8 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   daily_double_answer_ms: 25000,
   final_answer_ms: 20000,
   final_wager_ms: 15000,
+  unlimitedBuzzer: false,
+  buzz_collect_ms: 1200,
 }
 
 // Game search result for browsing J-Archive games
@@ -128,6 +149,8 @@ export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   daily_double_answer_ms: 20000,
   final_answer_ms: 20000,
   final_wager_ms: 15000,
+  unlimitedBuzzer: false,
+  buzz_collect_ms: 1200,
 }
 
 export interface Player {
@@ -175,6 +198,8 @@ export interface Buzz {
   client_timestamp: number | null
   latency_offset: number | null
   adjusted_time: string | null
+  /** Time from the buzzer arming on that player's device to them pressing it. */
+  reaction_ms: number | null
   is_winner: boolean
   answer: string | null
   is_correct: boolean | null

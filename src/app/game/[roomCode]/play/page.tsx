@@ -7,6 +7,8 @@ import { ClueText } from '@/components/ClueText'
 import { BuzzerButton } from '@/components/BuzzerButton'
 import { ClueAttempts } from '@/components/ClueAttempts'
 import { BuzzOrder } from '@/components/BuzzOrder'
+import { BuzzReport } from '@/components/BuzzReport'
+import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { CommunityVote } from '@/components/CommunityVote'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
@@ -30,7 +32,6 @@ import {
   advanceToFinalAnswering,
   startFinalReveal,
   advanceToGameOver,
-  skipClue,
   passOnClue,
   passAfterBuzz,
   removePlayer,
@@ -38,10 +39,16 @@ import {
   joinGame,
   skipCurrentPlayer,
   openBuzzWindow,
+  finishBuzzWindow,
+  submitOpenAnswer,
+  closeOpenClue,
+  getBuzzOrder,
+  isUnlimitedBuzzer,
 } from '@/lib/game-api'
 import { leaveCommunityLobby } from '@/lib/community'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
 import { buzzOpenDelayMs, computeReadingMs } from '@/lib/clue-timing'
+import { formatReaction } from '@/lib/buzz-stats'
 import {
   playCorrectSound, playWrongSound, playTimeUpSound,
   playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound,
@@ -129,6 +136,27 @@ export default function PlayPage() {
   // when the window reopens for players who haven't tried yet.
   const [hasTriedAnswer, setHasTriedAnswer] = useState(false)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
+  /**
+   * My own buzz on the current clue: how long I took, measured on this device.
+   *
+   * The winner isn't known the instant you press any more — buzzes are
+   * collected for a moment so a phone that armed late still gets compared — so
+   * this is what the buzzer shows in the meantime. It's also the honest number:
+   * it can't be flattered or spoiled by the network.
+   */
+  const [myBuzz, setMyBuzz] = useState<{ reactionMs: number | null } | null>(null)
+  /** UNLIMITED BUZZER: am I one of the people who rang in and still owes an answer? */
+  const [openEligible, setOpenEligible] = useState(false)
+  const [openLockedIn, setOpenLockedIn] = useState(false)
+  const [openCountdown, setOpenCountdown] = useState<number | null>(null)
+  /**
+   * When this device's buzzer armed, on the monotonic clock. Everything about
+   * a buzz is measured from here, never from a wall clock: the phones in a room
+   * do NOT arm at the same instant (one that misses the realtime push waits for
+   * the 2s poll), and comparing across devices is what used to make the fastest
+   * player lose.
+   */
+  const armedAtRef = useRef<number | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
   const [gameAirDate, setGameAirDate] = useState<string | null>(null)
   const [leavingGame, setLeavingGame] = useState(false)
@@ -215,7 +243,7 @@ export default function PlayPage() {
     const curr = game.phase
     if (prev !== curr) {
       if (curr === 'clue_reading') playSelectSound()
-      if (curr === 'player_answering') playBuzzSound()
+      if (curr === 'player_answering' || curr === 'open_answering') playBuzzSound()
       if (curr === 'daily_double_wager') playDailyDoubleSound()
       if (curr === 'clue_result') {
         const resultClue = game.current_clue_id
@@ -264,6 +292,7 @@ export default function PlayPage() {
     setBuzzArmed(false)
     if (!game || game.phase !== 'buzz_window') {
       setBuzzCountdown(null)
+      armedAtRef.current = null
       if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)
       if (buzzArmTimeoutRef.current) clearTimeout(buzzArmTimeoutRef.current)
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
@@ -279,14 +308,21 @@ export default function PlayPage() {
     const openDelay = Math.max(0, Math.min(1200, scheduledMs - Date.now()))
     const armAt = Date.now() + openDelay
 
+    // The reaction clock starts the moment this device's buzzer goes live —
+    // performance.now(), so it can't be moved by a clock correction mid-clue.
+    armedAtRef.current = performance.now() + openDelay
+
     buzzArmTimeoutRef.current = setTimeout(() => setBuzzArmed(true), openDelay)
     setBuzzCountdown(Math.ceil(totalMs / 1000))
     buzzIntervalRef.current = setInterval(() => {
       const remaining = Math.max(0, totalMs - (Date.now() - armAt))
       setBuzzCountdown(Math.ceil(remaining / 1000))
     }, 250)
+    // Out of time. Settle whatever is pending first — a race still collecting
+    // buzzes, or a room mid-buzz with the race turned off — and only give up on
+    // the clue if nobody rang in at all.
     buzzTimeoutRef.current = setTimeout(async () => {
-      if (game.current_clue_id) await skipClue(game.id, game.current_clue_id)
+      if (game.current_clue_id) await finishBuzzWindow(game.id, game.current_clue_id)
     }, openDelay + totalMs)
     return () => {
       if (buzzTimeoutRef.current) clearTimeout(buzzTimeoutRef.current)
@@ -402,7 +438,68 @@ export default function PlayPage() {
   useEffect(() => {
     setHasTriedAnswer(false)
     setHasPassed(false)
+    setMyBuzz(null)
+    setOpenEligible(false)
+    setOpenLockedIn(false)
   }, [game?.current_clue_id])
+
+  // A reopened buzz window is a fresh race, so the buzzer comes back and my
+  // previous reaction stops being the thing on screen.
+  useEffect(() => {
+    if (game?.phase === 'buzz_window') setMyBuzz(null)
+  }, [game?.phase, game?.buzz_window_start])
+
+  // ===== UNLIMITED BUZZER: everyone who rang in answers at once =====
+
+  // Did I ring in on this clue? Read from the buzzes rather than from local
+  // state, so a refresh mid-clue doesn't lose me my turn to answer.
+  useEffect(() => {
+    if (!game || game.phase !== 'open_answering' || !game.current_clue_id || !myPlayerId) return
+    let cancelled = false
+    getBuzzOrder(game.id, game.current_clue_id).then((rows) => {
+      if (cancelled) return
+      const mine = rows.find((r) => r.player_id === myPlayerId)
+      setOpenEligible(!!mine)
+      setOpenLockedIn(!!mine && mine.is_correct !== null)
+    })
+    return () => { cancelled = true }
+  }, [game?.phase, game?.id, game?.current_clue_id, myPlayerId])
+
+  // The open answer clock. Anchored on when the phase began — the same instant
+  // for everyone — so all the answers are on the same timer and a reload can't
+  // buy anyone extra seconds. At zero it submits whatever is typed, including
+  // nothing: ringing in and coming up empty is a wrong answer.
+  const openAnswerRef = useRef<string>('')
+  useEffect(() => { openAnswerRef.current = answer }, [answer])
+  useEffect(() => {
+    if (!game || game.phase !== 'open_answering' || !game.current_clue_id) {
+      setOpenCountdown(null)
+      return
+    }
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs
+    const remaining = () => Math.max(0, deadline - Date.now())
+
+    setOpenCountdown(Math.ceil(remaining() / 1000))
+    const tick = setInterval(() => setOpenCountdown(Math.ceil(remaining() / 1000)), 250)
+
+    const mine = setTimeout(async () => {
+      if (!openEligible || openLockedIn || !myPlayerId || !game.current_clue_id) return
+      setOpenLockedIn(true)
+      await submitOpenAnswer(game.id, game.current_clue_id, myPlayerId, openAnswerRef.current.trim())
+      setAnswer('')
+    }, remaining())
+
+    // Backstop: reveal the clue a moment after the clock, whether or not
+    // everyone's answer landed. Guarded server-side, so every device racing to
+    // do this is fine.
+    const close = setTimeout(() => {
+      if (game.current_clue_id) closeOpenClue(game.id, game.current_clue_id)
+    }, remaining() + 1800)
+
+    return () => { clearInterval(tick); clearTimeout(mine); clearTimeout(close) }
+  }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id, openEligible, openLockedIn, myPlayerId, game?.settings?.answer_time_ms])
 
   // Auto-advance finals.
   //
@@ -596,8 +693,22 @@ export default function PlayPage() {
 
   const handleBuzz = () => doAction(async () => {
     if (!game || !myPlayer || !game.current_clue_id) return
+    // Time it here, against this device's own arming instant, before anything
+    // slow happens. This number is the buzz — whoever reacted quickest wins the
+    // clue, no matter whose packet reaches Supabase first.
+    const reactionMs =
+      armedAtRef.current !== null ? Math.max(0, performance.now() - armedAtRef.current) : null
     playBuzzSound()
-    await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
+    setMyBuzz({ reactionMs })
+    const res = await submitBuzz(game.id, game.current_clue_id, myPlayer.id, reactionMs)
+    if (res.open) setOpenEligible(true)
+  })
+
+  const handleOpenAnswer = () => doAction(async () => {
+    if (!game || !myPlayer || !game.current_clue_id) return
+    setOpenLockedIn(true)
+    await submitOpenAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
+    setAnswer('')
   })
 
   const handlePass = () => doAction(async () => {
@@ -606,8 +717,8 @@ export default function PlayPage() {
     await passOnClue(game.id, game.current_clue_id, myPlayer.id)
     setHasPassed(true)
     // Note: we do NOT cancel buzzTimeoutRef here — if the all-passed check
-    // fails due to a race condition (concurrent passes), the buzz timeout
-    // will fire skipClue as a fallback to advance the game.
+    // fails due to a race condition (concurrent passes), the buzz window
+    // expiring calls finishBuzzWindow as a fallback to advance the game.
   })
 
   const handleSubmitAnswer = () => doAction(async () => {
@@ -760,6 +871,12 @@ export default function PlayPage() {
           ))}
         </div>
 
+        {/* How the buzzer behaves, decided before anyone picks a clue — and
+            changeable later between clues from the scoreboard. */}
+        <div className="mb-5 flex w-full justify-center">
+          <BuzzModeToggle game={game} canEdit={myPlayer.is_creator} />
+        </div>
+
         <button onClick={handleReady} disabled={busy}
           className={`w-full max-w-sm py-4 rounded-2xl font-bold text-xl transition-all ${
             myPlayer.is_ready ? 'btn-secondary' : 'bg-green-600 text-white'
@@ -791,6 +908,19 @@ export default function PlayPage() {
       <div className="flex items-center justify-between gap-2 px-3 py-1">
         <span className="text-[10px] text-gray-500 font-mono">{game.room_code}</span>
         <div className="flex items-center gap-3">
+          {/* The buzzer rule, always visible, and flippable by the host between
+              clues — never mid-clue, which would move the goalposts on whoever
+              is already holding a live buzzer. */}
+          <BuzzModeToggle
+            game={game}
+            variant="chip"
+            canEdit={
+              !!myPlayer?.is_creator &&
+              (game.phase === 'board_selection' ||
+                game.phase === 'clue_result' ||
+                game.phase === 'round_end')
+            }
+          />
           {gameAirDate && (
             <span className="text-[10px] text-gray-500">
               {new Date(gameAirDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -920,6 +1050,9 @@ export default function PlayPage() {
             </p>
             {answerer && (
               <p className="text-white text-lg">
+                {/* Names whoever the board is credited to. With the race off
+                    that's the quickest of possibly several people who got it —
+                    the full account is the list of answers below. */}
                 {answerer.name} {wasCorrect ? `+$${swing.toLocaleString()}` : `-$${swing.toLocaleString()}`}
               </p>
             )}
@@ -929,8 +1062,14 @@ export default function PlayPage() {
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
           </div>
 
-          {/* Every answer attempted on this clue */}
-          <ClueAttempts gameId={game.id} clueId={currentClue.id} players={players} variant="phone" />
+          {/* Every answer given, what each person said, and what it cost them */}
+          <ClueAttempts
+            gameId={game.id}
+            clueId={currentClue.id}
+            players={players}
+            variant="phone"
+            value={currentClue.is_daily_double ? swing : currentClue.value}
+          />
         </div>
       </div>
     )
@@ -1034,6 +1173,14 @@ export default function PlayPage() {
             </div>
           ))}
         </div>
+        {/* How everyone actually did on the buzzer — the record of the game,
+            not just the scores it produced. */}
+        {game.phase === 'game_over' && (
+          <div className="mt-8 flex w-full justify-center">
+            <BuzzReport gameId={game.id} players={players} variant="phone" />
+          </div>
+        )}
+
         {game.phase === 'game_over' && (
           <div className="flex flex-col items-center gap-3 mt-8">
             {myPlayer.is_creator && (
@@ -1066,8 +1213,10 @@ export default function PlayPage() {
   // === ACTIVE GAME: Board + Clue + Buzzer ===
   const showClue = currentClue && (
     game.phase === 'clue_reading' || game.phase === 'buzz_window' ||
-    game.phase === 'player_answering' || game.phase === 'daily_double_answering'
+    game.phase === 'player_answering' || game.phase === 'open_answering' ||
+    game.phase === 'daily_double_answering'
   )
+  const openMode = isUnlimitedBuzzer(game.settings)
 
   // === DAILY DOUBLE WAGER (clue hidden until wager is placed) ===
   if (game.phase === 'daily_double_wager' && currentClue) {
@@ -1157,6 +1306,29 @@ export default function PlayPage() {
                 )}
               </div>
             )}
+            {/* UNLIMITED BUZZER: everyone who rang in is answering at the same
+                time. Who buzzed and how fast is fair game to show; who has it
+                RIGHT is not, until the reveal. */}
+            {game.phase === 'open_answering' && (
+              <div className="mt-2 flex flex-col items-center gap-2 flex-shrink-0">
+                <p className="text-jeopardy-gold font-bold text-sm uppercase tracking-wider">
+                  Everyone answers
+                </p>
+                {openCountdown !== null && (
+                  <p className={`text-xl font-bold ${openCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                    {openCountdown}s
+                  </p>
+                )}
+                <BuzzOrder
+                  gameId={game.id}
+                  clueId={currentClue.id}
+                  players={players}
+                  variant="compact"
+                  hideResults
+                  heading="Buzzed in"
+                />
+              </div>
+            )}
           </div>
 
           {/* Bottom controls */}
@@ -1179,10 +1351,34 @@ export default function PlayPage() {
                   submitDisabled={!answer.trim()} maxLength={200}
                   secondaryAction={{ label: 'Pass', onClick: handlePassAfterBuzz, disabled: busy }} />
               </div>
+            ) : game.phase === 'open_answering' ? (
+              /* UNLIMITED BUZZER: everybody who rang in types their own answer,
+                 on their own, and is marked on it independently. */
+              openLockedIn ? (
+                <div className="text-center py-4 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-white font-semibold">Answer locked in</p>
+                  <p className="text-gray-400 text-xs mt-0.5">Waiting for the others…</p>
+                </div>
+              ) : openEligible ? (
+                <div className="w-full max-w-sm mx-auto">
+                  <GameKeyboard value={answer} onChange={setAnswer} onSubmit={handleOpenAnswer}
+                    mode="letters" placeholder="Type or 🎤 speak your answer..." submitLabel="Submit"
+                    submitDisabled={!answer.trim()} maxLength={200} />
+                </div>
+              ) : (
+                <div className="text-center py-4 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-gray-400">You didn&apos;t buzz in on this one</p>
+                  <p className="text-gray-500 text-xs mt-0.5">
+                    Everyone who did is answering now
+                  </p>
+                </div>
+              )
             ) : (game.phase === 'buzz_window' || game.phase === 'clue_reading') ? (
               <>
-              {/* The buzzers reopen after every wrong answer, so the room can
-                  see what's already been said and missed. */}
+              {/* Wrong answers are public. The buzzers reopen after each one, so
+                  the room sees who missed and exactly what they said — nobody
+                  gets quietly written off screen, and nobody wastes a buzz
+                  repeating a guess that's already been ruled out. */}
               <ClueAttempts
                 gameId={game.id}
                 clueId={currentClue.id}
@@ -1190,6 +1386,8 @@ export default function PlayPage() {
                 variant="phone"
                 refreshKey={game.updated_at}
                 heading="Already tried"
+                announceLatest
+                value={currentClue.value}
               />
               {hasTriedAnswer ? (
                 <div className="text-center py-4 rounded-xl bg-red-950/40 border border-red-900/60">
@@ -1198,6 +1396,19 @@ export default function PlayPage() {
                 </div>
               ) : hasPassed ? (
                 <div className="text-center py-4"><p className="text-gray-400">Passed</p></div>
+              ) : myBuzz ? (
+                /* Pressed. Nothing is decided for a moment — buzzes are being
+                   collected so a phone that armed late is still compared on its
+                   reaction rather than dropped for being slow to the server. */
+                <div className="text-center py-4 rounded-xl bg-green-950/40 border border-green-800/60">
+                  <p className="text-green-300 font-bold uppercase tracking-widest">Buzzed in</p>
+                  {myBuzz.reactionMs !== null && (
+                    <p className="text-white text-2xl font-mono mt-1">{formatReaction(myBuzz.reactionMs)}</p>
+                  )}
+                  <p className="text-gray-400 text-xs mt-0.5">
+                    {openMode ? 'Everyone who buzzed will answer' : 'Seeing who was fastest…'}
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <BuzzerButton gameId={game.id} clueId={currentClue.id} playerId={myPlayer.id}
@@ -1207,6 +1418,24 @@ export default function PlayPage() {
                   )}
                 </div>
               )}
+              </>
+            ) : game.phase === 'player_answering' ? (
+              /* Watching someone else answer. The record of what has already
+                 been tried and missed stays up — it's the room's shared memory
+                 of this clue, not a footnote on the reveal screen. */
+              <>
+                <ClueAttempts
+                  gameId={game.id}
+                  clueId={currentClue.id}
+                  players={players}
+                  variant="phone"
+                  refreshKey={game.updated_at}
+                  heading="Already tried"
+                  value={currentClue.value}
+                />
+                <div className="text-center py-3">
+                  <p className="text-gray-500">{currentPlayer?.name} is answering…</p>
+                </div>
               </>
             ) : (
               <div className="text-center py-4"><p className="text-gray-500">Waiting...</p></div>

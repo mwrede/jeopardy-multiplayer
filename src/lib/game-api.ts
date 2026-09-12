@@ -1094,57 +1094,451 @@ export async function selectClue(gameId: string, clueId: string, playerId: strin
   }
 }
 
-/**
- * Submit a buzz.
- * Records the buzz and sets the player as the current answerer.
- * Sends a high-resolution client timestamp so the server can break ties
- * when two players buzz at nearly the same instant.
- */
 export type BuzzOrderRow = {
   player_id: string
   is_winner: boolean
   server_timestamp: string
   client_timestamp: number | null
+  /** How long that player took to press, timed on their own device. */
+  reaction_ms: number | null
   answer: string | null
   is_correct: boolean | null
 }
 
+/** Default collection window — see GameSettings.buzz_collect_ms. */
+export const BUZZ_COLLECT_MS = 1200
+
+/** Is this game playing with the buzzer race turned off? */
+export function isUnlimitedBuzzer(settings: any): boolean {
+  return !!settings?.unlimitedBuzzer
+}
+
 /**
- * Fetch every non-passing buzz for a clue in the order they arrived
- * (server_timestamp, then client_timestamp as tiebreaker — same rule
- * resolve_buzz uses to pick the winner). Used to render "who buzzed first".
+ * Set once the buzzes table turns out not to have reaction_ms — i.e. this
+ * deployment hasn't run supabase-migration-buzz-reaction.sql. Everything still
+ * works, it just falls back to ranking by arrival time like it used to.
+ */
+let reactionColumnMissing = false
+
+function isMissingReactionColumn(message: string | undefined): boolean {
+  return !!message && /reaction_ms/.test(message)
+}
+
+/**
+ * Fetch every non-passing buzz for a clue, FASTEST REACTION FIRST.
+ *
+ * The ordering is the whole point: a buzz is ranked by how long that player
+ * took to press their own buzzer after it armed on their own device, never by
+ * whose packet reached the database first. Phones don't all arm at the same
+ * instant — one that missed the realtime push and armed off the 2s poll is
+ * seconds behind the room — so arrival order used to hand the clue to whoever
+ * had the best wifi rather than the fastest thumb.
+ *
+ * Rows written before the reaction_ms migration (and passes) have no reaction
+ * and sort last, where they fall back to arrival order.
  */
 export async function getBuzzOrder(gameId: string, clueId: string): Promise<BuzzOrderRow[]> {
-  const { data, error } = await supabase
+  const columns = reactionColumnMissing
+    ? 'player_id, is_winner, server_timestamp, client_timestamp, answer, is_correct'
+    : 'player_id, is_winner, server_timestamp, client_timestamp, reaction_ms, answer, is_correct'
+
+  let query = supabase
     .from('buzzes')
-    .select('player_id, is_winner, server_timestamp, client_timestamp, answer, is_correct')
+    .select(columns)
     .eq('game_id', gameId)
     .eq('clue_id', clueId)
     .eq('is_pass', false)
+  if (!reactionColumnMissing) {
+    query = query.order('reaction_ms', { ascending: true, nullsFirst: false })
+  }
+  const { data, error } = await query
     .order('server_timestamp', { ascending: true })
     .order('client_timestamp', { ascending: true, nullsFirst: false })
+
   if (error) {
+    if (isMissingReactionColumn(error.message) && !reactionColumnMissing) {
+      reactionColumnMissing = true
+      return getBuzzOrder(gameId, clueId)
+    }
     console.warn('[getBuzzOrder] failed:', error.message)
     return []
   }
-  return (data || []) as BuzzOrderRow[]
+  return ((data || []) as any[]).map((r) => ({ reaction_ms: null, ...r })) as BuzzOrderRow[]
 }
 
-export async function submitBuzz(gameId: string, clueId: string, playerId: string) {
-  // Capture client time as early as possible (milliseconds since page load — monotonic, high-res)
+/** Buzzes still in the running: rang in, didn't pass, hasn't answered yet. */
+function eligibleBuzzes(rows: BuzzOrderRow[]): BuzzOrderRow[] {
+  return rows.filter((r) => r.is_correct === null)
+}
+
+export type BuzzResult = {
+  /** The reaction time recorded, in ms — what the room sees afterwards. */
+  reactionMs: number | null
+  /** True in unlimited-buzzer mode: there is no race to win. */
+  open: boolean
+  /**
+   * Whether this player won the clue, when that is already settled. Null means
+   * the race is still collecting buzzes — the answer arrives via the phase
+   * change a moment later, not from this call.
+   */
+  won: boolean | null
+}
+
+/**
+ * Record a buzz.
+ *
+ * `reactionMs` is measured by the caller as the gap between its own buzzer
+ * arming and the press, on one monotonic clock that never leaves the device.
+ * That, not arrival order, decides who gets the clue.
+ *
+ * Nothing is decided here. The buzz goes in the book, and the race is settled
+ * a beat later — once every buzz that was on its way has had time to land.
+ */
+export async function submitBuzz(
+  gameId: string,
+  clueId: string,
+  playerId: string,
+  reactionMs?: number | null,
+) {
   const clientTimestamp = performance.now()
+  const reaction =
+    typeof reactionMs === 'number' && isFinite(reactionMs)
+      ? Math.max(0, Math.round(reactionMs))
+      : null
 
-  // Use atomic DB function to prevent race conditions in multiplayer
-  const { data, error } = await supabase.rpc('resolve_buzz', {
-    p_game_id: gameId,
-    p_clue_id: clueId,
-    p_player_id: playerId,
-    p_client_timestamp: clientTimestamp,
-  })
+  const { data: game } = await supabase
+    .from('games')
+    .select('settings')
+    .eq('id', gameId)
+    .maybeSingle()
+  const open = isUnlimitedBuzzer(game?.settings)
 
+  await recordBuzzRow(gameId, clueId, playerId, clientTimestamp, reaction)
+
+  if (open) {
+    // No race to resolve. The clue moves on when everyone has rung in or
+    // passed, and otherwise when the buzz window runs out.
+    await startOpenAnswering(gameId, clueId)
+    return { reactionMs: reaction, open: true, won: null } as BuzzResult
+  }
+
+  // Everyone is in — nothing left to wait for, settle it now.
+  if (await everyonePressedOrPassed(gameId, clueId)) {
+    const winner = await resolveBuzzRace(gameId, clueId)
+    if (winner) return { reactionMs: reaction, open: false, won: winner === playerId } as BuzzResult
+  }
+
+  // Otherwise give the stragglers their moment. A phone that armed late sends
+  // its buzz late through no fault of the player holding it, and dropping that
+  // buzz on the floor is exactly the unfairness this whole path exists to fix.
+  //
+  // Every buzzer schedules this, so the earliest one to land settles the race
+  // at first-buzz + collect window; the rest find it already settled and do
+  // nothing. If every one of those timers dies with its tab, the buzz window
+  // expiring calls finishBuzzWindow, which resolves before it gives up on the
+  // clue — so a race can't be left hanging.
+  const collectMs = (game?.settings as any)?.buzz_collect_ms ?? BUZZ_COLLECT_MS
+  setTimeout(() => {
+    resolveBuzzRace(gameId, clueId).catch((e) =>
+      console.warn('[submitBuzz] deferred resolve failed:', e?.message || e),
+    )
+  }, Math.max(0, collectMs))
+
+  return { reactionMs: reaction, open: false, won: null } as BuzzResult
+}
+
+/**
+ * Write (or rewrite) this player's buzz row for a clue.
+ *
+ * Rewrites matter: a reopened window after a wrong answer is a fresh race, so
+ * a player who buzzed and lost the first one must come back in with a new
+ * reaction and no leftover is_winner flag.
+ */
+async function recordBuzzRow(
+  gameId: string,
+  clueId: string,
+  playerId: string,
+  clientTimestamp: number,
+  reaction: number | null,
+) {
+  const row: any = {
+    game_id: gameId,
+    clue_id: clueId,
+    player_id: playerId,
+    client_timestamp: clientTimestamp,
+    server_timestamp: new Date().toISOString(),
+    is_winner: false,
+    is_pass: false,
+  }
+  if (!reactionColumnMissing && reaction !== null) row.reaction_ms = reaction
+
+  const { error } = await supabase
+    .from('buzzes')
+    .upsert(row, { onConflict: 'game_id,clue_id,player_id' })
+
+  if (!error) return
+
+  if (isMissingReactionColumn(error.message)) {
+    // Migration not applied — record the buzz anyway, just without the timing.
+    reactionColumnMissing = true
+    delete row.reaction_ms
+    const { error: retryErr } = await supabase
+      .from('buzzes')
+      .upsert(row, { onConflict: 'game_id,clue_id,player_id' })
+    if (!retryErr) return
+  }
+
+  // No unique constraint to upsert against (see
+  // supabase-migration-ensure-buzz-constraint.sql) — insert, then update.
+  const { error: insertErr } = await supabase.from('buzzes').insert(row)
+  if (!insertErr) return
+
+  const { id, game_id, clue_id, player_id, ...changes } = row
+  const { error: updateErr } = await supabase
+    .from('buzzes')
+    .update(changes)
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('player_id', playerId)
+  if (updateErr) throw updateErr
+}
+
+/** Has every player in the game either buzzed or passed on this clue? */
+async function everyonePressedOrPassed(gameId: string, clueId: string): Promise<boolean> {
+  const [{ data: players }, { data: rows }] = await Promise.all([
+    supabase.from('players').select('id').eq('game_id', gameId),
+    supabase.from('buzzes').select('player_id').eq('game_id', gameId).eq('clue_id', clueId),
+  ])
+  if (!players?.length) return false
+  const inBook = new Set((rows || []).map((r: any) => r.player_id))
+  return players.every((p: any) => inBook.has(p.id))
+}
+
+/**
+ * Settle a buzz race: the lowest reaction time wins the clue.
+ *
+ * Safe to call from anywhere, as often as you like. The winner is claimed with
+ * an UPDATE guarded on the game still being in buzz_window on this clue, so
+ * when several devices try to settle the same race at once exactly one lands
+ * and the others quietly find it already done.
+ *
+ * Returns the winning player id, or null if there was nothing to settle.
+ */
+export async function resolveBuzzRace(gameId: string, clueId: string): Promise<string | null> {
+  const { data: game } = await supabase
+    .from('games')
+    .select('phase, current_clue_id, settings')
+    .eq('id', gameId)
+    .maybeSingle()
+  if (!game || game.phase !== 'buzz_window' || game.current_clue_id !== clueId) return null
+  // Unlimited buzzer has no winner to pick.
+  if (isUnlimitedBuzzer(game.settings)) return null
+
+  const inTheRunning = eligibleBuzzes(await getBuzzOrder(gameId, clueId))
+  if (!inTheRunning.length) return null
+  const winner = inTheRunning[0].player_id
+
+  const { data: claimed } = await supabase
+    .from('games')
+    .update({
+      phase: 'player_answering',
+      current_player_id: winner,
+      buzz_window_open: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+    .eq('phase', 'buzz_window')
+    .eq('current_clue_id', clueId)
+    .select('id')
+  // Another device settled this race, or the clue moved on underneath us.
+  if (!claimed?.length) return null
+
+  await supabase
+    .from('buzzes')
+    .update({ is_winner: true })
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('player_id', winner)
+
+  return winner
+}
+
+/**
+ * UNLIMITED BUZZER: hand the clue to everyone who rang in at once.
+ *
+ * Normally called speculatively after each buzz and only moves when every
+ * player is accounted for; `force` is the buzz window running out, which
+ * starts the answering with whoever managed to ring in.
+ *
+ * Returns true if the game moved into open_answering.
+ */
+export async function startOpenAnswering(
+  gameId: string,
+  clueId: string,
+  force = false,
+): Promise<boolean> {
+  if (!force && !(await everyonePressedOrPassed(gameId, clueId))) return false
+
+  const buzzers = eligibleBuzzes(await getBuzzOrder(gameId, clueId))
+  if (!buzzers.length) return false
+
+  const { data: claimed } = await supabase
+    .from('games')
+    .update({
+      phase: 'open_answering',
+      buzz_window_open: false,
+      current_player_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+    .eq('phase', 'buzz_window')
+    .eq('current_clue_id', clueId)
+    .select('id')
+
+  return !!claimed?.length
+}
+
+/**
+ * Close out a buzz window that has run out of time.
+ *
+ * Resolves whatever is pending first and only skips the clue if genuinely
+ * nobody rang in — so a race still being collected, or a room mid-buzz in
+ * unlimited mode, is never thrown away by the clock.
+ */
+export async function finishBuzzWindow(gameId: string, clueId: string) {
+  const { data: game } = await supabase
+    .from('games')
+    .select('phase, current_clue_id, settings')
+    .eq('id', gameId)
+    .maybeSingle()
+  if (!game || game.phase !== 'buzz_window' || game.current_clue_id !== clueId) return
+
+  if (isUnlimitedBuzzer(game.settings)) {
+    const started = await startOpenAnswering(gameId, clueId, true)
+    if (!started) await skipClue(gameId, clueId)
+    return
+  }
+
+  const winner = await resolveBuzzRace(gameId, clueId)
+  if (!winner) await skipClue(gameId, clueId)
+}
+
+/**
+ * UNLIMITED BUZZER: one player's answer, graded on its own.
+ *
+ * Everybody who rang in answers at the same time and is judged independently,
+ * so a clue can pay several people at once. Ringing in still commits you: a
+ * wrong answer, or nothing typed by the time the clock runs out, costs the
+ * clue's value exactly as it does when you win a race and miss.
+ */
+export async function submitOpenAnswer(
+  gameId: string,
+  clueId: string,
+  playerId: string,
+  answer: string,
+) {
+  const [{ data: clue }, { data: game }, { data: buzz }] = await Promise.all([
+    supabase.from('clues').select('answer, value').eq('id', clueId).single(),
+    supabase.from('games').select('phase, current_clue_id').eq('id', gameId).single(),
+    supabase
+      .from('buzzes')
+      .select('is_correct, is_pass')
+      .eq('game_id', gameId)
+      .eq('clue_id', clueId)
+      .eq('player_id', playerId)
+      .maybeSingle(),
+  ])
+
+  // Guards: the clue has to still be open to answers, this player has to have
+  // rung in, and they only get one go. Without the last one a stale answer
+  // clock firing after a submitted answer would deduct the value twice.
+  if (!clue || !game) return { correct: false, scoreChange: 0 }
+  if (game.phase !== 'open_answering' || game.current_clue_id !== clueId) {
+    return { correct: false, scoreChange: 0 }
+  }
+  if (!buzz || buzz.is_pass || buzz.is_correct !== null) {
+    return { correct: false, scoreChange: 0 }
+  }
+
+  const text = answer.trim()
+  const correct = text.length > 0 && checkAnswer(text, clue.answer)
+  const scoreChange = correct ? clue.value : -clue.value
+
+  await supabase
+    .from('buzzes')
+    .update({ answer: text, is_correct: correct })
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('player_id', playerId)
+
+  const { data: player } = await supabase
+    .from('players').select('score').eq('id', playerId).single()
+  if (player) {
+    await supabase
+      .from('players')
+      .update({ score: player.score + scoreChange })
+      .eq('id', playerId)
+  }
+
+  // Last one in closes the clue rather than everyone waiting out the clock.
+  const rows = await getBuzzOrder(gameId, clueId)
+  if (rows.length > 0 && rows.every((r) => r.is_correct !== null)) {
+    await closeOpenClue(gameId, clueId)
+  }
+
+  return { correct, scoreChange }
+}
+
+/**
+ * UNLIMITED BUZZER: reveal the clue.
+ *
+ * The board is credited to the fastest player who got it right — the reaction
+ * times still decide something, they just no longer decide who is allowed to
+ * answer — and that player picks next. If nobody got it, the fastest wrong
+ * answer takes the cell (so the board shows it as missed) and the picker
+ * doesn't change.
+ *
+ * Guarded on the phase, so the answer clock and the last answer submitted can
+ * both call it and only one takes effect.
+ */
+export async function closeOpenClue(gameId: string, clueId: string) {
+  const attempts = (await getBuzzOrder(gameId, clueId)).filter((r) => r.is_correct !== null)
+  const firstCorrect = attempts.find((r) => r.is_correct === true)
+
+  await supabase
+    .from('clues')
+    .update({
+      is_answered: true,
+      answered_by: firstCorrect?.player_id ?? attempts[0]?.player_id ?? null,
+      answered_correct: attempts.length ? !!firstCorrect : null,
+    })
+    .eq('id', clueId)
+
+  const update: any = { phase: 'clue_result', updated_at: new Date().toISOString() }
+  if (firstCorrect) update.current_player_id = firstCorrect.player_id
+
+  await supabase
+    .from('games')
+    .update(update)
+    .eq('id', gameId)
+    .eq('phase', 'open_answering')
+    .eq('current_clue_id', clueId)
+}
+
+/**
+ * Turn the buzzer race on or off for a game, mid-game included.
+ *
+ * Deliberately does NOT touch updated_at: several clocks in the game are
+ * anchored on it (the clue reveal, the grace before a stalled turn can be
+ * skipped), and flipping a setting shouldn't restart any of them.
+ */
+export async function setBuzzerMode(gameId: string, unlimited: boolean) {
+  const { data, error: readErr } = await supabase
+    .from('games').select('settings').eq('id', gameId).single()
+  if (readErr) throw readErr
+  const settings = { ...((data?.settings as any) || {}), unlimitedBuzzer: unlimited }
+  const { error } = await supabase.from('games').update({ settings }).eq('id', gameId)
   if (error) throw error
-  // data is true if this player won the buzz, false if someone else beat them
-  return data as boolean
 }
 
 /**
@@ -1191,6 +1585,17 @@ export async function passOnClue(gameId: string, clueId: string, playerId: strin
   if (!allPassed) {
     await new Promise((r) => setTimeout(r, 500))
     allPassed = await checkAllPassed()
+  }
+
+  if (!allPassed) {
+    // Someone passing can still be the last word on a clue: if everybody else
+    // has already rung in, there is nothing left to wait for. Settle the race
+    // (or, with the race off, start everyone answering) rather than making the
+    // room sit out the rest of the buzz window.
+    const { data: g } = await supabase
+      .from('games').select('settings').eq('id', gameId).maybeSingle()
+    if (isUnlimitedBuzzer(g?.settings)) await startOpenAnswering(gameId, clueId)
+    else if (await everyonePressedOrPassed(gameId, clueId)) await resolveBuzzRace(gameId, clueId)
   }
 
   if (allPassed) {
@@ -1338,12 +1743,28 @@ export async function openBuzzWindow(
 ): Promise<void> {
   let windowMs: number | null = null
 
+  const { data: g } = await supabase
+    .from('games').select('settings').eq('id', gameId).maybeSingle()
+  const fullWindow = (g?.settings as any)?.buzz_window_ms ?? 10000
+
+  if (!opts.reopen) {
+    // Always state the duration for a fresh window. open_buzz_window COALESCEs
+    // a null onto whatever is already stored, so leaving it out meant the
+    // deliberately-short REOPENED window from an earlier wrong answer silently
+    // became the length of every clue for the rest of the game.
+    //
+    // The same full window applies with the race off. It's tempting to cut it
+    // short there — nobody is racing, so the tail of it looks like dead air —
+    // but shortening it puts the clock back on the buzzer, which is the exact
+    // thing that mode exists to remove. Instead the window ends early the
+    // moment every player has rung in or passed, which in a room that's paying
+    // attention is almost immediately.
+    windowMs = fullWindow
+  }
+
   if (opts.reopen) {
     // A reopened window is shorter: everyone has heard the clue already, so
     // this is a quick "anyone else?" rather than a fresh read.
-    const { data: g } = await supabase
-      .from('games').select('settings').eq('id', gameId).maybeSingle()
-    const fullWindow = (g?.settings as any)?.buzz_window_ms ?? 10000
     windowMs = Math.max(4000, Math.round(fullWindow * 0.5))
 
     if (opts.clueId) {

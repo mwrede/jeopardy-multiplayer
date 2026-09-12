@@ -55,12 +55,14 @@ export function BuzzerButton({
     } catch (e: any) {
       console.error('Buzz failed:', e)
       const msg = e?.message || String(e)
-      // resolve_buzz RPC is the most common cause when the migration's
-      // missing on a fresh Supabase project — surface it directly.
+      // A fresh Supabase project missing the buzz constraint is the usual
+      // cause, and the message it throws says nothing useful — point at the fix.
       setBuzzError(
-        /resolve_buzz|function .* does not exist/i.test(msg)
-          ? 'Buzzer backend not deployed — run supabase-migration-resolve-buzz.sql'
-          : msg
+        /unique or exclusion constraint|on conflict/i.test(msg)
+          ? 'Buzzer table not set up — run supabase-migration-ensure-buzz-constraint.sql'
+          : /resolve_buzz|function .* does not exist/i.test(msg)
+            ? 'Buzzer backend not deployed — run supabase-migration-resolve-buzz.sql'
+            : msg
       )
     } finally {
       setBuzzing(false)

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getBuzzOrder, type BuzzOrderRow } from '@/lib/game-api'
+import { formatReaction } from '@/lib/buzz-stats'
 import type { Player } from '@/types/game'
 
 type Props = {
@@ -11,14 +12,35 @@ type Props = {
   players: Player[]
   /** Layout density. `compact` is for phones/players, default is for the TV display. */
   variant?: 'compact' | 'display'
+  /**
+   * Hide the ✓/✗ marks. Set while answers are still being typed in
+   * unlimited-buzzer mode: everyone is answering at the same time, and showing
+   * that the quickest buzzer was right would hand the answer to the rest.
+   */
+  hideResults?: boolean
+  /** Heading above the list. */
+  heading?: string
 }
 
 /**
- * Shows the chronological order of buzzes for a clue. Whoever buzzed first
- * gets the gold medal; subsequent buzzers show how many ms behind they were.
- * Polls on a 1s interval so late buzzes appear during answer/reveal phases.
+ * WHO BUZZED, AND HOW FAST.
+ *
+ * The order is by reaction time — the gap between the buzzer arming on a
+ * player's own device and them pressing it — so this is the room's record of
+ * who was genuinely quickest, not of whose packet arrived first. Everyone's own
+ * time is shown next to their name; second place onwards also shows how far
+ * behind the leader they were.
+ *
+ * Polls on a 1s interval, plus realtime, so late buzzes appear as they land.
  */
-export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Props) {
+export function BuzzOrder({
+  gameId,
+  clueId,
+  players,
+  variant = 'display',
+  hideResults = false,
+  heading = 'Buzz order',
+}: Props) {
   const [buzzes, setBuzzes] = useState<BuzzOrderRow[]>([])
 
   useEffect(() => {
@@ -48,15 +70,20 @@ export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Prop
     }
   }, [gameId, clueId])
 
-  // Only render when at least two people raced for the buzz — a solo buzz
-  // doesn't have a "first" worth highlighting.
-  if (buzzes.length < 2) return null
+  const timed = buzzes.some((b) => typeof b.reaction_ms === 'number')
+
+  // A lone buzz is worth showing once it comes with a time on it — "0.48s" is
+  // a real fact about that player. Without timings it isn't: there's no first
+  // place to award when only one person rang in.
+  if (buzzes.length === 0) return null
+  if (buzzes.length < 2 && !timed) return null
 
   // Only the top 5 are interesting — anyone slower than fifth probably wasn't
   // really racing for the buzz.
   const TOP_N = 5
   const visible = buzzes.slice(0, TOP_N)
   const hidden = buzzes.length - visible.length
+  const leadReaction = visible[0].reaction_ms
   const firstMs = new Date(visible[0].server_timestamp).getTime()
 
   const isCompact = variant === 'compact'
@@ -68,17 +95,30 @@ export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Prop
   return (
     <div className={containerCls}>
       <p className={`text-gray-400 uppercase tracking-wider ${headerCls}`}>
-        Buzz order
+        {heading}
       </p>
       <ul className={isCompact ? 'space-y-1' : 'space-y-1.5'}>
         {visible.map((b, idx) => {
           const player = players.find((p) => p.id === b.player_id)
           if (!player) return null
-          const t = new Date(b.server_timestamp).getTime()
-          const gap = idx === 0 ? 0 : t - firstMs
           const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`
-          const correctness =
-            b.is_correct === true ? 'text-green-400' : b.is_correct === false ? 'text-red-400' : ''
+          const correctness = hideResults
+            ? ''
+            : b.is_correct === true ? 'text-green-400' : b.is_correct === false ? 'text-red-400' : ''
+
+          // Each player's own reaction is the headline number. The gap behind
+          // the leader is the secondary one — computed from reactions when we
+          // have them, and from arrival times only as a last resort.
+          const own = typeof b.reaction_ms === 'number' ? formatReaction(b.reaction_ms) : null
+          let gapLabel: string | null = null
+          if (idx > 0) {
+            if (typeof b.reaction_ms === 'number' && typeof leadReaction === 'number') {
+              gapLabel = `+${Math.max(0, b.reaction_ms - leadReaction)}ms`
+            } else {
+              gapLabel = `+${Math.max(0, new Date(b.server_timestamp).getTime() - firstMs)}ms`
+            }
+          }
+
           return (
             <li
               key={b.player_id}
@@ -96,16 +136,17 @@ export function BuzzOrder({ gameId, clueId, players, variant = 'display' }: Prop
                   className={`truncate ${idx === 0 ? 'text-white font-bold' : 'text-white/70'} ${correctness}`}
                 >
                   {player.name}
-                  {b.is_correct === true && ' ✓'}
-                  {b.is_correct === false && ' ✗'}
+                  {!hideResults && b.is_correct === true && ' ✓'}
+                  {!hideResults && b.is_correct === false && ' ✗'}
                 </span>
               </span>
               <span
-                className={`font-mono ${isCompact ? 'text-[10px]' : 'text-xs'} ${
-                  idx === 0 ? 'text-jeopardy-gold' : 'text-gray-500'
-                }`}
+                className={`flex items-center gap-2 font-mono ${isCompact ? 'text-[10px]' : 'text-xs'}`}
               >
-                {idx === 0 ? '1st' : `+${gap}ms`}
+                <span className={idx === 0 ? 'text-jeopardy-gold' : 'text-white/60'}>
+                  {own ?? (idx === 0 ? '1st' : '')}
+                </span>
+                {gapLabel && <span className="text-gray-500">{gapLabel}</span>}
               </span>
             </li>
           )

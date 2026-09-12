@@ -4,6 +4,8 @@ import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { BuzzerButton } from '@/components/BuzzerButton'
 import { BuzzOrder } from '@/components/BuzzOrder'
+import { BuzzReport } from '@/components/BuzzReport'
+import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import {
   joinGame,
@@ -23,12 +25,17 @@ import {
   startFinalReveal,
   passOnClue,
   passAfterBuzz,
-  skipClue,
   openBuzzWindow,
+  finishBuzzWindow,
+  submitOpenAnswer,
+  closeOpenClue,
+  getBuzzOrder,
+  isUnlimitedBuzzer,
 } from '@/lib/game-api'
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { buzzOpenDelayMs } from '@/lib/clue-timing'
+import { formatReaction } from '@/lib/buzz-stats'
 import { ClueAttempts } from '@/components/ClueAttempts'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
@@ -127,6 +134,9 @@ export default function PlayerPage() {
   useEffect(() => {
     setHasTriedAnswer(false)
     setHasPassed(false)
+    setMyBuzz(null)
+    setOpenEligible(false)
+    setOpenLockedIn(false)
   }, [game?.current_clue_id])
 
   // Final Jeopardy answer clock. Auto-submits whatever's typed when it
@@ -171,6 +181,22 @@ export default function PlayerPage() {
   const [buzzArmed, setBuzzArmed] = useState(false)
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
   const [codeCopied, setCodeCopied] = useState(false)
+  /** My own buzz on this clue, timed on this phone. See armedAtRef. */
+  const [myBuzz, setMyBuzz] = useState<{ reactionMs: number | null } | null>(null)
+  /** UNLIMITED BUZZER: did I ring in, and have I answered yet? */
+  const [openEligible, setOpenEligible] = useState(false)
+  const [openLockedIn, setOpenLockedIn] = useState(false)
+  const [openCountdown, setOpenCountdown] = useState<number | null>(null)
+  /**
+   * When THIS phone's buzzer armed, on the monotonic clock.
+   *
+   * Phones do not arm together — one that misses the realtime push waits for
+   * the 2s poll and can be a second or two behind the room. So a buzz is timed
+   * against this device's own arming instant and nothing else; that reaction is
+   * what decides the clue, which makes a slow phone a slow phone rather than a
+   * slow player.
+   */
+  const armedAtRef = useRef<number | null>(null)
   const buzzIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const answerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const answerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -236,6 +262,7 @@ export default function PlayerPage() {
     setBuzzArmed(false)
     if (!game || game.phase !== 'buzz_window') {
       setBuzzCountdown(null)
+      armedAtRef.current = null
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
       if (buzzArmTimeoutRef.current) clearTimeout(buzzArmTimeoutRef.current)
       buzzIntervalRef.current = null
@@ -252,6 +279,11 @@ export default function PlayerPage() {
     // Clamp so a badly-skewed device clock still arms within 1.2s.
     const openDelay = Math.max(0, Math.min(1200, scheduledMs - Date.now()))
     const armAt = Date.now() + openDelay
+
+    // A reopened window is a fresh race — buzzer back, previous reaction gone.
+    setMyBuzz(null)
+    // The reaction clock starts when this phone's buzzer goes live.
+    armedAtRef.current = performance.now() + openDelay
 
     buzzArmTimeoutRef.current = setTimeout(() => setBuzzArmed(true), openDelay)
     setBuzzCountdown(Math.ceil(totalMs / 1000))
@@ -301,6 +333,56 @@ export default function PlayerPage() {
       if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
     }
   }, [game?.phase, game?.id, game?.current_player_id, myPlayerId])
+
+  // ===== UNLIMITED BUZZER: everyone who rang in answers at once =====
+
+  // Did I ring in on this clue? Read from the buzzes, not from local state, so
+  // a refresh mid-clue doesn't cost me my answer.
+  useEffect(() => {
+    if (!game || game.phase !== 'open_answering' || !game.current_clue_id || !myPlayerId) return
+    let cancelled = false
+    getBuzzOrder(game.id, game.current_clue_id).then((rows) => {
+      if (cancelled) return
+      const mine = rows.find((r) => r.player_id === myPlayerId)
+      setOpenEligible(!!mine)
+      setOpenLockedIn(!!mine && mine.is_correct !== null)
+    })
+    return () => { cancelled = true }
+  }, [game?.phase, game?.id, game?.current_clue_id, myPlayerId])
+
+  // The open answer clock, anchored on when the phase began so everyone is on
+  // the same one. At zero it sends whatever is typed — ringing in and coming up
+  // empty counts as a wrong answer, exactly as it does when you win a race and
+  // then can't produce it.
+  const openAnswerRef = useRef<string>('')
+  useEffect(() => { openAnswerRef.current = answer }, [answer])
+  useEffect(() => {
+    if (!game || game.phase !== 'open_answering' || !game.current_clue_id) {
+      setOpenCountdown(null)
+      return
+    }
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs
+    const remaining = () => Math.max(0, deadline - Date.now())
+
+    setOpenCountdown(Math.ceil(remaining() / 1000))
+    const tick = setInterval(() => setOpenCountdown(Math.ceil(remaining() / 1000)), 250)
+
+    const mine = setTimeout(async () => {
+      if (!openEligible || openLockedIn || !myPlayerId || !game.current_clue_id) return
+      setOpenLockedIn(true)
+      await submitOpenAnswer(game.id, game.current_clue_id, myPlayerId, openAnswerRef.current.trim())
+      setAnswer('')
+    }, remaining())
+
+    // Backstop so the reveal always comes, even if an answer never lands.
+    const close = setTimeout(() => {
+      if (game.current_clue_id) closeOpenClue(game.id, game.current_clue_id)
+    }, remaining() + 1800)
+
+    return () => { clearInterval(tick); clearTimeout(mine); clearTimeout(close) }
+  }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id, openEligible, openLockedIn, myPlayerId, game?.settings?.answer_time_ms])
 
   // Play tick sounds on countdown changes
   const prevBuzzRef2 = useRef<number | null>(null)
@@ -363,8 +445,21 @@ export default function PlayerPage() {
     }
     if (!game.current_clue_id) { console.warn('[handleBuzz] no current clue'); return }
     console.log('[handleBuzz] submitting buzz')
+    // Timed against this phone's own arming instant, before anything slow
+    // happens — that reaction, not arrival order, wins the clue.
+    const reactionMs =
+      armedAtRef.current !== null ? Math.max(0, performance.now() - armedAtRef.current) : null
     playBuzzSound()
-    await submitBuzz(game.id, game.current_clue_id, myPlayer.id)
+    setMyBuzz({ reactionMs })
+    const res = await submitBuzz(game.id, game.current_clue_id, myPlayer.id, reactionMs)
+    if (res.open) setOpenEligible(true)
+  })
+
+  const handleOpenAnswer = () => doAction(async () => {
+    if (!game || !myPlayer || !game.current_clue_id) return
+    setOpenLockedIn(true)
+    await submitOpenAnswer(game.id, game.current_clue_id, myPlayer.id, answer.trim())
+    setAnswer('')
   })
 
   const handlePass = () => doAction(async () => {
@@ -501,6 +596,16 @@ export default function PlayerPage() {
             </div>
           ))}
         </div>
+
+        {/* How the buzzer behaves. Set here, changeable later between clues.
+            Not offered in host-run games: there the host rules on answers out
+            loud, so there's no typed answer per player for an everyone-answers
+            round to mark. */}
+        {!isHostRun && (
+          <div className="mb-6 flex w-full justify-center">
+            <BuzzModeToggle game={game} canEdit={myPlayer.is_creator} />
+          </div>
+        )}
 
         {myPlayer.is_creator ? (
           <button
@@ -684,6 +789,13 @@ export default function PlayerPage() {
               ${myPlayer.score.toLocaleString()}
             </p>
           </div>
+
+          {/* What everyone did on the buzzer all game, times included. */}
+          {game.phase === 'game_over' && (
+            <div className="mt-8 flex w-full justify-center">
+              <BuzzReport gameId={game.id} players={players} variant="phone" />
+            </div>
+          )}
         </div>
       </div>
     )
@@ -764,8 +876,14 @@ export default function PlayerPage() {
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
           </div>
 
-          {/* Every answer attempted on this clue */}
-          <ClueAttempts gameId={game.id} clueId={currentClue.id} players={players} variant="phone" />
+          {/* Every answer given: who said what, and what it cost them */}
+          <ClueAttempts
+            gameId={game.id}
+            clueId={currentClue.id}
+            players={players}
+            variant="phone"
+            value={isDailyDouble ? swing : currentClue.value}
+          />
         </div>
       </div>
     )
@@ -916,6 +1034,8 @@ export default function PlayerPage() {
             variant="phone"
             refreshKey={game.updated_at}
             heading="Already tried"
+            announceLatest
+            value={currentClue.value}
           />
           {game.phase === 'buzz_window' && buzzCountdown !== null && (
             <p className={`text-7xl font-bold font-mono ${
@@ -936,6 +1056,21 @@ export default function PlayerPage() {
             <div className="w-full py-8 rounded-2xl bg-gray-800 text-center">
               <p className="text-gray-400 text-xl font-semibold">Passed</p>
               <p className="text-gray-500 text-sm mt-1">Waiting for others...</p>
+            </div>
+          ) : myBuzz ? (
+            /* Pressed, and it's in. The winner isn't known for a moment: buzzes
+               are collected briefly so a phone that armed late is still judged
+               on its reaction instead of being thrown away for arriving late. */
+            <div className="w-full py-8 rounded-2xl bg-green-950/40 border border-green-800/60 text-center">
+              <p className="text-green-300 text-xl font-bold uppercase tracking-widest">Buzzed in</p>
+              {myBuzz.reactionMs !== null && (
+                <p className="text-white text-4xl font-mono mt-2">{formatReaction(myBuzz.reactionMs)}</p>
+              )}
+              <p className="text-gray-400 text-sm mt-1">
+                {isUnlimitedBuzzer(game.settings)
+                  ? 'Everyone who buzzed will answer'
+                  : 'Seeing who was fastest…'}
+              </p>
             </div>
           ) : (
             <>
@@ -959,6 +1094,81 @@ export default function PlayerPage() {
               )}
             </>
           )}
+        </div>
+      </div>
+    )
+  }
+
+  // ===== UNLIMITED BUZZER: EVERYONE ANSWERS =====
+  //
+  // No mic to hand over — everyone who rang in types their own answer at the
+  // same time and is marked on it alone, so one clue can pay several people.
+  // The clue itself stays on the TV; the phone is where you answer.
+  if (game.phase === 'open_answering' && currentClue) {
+    if (!openEligible) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
+          <PlayerHeader myPlayer={myPlayer} game={game} />
+          <p className="text-gray-400 text-xl mt-8 text-center">
+            You didn&apos;t buzz in on this one
+          </p>
+          <p className="text-gray-500 text-sm mt-2 text-center">
+            Everyone who did is answering now
+          </p>
+          {openCountdown !== null && (
+            <p className="text-white/40 text-3xl font-mono mt-6">{openCountdown}s</p>
+          )}
+        </div>
+      )
+    }
+
+    if (openLockedIn) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
+          <PlayerHeader myPlayer={myPlayer} game={game} />
+          <p className="text-white text-2xl font-bold mt-8">Answer locked in</p>
+          <p className="text-gray-400 text-sm mt-2">Waiting for the others…</p>
+          {openCountdown !== null && (
+            <p className="text-white/40 text-3xl font-mono mt-6">{openCountdown}s</p>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+        <PlayerHeader myPlayer={myPlayer} game={game} />
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
+          <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
+            Everyone answers
+          </p>
+          <p className="text-white text-lg mt-2">Type your answer</p>
+          {openCountdown !== null && (
+            <p className={`text-4xl font-bold font-mono mt-3 ${
+              openCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'
+            }`}>
+              {openCountdown}s
+            </p>
+          )}
+          {myBuzz?.reactionMs != null && (
+            <p className="text-gray-500 text-xs mt-2 font-mono">
+              You buzzed in {formatReaction(myBuzz.reactionMs)}
+            </p>
+          )}
+        </div>
+        <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
+          <div className="w-full max-w-sm mx-auto">
+            <GameKeyboard
+              value={answer}
+              onChange={setAnswer}
+              onSubmit={handleOpenAnswer}
+              mode="letters"
+              placeholder="Type or 🎤 speak your answer..."
+              submitLabel="Submit Answer"
+              submitDisabled={!answer.trim()}
+              maxLength={200}
+            />
+          </div>
         </div>
       </div>
     )

@@ -5,6 +5,7 @@ import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { ClueText } from '@/components/ClueText'
 import { BuzzOrder } from '@/components/BuzzOrder'
+import { BuzzReport } from '@/components/BuzzReport'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
@@ -15,10 +16,12 @@ import {
   advanceToFinalAnswering,
   startFinalReveal,
   advanceToGameOver,
-  skipClue,
   passAfterBuzz,
   skipToRound,
   openBuzzWindow,
+  finishBuzzWindow,
+  closeOpenClue,
+  isUnlimitedBuzzer,
 } from '@/lib/game-api'
 import { CLUE_INTRO_MS, buzzOpenDelayMs } from '@/lib/clue-timing'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
@@ -145,7 +148,7 @@ export default function DisplayPage() {
     // Play sounds on phase transitions
     if (prev !== curr) {
       if (curr === 'clue_reading') playSelectSound()
-      if (curr === 'player_answering') playBuzzSound()
+      if (curr === 'player_answering' || curr === 'open_answering') playBuzzSound()
       if (curr === 'daily_double_wager') playDailyDoubleSound()
       if (curr === 'clue_result') {
         // Check if the clue was answered correctly
@@ -223,9 +226,12 @@ export default function DisplayPage() {
       setBuzzCountdown(Math.ceil(remaining / 1000))
     }, 250)
 
+    // Out of time. Settle whatever is pending — a buzz race still collecting,
+    // or a room mid-buzz with the race turned off — and only give up on the clue
+    // if nobody rang in at all.
     buzzTimeoutRef.current = setTimeout(async () => {
       if (game.current_clue_id) {
-        await skipClue(game.id, game.current_clue_id)
+        await finishBuzzWindow(game.id, game.current_clue_id)
       }
     }, openDelay + totalMs)
 
@@ -234,6 +240,27 @@ export default function DisplayPage() {
       if (buzzIntervalRef.current) clearInterval(buzzIntervalRef.current)
     }
   }, [game?.phase, game?.id])
+
+  // UNLIMITED BUZZER: the shared answer clock, anchored on when the phase began
+  // so the TV shows the same number the phones are counting down. At the end the
+  // TV also nudges the clue to its reveal, in case an answer never landed — the
+  // close is guarded server-side, so every screen doing this is harmless.
+  const [openCountdown, setOpenCountdown] = useState<number | null>(null)
+  useEffect(() => {
+    if (!game || game.phase !== 'open_answering' || !game.current_clue_id) {
+      setOpenCountdown(null)
+      return
+    }
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs
+    const remaining = () => Math.max(0, deadline - Date.now())
+    setOpenCountdown(Math.ceil(remaining() / 1000))
+    const tick = setInterval(() => setOpenCountdown(Math.ceil(remaining() / 1000)), 250)
+    const clueId = game.current_clue_id
+    const close = setTimeout(() => { closeOpenClue(game.id, clueId) }, remaining() + 2000)
+    return () => { clearInterval(tick); clearTimeout(close) }
+  }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id, game?.settings?.answer_time_ms])
 
   // Answer countdown timer + auto-skip on timeout
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
@@ -464,7 +491,14 @@ export default function DisplayPage() {
           )}
         </div>
 
-        <p className="mt-8 text-gray-500">
+        <p className="mt-4 text-sm uppercase tracking-[0.25em] text-gray-500">
+          Buzzer:{' '}
+          <span className={isUnlimitedBuzzer(game.settings) ? 'text-jeopardy-gold' : 'text-gray-300'}>
+            {isUnlimitedBuzzer(game.settings) ? 'everyone answers' : 'fastest buzz'}
+          </span>
+        </p>
+
+        <p className="mt-6 text-gray-500">
           {players.length}/15 players
           {players.length >= 1 && (
             <span className="text-jeopardy-gold ml-4">Waiting for host to start...</span>
@@ -745,6 +779,9 @@ export default function DisplayPage() {
             </p>
             {!noOneAnswered && (
               <p className="text-3xl text-white text-center font-semibold">
+                {/* Whoever the board is credited to. With the race off that's
+                    the quickest of possibly several people who got it; the list
+                    below is the full account. */}
                 {answerer?.name || 'Unknown'}
               </p>
             )}
@@ -772,9 +809,16 @@ export default function DisplayPage() {
             </div>
           )}
 
-          {/* Every answer attempted on this clue, in buzz order */}
+          {/* Every answer given — who said what, and what it cost them. The
+              room heard the wrong ones, so the room sees them. */}
           {resultClue && (
-            <ClueAttempts gameId={game.id} clueId={resultClue.id} players={players} variant="tv" />
+            <ClueAttempts
+              gameId={game.id}
+              clueId={resultClue.id}
+              players={players}
+              variant="tv"
+              value={isDailyDouble ? swing : resultClue.value}
+            />
           )}
         </div>
       </div>
@@ -791,6 +835,7 @@ export default function DisplayPage() {
     (game.phase === 'clue_reading' ||
       game.phase === 'buzz_window' ||
       game.phase === 'player_answering' ||
+      game.phase === 'open_answering' ||
       game.phase === 'daily_double_answering')
 
   const currentPlayer = players.find((p) => p.id === game.current_player_id)
@@ -941,7 +986,34 @@ export default function DisplayPage() {
                   variant="tv"
                   refreshKey={game.updated_at}
                   heading="Already tried"
+                  announceLatest
+                  value={currentClue.value}
                 />
+              </div>
+            )}
+            {/* UNLIMITED BUZZER: the whole room answers at once. Who rang in and
+                how fast is shown live; whether anyone has it RIGHT is not, or
+                the first ✓ on screen would hand the answer to everyone still
+                typing. */}
+            {game.phase === 'open_answering' && (
+              <div className="flex flex-col items-center gap-4">
+                <p className="text-jeopardy-gold text-2xl font-bold uppercase tracking-[0.2em]">
+                  Everyone answers
+                </p>
+                {openCountdown !== null && (
+                  <p className={`text-6xl font-bold ${openCountdown <= 5 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                    {openCountdown}
+                  </p>
+                )}
+                {game.current_clue_id && (
+                  <BuzzOrder
+                    gameId={game.id}
+                    clueId={game.current_clue_id}
+                    players={players}
+                    hideResults
+                    heading="Buzzed in"
+                  />
+                )}
               </div>
             )}
             {game.phase === 'player_answering' && (
@@ -949,6 +1021,17 @@ export default function DisplayPage() {
                 {game.current_clue_id && (
                   <BuzzOrder gameId={game.id} clueId={game.current_clue_id} players={players} />
                 )}
+                {/* What's already been said and missed stays up while the next
+                    player answers, rather than only appearing on the reveal. */}
+                <ClueAttempts
+                  gameId={game.id}
+                  clueId={currentClue.id}
+                  players={players}
+                  variant="tv"
+                  refreshKey={game.updated_at}
+                  heading="Already tried"
+                  value={currentClue.value}
+                />
                 <p className="text-green-400 text-2xl font-bold">
                   {players.find((p) => p.id === game.current_player_id)?.name} is answering...
                 </p>
@@ -1008,6 +1091,12 @@ export default function DisplayPage() {
                   </span>
                 </div>
               ))}
+          </div>
+
+          {/* The buzzer tape: how everyone actually did on the buzzer all
+              game, not just the money it turned into. */}
+          <div className="mb-10 flex w-full justify-center">
+            <BuzzReport gameId={game.id} players={players} variant="tv" />
           </div>
 
           <a
