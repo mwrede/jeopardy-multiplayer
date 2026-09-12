@@ -264,32 +264,44 @@ export function GameBrowser({ compact = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
+  /** The calendar year a season STARTED in. Season 42 opened in 2025. */
   const seasonToYear = (s: string) => {
     const n = parseInt(s)
     if (isNaN(n)) return null
     return 1983 + n
   }
 
-  const yearToSeason = (year: number) => {
-    const s = year - 1983
-    return s >= 1 ? String(s) : null
-  }
-
   const numericSeasons = seasons.filter((s) => /^\d+$/.test(s))
   const specialSeasons = seasons.filter((s) => !/^\d+$/.test(s))
 
+  // Years to offer, newest first. Derived from the season list rather than
+  // hardcoded: a season runs September to July, so the newest one reaches into
+  // the FOLLOWING calendar year — season 42 opened in 2025 and its games run
+  // through 2026. The old list stopped at 2025 and hid every 2026 episode.
+  const latestYear = numericSeasons.length
+    ? Math.max(...numericSeasons.map(Number)) + 1984
+    : 2026
   const years: number[] = []
-  for (let y = 2025; y >= 1984; y--) years.push(y)
+  for (let y = latestYear; y >= 1984; y--) years.push(y)
 
   const buildFilters = useCallback((p: number = 0): GameSearchFilters => {
     const diff = DIFFICULTIES.find((d) => d.id === difficultyFilter)
+    // The year is a CALENDAR year — Jan 1 to Dec 31 of it. It used to be
+    // translated into a season and sent as that instead, which is a different
+    // span of time: picking 2025 searched season 42, which opens in September
+    // 2025 and runs to July 2026. So the list came back full of 2026 episodes
+    // and buried the December 2025 ones past the first page of fifty.
+    const year = parseInt(yearFilter, 10)
+    const hasYear = !isNaN(year)
     return {
       query: query.trim() || undefined,
       season: seasonFilter || diff?.season || undefined,
       notesFilter: diff?.notesFilter || undefined,
+      dateFrom: hasYear ? `${year}-01-01` : undefined,
+      dateTo: hasYear ? `${year}-12-31` : undefined,
       page: p,
     }
-  }, [query, seasonFilter, difficultyFilter])
+  }, [query, seasonFilter, yearFilter, difficultyFilter])
 
   const runSearch = useCallback(async (append: boolean = false, p: number = 0) => {
     setSearching(true)
@@ -335,25 +347,23 @@ export function GameBrowser({ compact = false }: Props) {
     setSearching(false)
   }, [buildFilters, query])
 
+  // Re-run whenever a filter changes. yearFilter belongs here in its own right
+  // now: it used to reach this effect only by side effect, through the season
+  // it set, so on its own it would change nothing on screen.
   useEffect(() => {
     runSearch(false, 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonFilter, difficultyFilter])
+  }, [seasonFilter, yearFilter, difficultyFilter])
 
+  // Year and season are independent filters that narrow each other when both
+  // are set. They used to mirror each other, which quietly overwrote whichever
+  // one you'd picked first with a span of time you hadn't asked for.
   function handleYearChange(year: string) {
     setYearFilter(year)
-    if (year) {
-      const s = yearToSeason(parseInt(year))
-      if (s && seasons.includes(s)) setSeasonFilter(s)
-    } else {
-      setSeasonFilter('')
-    }
   }
 
   function handleSeasonChange(season: string) {
     setSeasonFilter(season)
-    const y = seasonToYear(season)
-    setYearFilter(y ? String(y) : '')
   }
 
   function handleClearFilters() {
