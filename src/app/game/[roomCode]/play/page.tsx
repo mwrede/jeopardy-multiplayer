@@ -340,7 +340,7 @@ export default function PlayPage() {
       if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
       return
     }
-    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const totalMs = game.settings?.answer_time_ms ?? 20000
     setAnswerCountdown(Math.ceil(totalMs / 1000))
     answerIntervalRef.current = setInterval(() => {
       setAnswerCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))
@@ -477,7 +477,7 @@ export default function PlayPage() {
       return
     }
     const startedAt = Date.parse(game.updated_at ?? '')
-    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const totalMs = game.settings?.answer_time_ms ?? 20000
     const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs
     const remaining = () => Math.max(0, deadline - Date.now())
 

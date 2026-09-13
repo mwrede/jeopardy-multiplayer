@@ -252,7 +252,7 @@ export default function DisplayPage() {
       return
     }
     const startedAt = Date.parse(game.updated_at ?? '')
-    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const totalMs = game.settings?.answer_time_ms ?? 20000
     const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs
     const remaining = () => Math.max(0, deadline - Date.now())
     setOpenCountdown(Math.ceil(remaining() / 1000))
@@ -276,7 +276,7 @@ export default function DisplayPage() {
       return
     }
 
-    const totalMs = game.settings?.answer_time_ms ?? 15000
+    const totalMs = game.settings?.answer_time_ms ?? 20000
     const totalSec = Math.ceil(totalMs / 1000)
     setAnswerCountdown(totalSec)
 

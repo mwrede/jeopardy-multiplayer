@@ -107,7 +107,7 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   // reads each clue aloud on the TV; the buzzer opens when the voice ends.
   reading_period_ms: 0,
   buzz_window_ms: 10000,
-  answer_time_ms: 15000,
+  answer_time_ms: 20000,
   daily_double_answer_ms: 25000,
   final_answer_ms: 20000,
   final_wager_ms: 15000,
@@ -145,7 +145,7 @@ export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   gameLength: 'full',
   reading_period_ms: 3000,
   buzz_window_ms: 10000,
-  answer_time_ms: 15000,
+  answer_time_ms: 20000,
   daily_double_answer_ms: 20000,
   final_answer_ms: 20000,
   final_wager_ms: 15000,
