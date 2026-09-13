@@ -1103,6 +1103,8 @@ export type BuzzOrderRow = {
   reaction_ms: number | null
   answer: string | null
   is_correct: boolean | null
+  /** Out of the running for this clue: passed, or already had their go. */
+  is_pass: boolean
 }
 
 /** Default collection window — see GameSettings.buzz_collect_ms. */
@@ -1139,15 +1141,14 @@ function isMissingReactionColumn(message: string | undefined): boolean {
  */
 export async function getBuzzOrder(gameId: string, clueId: string): Promise<BuzzOrderRow[]> {
   const columns = reactionColumnMissing
-    ? 'player_id, is_winner, server_timestamp, client_timestamp, answer, is_correct'
-    : 'player_id, is_winner, server_timestamp, client_timestamp, reaction_ms, answer, is_correct'
+    ? 'player_id, is_winner, server_timestamp, client_timestamp, answer, is_correct, is_pass'
+    : 'player_id, is_winner, server_timestamp, client_timestamp, reaction_ms, answer, is_correct, is_pass'
 
   let query = supabase
     .from('buzzes')
     .select(columns)
     .eq('game_id', gameId)
     .eq('clue_id', clueId)
-    .eq('is_pass', false)
   if (!reactionColumnMissing) {
     query = query.order('reaction_ms', { ascending: true, nullsFirst: false })
   }
@@ -1163,7 +1164,16 @@ export async function getBuzzOrder(gameId: string, clueId: string): Promise<Buzz
     console.warn('[getBuzzOrder] failed:', error.message)
     return []
   }
-  return ((data || []) as any[]).map((r) => ({ reaction_ms: null, ...r })) as BuzzOrderRow[]
+  // Passes are dropped, EXCEPT from anyone who actually answered.
+  //
+  // Reopening the buzzers after a wrong answer marks everyone who has had
+  // their go as is_pass, which is how they're kept out of the new race — and
+  // filtering that in the query took their answers off screen with them. The
+  // room would watch someone miss and then find the record of it gone by the
+  // time the buzzers came back, which is the opposite of the point.
+  return ((data || []) as any[])
+    .map((r) => ({ reaction_ms: null, ...r }))
+    .filter((r) => !r.is_pass || r.is_correct !== null) as BuzzOrderRow[]
 }
 
 /** Buzzes still in the running: rang in, didn't pass, hasn't answered yet. */
@@ -1709,20 +1719,65 @@ export async function submitAnswer(gameId: string, clueId: string, playerId: str
 }
 
 /**
- * After a buzzer answers wrong or lets the answer clock run out on a regular
- * clue, promote the next-fastest untried buzzer. If none, REOPEN the buzz
- * window so any player who hasn't attempted yet gets a shot — skipClue's
- * auto-timeout later closes the clue if nobody jumps in.
+ * How long the room gets to look at a wrong answer before the buzzers return.
+ *
+ * Long enough to read a name and a few words off a TV across a room, short
+ * enough that it plays as a beat rather than a pause.
+ */
+export const WRONG_ANSWER_HOLD_MS = 2600
+
+/**
+ * A wrong answer on a regular clue: show it to the room, THEN reopen.
+ *
+ * The buzzers used to come straight back on, which meant the answer that had
+ * just been given flashed past inside a list while everyone was already
+ * hammering their buzzer for the next go. So the clue now stops on
+ * `answer_wrong` for a beat with the miss on screen — who said it, the words
+ * they used, what it cost — and the race restarts after that.
+ *
+ * The hold is set here and released by a timer, because the phase is only a
+ * display state: nothing about the game is waiting on it.
  */
 async function advanceAfterFailedAnswer(gameId: string, clueId: string, lastAnswererId: string) {
-  // The buzzers come back on. Every wrong answer reopens the race for whoever
-  // hasn't tried yet, rather than walking down a queue of who buzzed first —
-  // that queue meant the second-fastest buzzer was handed the clue without
-  // having to beat anyone to it, which isn't how the show plays.
-  //
-  // resolve_buzz keeps the reopened window honest: it ignores players who have
-  // already answered, and it restamps a buzz when it's reused, so nobody wins
-  // the new race on the strength of a buzz from the old one.
+  const { data: held } = await supabase
+    .from('games')
+    .update({ phase: 'answer_wrong', buzz_window_open: false, updated_at: new Date().toISOString() })
+    .eq('id', gameId)
+    .eq('current_clue_id', clueId)
+    .in('phase', ['player_answering', 'daily_double_answering'])
+    .select('id')
+
+  // The clue moved on underneath us (a stale answer clock, a host closing it):
+  // don't drag it back.
+  if (!held?.length) return
+
+  setTimeout(() => {
+    reopenAfterWrongAnswer(gameId, clueId).catch((e) =>
+      console.warn('[advanceAfterFailedAnswer] reopen failed:', e?.message || e),
+    )
+  }, WRONG_ANSWER_HOLD_MS)
+}
+
+/**
+ * Release the hold: the buzzers come back on for everyone who hasn't tried yet.
+ *
+ * Every wrong answer reopens the race rather than walking down a queue of who
+ * buzzed first — that queue handed the clue to the second-fastest buzzer
+ * without them having to beat anyone to it, which isn't how the show plays.
+ * The reopen wipes the slate (see openBuzzWindow) so the new window is a
+ * genuine race and nobody wins it on the strength of an old buzz.
+ *
+ * Guarded on the phase, so the device that set the hold and any other screen
+ * covering for it can both call this and only the first one lands.
+ */
+export async function reopenAfterWrongAnswer(gameId: string, clueId: string) {
+  const { data: game } = await supabase
+    .from('games')
+    .select('phase, current_clue_id')
+    .eq('id', gameId)
+    .maybeSingle()
+  if (!game || game.phase !== 'answer_wrong' || game.current_clue_id !== clueId) return
+
   await openBuzzWindow(gameId, { reopen: true, clueId })
 }
 

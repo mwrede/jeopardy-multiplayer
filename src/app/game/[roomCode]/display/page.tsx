@@ -20,6 +20,8 @@ import {
   skipToRound,
   openBuzzWindow,
   finishBuzzWindow,
+  reopenAfterWrongAnswer,
+  WRONG_ANSWER_HOLD_MS,
   closeOpenClue,
   isUnlimitedBuzzer,
 } from '@/lib/game-api'
@@ -262,6 +264,17 @@ export default function DisplayPage() {
     return () => { clearInterval(tick); clearTimeout(close) }
   }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id, game?.settings?.answer_time_ms])
 
+  // The hold after a wrong answer is released by the device that answered.
+  // The TV covers for one that has gone — late enough never to race it.
+  useEffect(() => {
+    if (!game || game.phase !== 'answer_wrong' || !game.current_clue_id) return
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const at = (isNaN(startedAt) ? Date.now() : startedAt) + WRONG_ANSWER_HOLD_MS + 5000
+    const clueId = game.current_clue_id
+    const t = setTimeout(() => { reopenAfterWrongAnswer(game.id, clueId) }, Math.max(0, at - Date.now()))
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id])
+
   // Answer countdown timer + auto-skip on timeout
   const [answerCountdown, setAnswerCountdown] = useState<number | null>(null)
   const answerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -390,7 +403,7 @@ export default function DisplayPage() {
       finalAnswerRef.current = null
       return
     }
-    const windowMs = game.settings?.final_answer_ms ?? 20000
+    const windowMs = game.settings?.final_answer_ms ?? 30000
     const gameId = game.id
     finalAnswerRef.current = setTimeout(() => {
       startFinalReveal(gameId).catch((e) =>
@@ -836,6 +849,7 @@ export default function DisplayPage() {
       game.phase === 'buzz_window' ||
       game.phase === 'player_answering' ||
       game.phase === 'open_answering' ||
+      game.phase === 'answer_wrong' ||
       game.phase === 'daily_double_answering')
 
   const currentPlayer = players.find((p) => p.id === game.current_player_id)
@@ -989,6 +1003,28 @@ export default function DisplayPage() {
                   announceLatest
                   value={currentClue.value}
                 />
+              </div>
+            )}
+            {/* THE MISS, held on screen before the buzzers come back. The room
+                heard it; now it reads it — the name, the exact words, and what
+                it cost. The correct answer stays hidden: the clue is still
+                live and somebody is about to go for it. */}
+            {game.phase === 'answer_wrong' && (
+              <div className="flex flex-col items-center gap-2">
+                <ClueAttempts
+                  gameId={game.id}
+                  clueId={currentClue.id}
+                  players={players}
+                  variant="tv"
+                  refreshKey={game.updated_at}
+                  live
+                  announceLatest
+                  heading="Already tried"
+                  value={currentClue.value}
+                />
+                <p className="text-red-400/80 text-xl font-bold uppercase tracking-[0.2em] animate-pulse">
+                  Buzzers back in a moment
+                </p>
               </div>
             )}
             {/* UNLIMITED BUZZER: the whole room answers at once. Who rang in and

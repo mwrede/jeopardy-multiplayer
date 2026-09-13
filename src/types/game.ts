@@ -9,6 +9,8 @@ export type GamePhase =
   | 'player_answering'
   /** Unlimited-buzzer mode: everyone who buzzed answers at once, on their own. */
   | 'open_answering'
+  /** A beat to show the room a wrong answer before the buzzers come back. */
+  | 'answer_wrong'
   | 'daily_double_wager'
   | 'daily_double_answering'
   | 'clue_result'
@@ -109,7 +111,7 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   buzz_window_ms: 10000,
   answer_time_ms: 20000,
   daily_double_answer_ms: 25000,
-  final_answer_ms: 20000,
+  final_answer_ms: 30000,
   final_wager_ms: 15000,
   unlimitedBuzzer: false,
   buzz_collect_ms: 1200,
@@ -147,7 +149,7 @@ export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   buzz_window_ms: 10000,
   answer_time_ms: 20000,
   daily_double_answer_ms: 20000,
-  final_answer_ms: 20000,
+  final_answer_ms: 30000,
   final_wager_ms: 15000,
   unlimitedBuzzer: false,
   buzz_collect_ms: 1200,

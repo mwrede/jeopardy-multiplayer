@@ -6,6 +6,7 @@ import { BuzzerButton } from '@/components/BuzzerButton'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { BuzzModeToggle } from '@/components/BuzzModeToggle'
+import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import {
   joinGame,
@@ -27,6 +28,8 @@ import {
   passAfterBuzz,
   openBuzzWindow,
   finishBuzzWindow,
+  reopenAfterWrongAnswer,
+  WRONG_ANSWER_HOLD_MS,
   submitOpenAnswer,
   closeOpenClue,
   getBuzzOrder,
@@ -139,6 +142,12 @@ export default function PlayerPage() {
     setOpenLockedIn(false)
   }, [game?.current_clue_id])
 
+  // A miss ends the race I was in — my reaction from it stops being the thing
+  // on screen, so the miss itself has the phone to itself.
+  useEffect(() => {
+    if (game?.phase === 'answer_wrong') setMyBuzz(null)
+  }, [game?.phase])
+
   // Final Jeopardy answer clock. Auto-submits whatever's typed when it
   // hits zero — including nothing, which is a valid outcome.
   const [finalCountdown, setFinalCountdown] = useState<number | null>(null)
@@ -160,7 +169,7 @@ export default function PlayerPage() {
       finalIntervalRef.current = null
       return
     }
-    const totalMs = game.settings?.final_answer_ms ?? 15000
+    const totalMs = game.settings?.final_answer_ms ?? 30000
     setFinalCountdown(Math.ceil(totalMs / 1000))
     finalIntervalRef.current = setInterval(() => {
       setFinalCountdown((n) => (n !== null && n > 0 ? n - 1 : 0))
@@ -383,6 +392,17 @@ export default function PlayerPage() {
 
     return () => { clearInterval(tick); clearTimeout(mine); clearTimeout(close) }
   }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id, openEligible, openLockedIn, myPlayerId, game?.settings?.answer_time_ms])
+
+  // A wrong answer holds the clue for a beat so the room can read it. The
+  // device that answered releases it; this covers for one that has gone.
+  useEffect(() => {
+    if (!game || game.phase !== 'answer_wrong' || !game.current_clue_id) return
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const at = (isNaN(startedAt) ? Date.now() : startedAt) + WRONG_ANSWER_HOLD_MS + 5000
+    const clueId = game.current_clue_id
+    const t = setTimeout(() => { reopenAfterWrongAnswer(game.id, clueId) }, Math.max(0, at - Date.now()))
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id])
 
   // Play tick sounds on countdown changes
   const prevBuzzRef2 = useRef<number | null>(null)
@@ -1004,9 +1024,11 @@ export default function PlayerPage() {
     )
   }
 
-  // ===== BUZZER (clue reading or buzz window) =====
+  // ===== BUZZER (clue reading, buzz window, or the beat after a miss) =====
   if (
-    (game.phase === 'clue_reading' || game.phase === 'buzz_window') &&
+    (game.phase === 'clue_reading' ||
+      game.phase === 'buzz_window' ||
+      game.phase === 'answer_wrong') &&
     currentClue
   ) {
     return (
@@ -1018,12 +1040,16 @@ export default function PlayerPage() {
               screen of its own. Putting the clue here too split the room's
               attention and, worse, meant people read at different speeds off
               different devices instead of the one everybody can see. */}
-          <p className="text-jeopardy-gold text-xs font-bold uppercase tracking-[0.3em]">
+          <p className={`text-xs font-bold uppercase tracking-[0.3em] ${
+            game.phase === 'answer_wrong' ? 'text-red-400' : 'text-jeopardy-gold'
+          }`}>
             {game.phase === 'buzz_window'
               ? 'Buzz!'
-              : isHostRun
-                ? 'Get ready…'
-                : 'Watch the TV'}
+              : game.phase === 'answer_wrong'
+                ? 'Buzzers back in a moment'
+                : isHostRun
+                  ? 'Get ready…'
+                  : 'Watch the TV'}
           </p>
           {/* What's already been guessed wrong. The buzzers reopen after every
               wrong answer, so this is the room's record of what not to say. */}
@@ -1276,9 +1302,16 @@ export default function PlayerPage() {
           className="input-base max-w-xs text-2xl text-center"
           autoFocus
         />
+        <div className="mt-4 w-full max-w-xs">
+          <TrueDailyDoubleButton
+            score={myPlayer.score}
+            onPick={(amount) => setWager(String(amount))}
+            disabled={busy}
+          />
+        </div>
         <button
           onClick={handleSubmitWager}
-          className="btn-primary w-full max-w-xs mt-4 py-4 text-xl"
+          className="btn-primary w-full max-w-xs mt-2 py-4 text-xl"
         >
           Lock In Wager
         </button>

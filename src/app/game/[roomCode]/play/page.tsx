@@ -9,6 +9,7 @@ import { ClueAttempts } from '@/components/ClueAttempts'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { BuzzModeToggle } from '@/components/BuzzModeToggle'
+import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { CommunityVote } from '@/components/CommunityVote'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
@@ -40,6 +41,8 @@ import {
   skipCurrentPlayer,
   openBuzzWindow,
   finishBuzzWindow,
+  reopenAfterWrongAnswer,
+  WRONG_ANSWER_HOLD_MS,
   submitOpenAnswer,
   closeOpenClue,
   getBuzzOrder,
@@ -357,6 +360,18 @@ export default function PlayPage() {
     }
   }, [game?.phase, game?.id, game?.current_player_id, myPlayerId])
 
+  // A wrong answer holds the clue for a beat so the room can read it, and the
+  // device that answered releases it. If that device has gone, this covers —
+  // late enough that it never races the one that's supposed to do it.
+  useEffect(() => {
+    if (!game || game.phase !== 'answer_wrong' || !game.current_clue_id) return
+    const startedAt = Date.parse(game.updated_at ?? '')
+    const at = (isNaN(startedAt) ? Date.now() : startedAt) + WRONG_ANSWER_HOLD_MS + 5000
+    const clueId = game.current_clue_id
+    const t = setTimeout(() => { reopenAfterWrongAnswer(game.id, clueId) }, Math.max(0, at - Date.now()))
+    return () => clearTimeout(t)
+  }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id])
+
   // round_end → board_selection after 4s
   const roundEndRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -443,10 +458,10 @@ export default function PlayPage() {
     setOpenLockedIn(false)
   }, [game?.current_clue_id])
 
-  // A reopened buzz window is a fresh race, so the buzzer comes back and my
-  // previous reaction stops being the thing on screen.
+  // A miss ends the race I was in, and a reopened window starts a fresh one:
+  // either way my reaction from the last race stops being the thing on screen.
   useEffect(() => {
-    if (game?.phase === 'buzz_window') setMyBuzz(null)
+    if (game?.phase === 'buzz_window' || game?.phase === 'answer_wrong') setMyBuzz(null)
   }, [game?.phase, game?.buzz_window_start])
 
   // ===== UNLIMITED BUZZER: everyone who rang in answers at once =====
@@ -591,7 +606,7 @@ export default function PlayPage() {
       finalIntervalRef.current = null
       return
     }
-    const totalMs = game.settings?.final_answer_ms ?? 15000
+    const totalMs = game.settings?.final_answer_ms ?? 30000
     setFinalCountdown(Math.ceil(totalMs / 1000))
     finalIntervalRef.current = setInterval(() => {
       setFinalCountdown((n) => (n !== null && n > 0 ? n - 1 : 0))
@@ -1214,7 +1229,7 @@ export default function PlayPage() {
   const showClue = currentClue && (
     game.phase === 'clue_reading' || game.phase === 'buzz_window' ||
     game.phase === 'player_answering' || game.phase === 'open_answering' ||
-    game.phase === 'daily_double_answering'
+    game.phase === 'answer_wrong' || game.phase === 'daily_double_answering'
   )
   const openMode = isUnlimitedBuzzer(game.settings)
 
@@ -1238,7 +1253,12 @@ export default function PlayPage() {
         </div>
         <div className="flex-shrink-0 bg-jeopardy-dark/95 border-t border-white/10 p-2 pb-[env(safe-area-inset-bottom,8px)]">
           {isMyTurn ? (
-            <div className="w-full max-w-sm mx-auto">
+            <div className="w-full max-w-sm mx-auto space-y-2">
+              <TrueDailyDoubleButton
+                score={myPlayer.score}
+                onPick={(amount) => setWager(String(amount))}
+                disabled={busy}
+              />
               <GameKeyboard value={wager} onChange={setWager} onSubmit={handleSubmitWager}
                 mode="numbers" placeholder="Enter wager" submitLabel="Lock In Wager"
                 submitDisabled={!wager.trim()} />
@@ -1305,6 +1325,14 @@ export default function PlayPage() {
                   </p>
                 )}
               </div>
+            )}
+            {/* The beat after a miss: the room reads what was said before the
+                buzzers come back. The right answer stays hidden — the clue is
+                still live. */}
+            {game.phase === 'answer_wrong' && (
+              <p className="mt-2 text-red-400 font-bold text-sm uppercase tracking-wider flex-shrink-0">
+                Buzzers back in a moment
+              </p>
             )}
             {/* UNLIMITED BUZZER: everyone who rang in is answering at the same
                 time. Who buzzed and how fast is fair game to show; who has it
@@ -1373,7 +1401,8 @@ export default function PlayPage() {
                   </p>
                 </div>
               )
-            ) : (game.phase === 'buzz_window' || game.phase === 'clue_reading') ? (
+            ) : (game.phase === 'buzz_window' || game.phase === 'clue_reading' ||
+                 game.phase === 'answer_wrong') ? (
               <>
               {/* Wrong answers are public. The buzzers reopen after each one, so
                   the room sees who missed and exactly what they said — nobody
