@@ -26,13 +26,26 @@ async function fetchFullState(gameId: string) {
   ])
 
   const catIds = catIdsRes.data?.map((c) => c.id) || []
+  const CLUE_COLUMNS =
+    'id, category_id, value, question, answer, is_daily_double, is_answered, answered_by, answered_correct'
   let cluesData: Clue[] = []
   if (catIds.length > 0) {
-    const { data } = await supabase
+    // source_year arrives with supabase-migration-clue-source-year.sql. Naming
+    // a column that doesn't exist fails the whole select, which would leave the
+    // board with no clues at all — so fall back to the set without it.
+    const { data, error } = await supabase
       .from('clues')
-      .select('id, category_id, value, question, answer, is_daily_double, is_answered, answered_by, answered_correct')
+      .select(`${CLUE_COLUMNS}, source_year`)
       .in('category_id', catIds)
-    cluesData = (data as Clue[]) || []
+    if (error) {
+      const { data: legacy } = await supabase
+        .from('clues')
+        .select(CLUE_COLUMNS)
+        .in('category_id', catIds)
+      cluesData = (legacy as Clue[]) || []
+    } else {
+      cluesData = (data as Clue[]) || []
+    }
   }
 
   return {

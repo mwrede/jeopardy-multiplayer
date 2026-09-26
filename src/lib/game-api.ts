@@ -615,11 +615,23 @@ export async function startGame(gameId: string) {
     return eligible.slice(0, count)
   }
 
-  // Helper: pick random clues from a category (returns null if not enough)
+  /**
+   * One whole column, as it aired.
+   *
+   * A category NAME is not a column: "THE 20th CENTURY" has headed a column in
+   * dozens of different shows, and taking five random clues filed under that
+   * name built a column out of five unrelated boards — 1989, 1992, 1988 down a
+   * single column, with no difficulty ramp because each clue's original value
+   * was thrown away. Group by episode first, pick one episode's column, and
+   * order it by the value the writers gave it.
+   *
+   * Returns null when no single episode has enough clues, so buildRound moves
+   * on to the next candidate category.
+   */
   async function pickClues(categoryName: string, roundName: string) {
     let clueQuery = supabase
       .from('clue_pool')
-      .select('question, answer, air_date')
+      .select('question, answer, air_date, value, game_id_source')
       .eq('category', categoryName)
       .eq('round', roundName)
 
@@ -627,22 +639,32 @@ export async function startGame(gameId: string) {
       clueQuery = clueQuery.in('game_id_source', allowedGameIds.slice(0, 100))
     }
 
-    const { data: pool } = await clueQuery.limit(50)
+    const { data: pool } = await clueQuery.limit(200)
+    if (!pool || pool.length < CLUES_PER_CAT) return null
 
-    if (!pool || pool.length < CLUES_PER_CAT) return null // not enough clues, skip this category
-
-    // Shuffle and take CLUES_PER_CAT
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]]
+    const byEpisode = new Map<number, typeof pool>()
+    for (const row of pool) {
+      const id = (row as any).game_id_source
+      if (id == null) continue
+      const list = byEpisode.get(id) ?? []
+      list.push(row)
+      byEpisode.set(id, list)
     }
 
-    return pool.slice(0, CLUES_PER_CAT)
+    const whole = [...byEpisode.values()].filter((c) => c.length >= CLUES_PER_CAT)
+    if (whole.length === 0) return null
+
+    const column = whole[Math.floor(Math.random() * whole.length)]
+    return [...column]
+      .sort((a: any, b: any) => (a.value || 0) - (b.value || 0))
+      .slice(0, CLUES_PER_CAT)
   }
 
   // Helper: pick categories and build clues, skipping any that don't have enough clues
   async function buildRound(roundName: string, roundNumber: number, values: number[]) {
-    const candidates = await pickCategories(roundName, NUM_CATEGORIES * 3) // get extra candidates
+    // Extra candidates, because a category can now be rejected for having no
+    // single episode with a full column, not just for being short overall.
+    const candidates = await pickCategories(roundName, NUM_CATEGORIES * 4)
     const clueIds: string[] = []
     let pos = 0
 
