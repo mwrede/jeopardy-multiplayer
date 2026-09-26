@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Analytics } from '@/components/Analytics'
+import { Analytics as VercelAnalytics } from '@vercel/analytics/next'
 
 export const metadata: Metadata = {
   title: 'Jeopardy!',
@@ -17,6 +18,7 @@ export default function RootLayout({
       <body className="min-h-screen">
         {children}
         <Analytics />
+        <VercelAnalytics />
       </body>
     </html>
   )
