@@ -11,13 +11,14 @@ const clock = (iso: string) =>
 /**
  * Chat for a game, as a thing that gets out of the way.
  *
- * The buzzer is the loudest thing on a player's phone and nothing may compete
- * with it, so this is a small pill in the top corner, never a bar across the
- * bottom where a thumb lives. Closed, it's one line high. A new message peeks
- * out beside it for a few seconds and then leaves on its own.
+ * An OVERLAY, not a modal. It has no backdrop and never covers the board or
+ * the buzzer: the game carries on underneath and stays fully playable with the
+ * chat open, which is the point — people want to talk WHILE they play, not
+ * instead of it. It docks to a top corner and stays narrow so the buzzer, which
+ * nothing may compete with, keeps the middle of the phone to itself.
  *
- * Open, it can be shut four ways — the ×, the backdrop, Escape, and sending a
- * message doesn't hold it open. Easy to hide was the whole brief.
+ * Closed, it's a pill one line high, and a new message peeks out beside it for
+ * a few seconds before leaving on its own.
  *
  * Renders nothing at all until supabase-migration-chat.sql has been run.
  */
@@ -75,6 +76,10 @@ export function GameChat({
     inputRef.current?.focus()
   }
 
+  /* No autoFocus on the field. Opening the chat should show the conversation,
+     not throw a phone keyboard up over the buzzer — typing is a second,
+     deliberate tap. */
+
   return (
     <>
       {/* ── Closed: a pill, plus a peek at anything new ─────────────────── */}
@@ -107,17 +112,12 @@ export function GameChat({
         </div>
       )}
 
-      {/* ── Open: a sheet. Backdrop closes it. ──────────────────────────── */}
+      {/* ── Open: an overlay. No backdrop, so the game underneath keeps
+             working — clicks, the board, the buzzer, all of it. ─────────── */}
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-end bg-black/50 sm:items-start sm:p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="flex h-[70vh] w-full flex-col rounded-t-2xl border border-white/15 bg-jeopardy-dark sm:h-[min(520px,80vh)] sm:w-[340px] sm:rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-2.5">
+        <div className="fixed right-2 top-2 z-40 w-[260px] sm:w-[320px]">
+          <div className="flex max-h-[58vh] flex-col rounded-xl border border-copper/40 bg-jeopardy-dark/95 shadow-2xl backdrop-blur sm:max-h-[440px]">
+            <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-copper">
                 💬 Chat
               </span>
@@ -130,7 +130,7 @@ export function GameChat({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2.5">
               {messages.length === 0 && (
                 <p className="py-8 text-center text-sm text-gray-500">
                   Nothing yet. Say something.
@@ -158,7 +158,7 @@ export function GameChat({
               <div ref={endRef} />
             </div>
 
-            <div className="flex shrink-0 gap-2 border-t border-white/10 p-3">
+            <div className="flex shrink-0 gap-1.5 border-t border-white/10 p-2">
               <input
                 ref={inputRef}
                 value={draft}
@@ -166,13 +166,12 @@ export function GameChat({
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submit() } }}
                 placeholder="Say something…"
                 maxLength={MAX_MESSAGE_LENGTH}
-                autoFocus
                 className="input-base min-w-0 flex-1 text-sm"
               />
               <button
                 onClick={() => void submit()}
                 disabled={!draft.trim() || sending}
-                className="btn-stage btn-copper btn-stage-sm shrink-0 px-4 disabled:opacity-40"
+                className="btn-stage btn-copper btn-stage-sm shrink-0 px-3 disabled:opacity-40"
               >
                 Send
               </button>

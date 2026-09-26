@@ -69,9 +69,21 @@ export function BuzzerButton({
     }
   }, [state, buzzing, onBuzz])
 
-  // Keyboard support: spacebar to buzz
+  // Keyboard support: spacebar to buzz — unless you're typing.
+  //
+  // This listens on the window, so a space typed into the chat box, an answer
+  // field or a wager used to buzz the player in AND get swallowed by
+  // preventDefault, costing them the word and ringing them in by accident.
   useEffect(() => {
+    function isTyping(target: EventTarget | null): boolean {
+      const el = target as HTMLElement | null
+      if (!el || !el.tagName) return false
+      const tag = el.tagName.toLowerCase()
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
+    }
+
     function handleKeyDown(e: KeyboardEvent) {
+      if (isTyping(e.target)) return
       if (e.code === 'Space' && state === 'ready') {
         e.preventDefault()
         handleBuzz()
