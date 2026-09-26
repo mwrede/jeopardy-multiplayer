@@ -1,0 +1,896 @@
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChromeWordmark } from '@/components/ChromeWordmark'
+import { GameKeyboard } from '@/components/GameKeyboard'
+import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
+import { CLUE_INTRO_MS, computeReadingMs } from '@/lib/clue-timing'
+import { checkAnswer } from '@/lib/answer-check'
+import { clampDailyDoubleWager, clampFinalWager, maxDailyDoubleWager, maxFinalWager } from '@/lib/wager'
+import { fetchEpisode, money, type Episode, type EpisodeContestant } from '@/lib/episode'
+import {
+  boardFor, cellKey, clearRun, clueAt, contestantFinal, contestantScore, episodeInfo, episodesInYear,
+  loadProfile, loadRun, nextEpisode, saveProfile, saveRun, whoAnswered,
+  type EpisodeInfo, type NightResult, type Profile, type Run,
+} from '@/lib/campaign'
+import type { GameLength } from '@/types/game'
+
+/**
+ * AGAINST REAL CONTESTANTS — the campaign.
+ *
+ * Told as a night at the show. You give your name and where you're from, the
+ * way every contestant does. You meet the three people who actually played
+ * this episode — occupations, hometowns, the returning champion's total. The
+ * host asks you to say something about yourself. Then the board, and on every
+ * clue you find out who really rang in that night and what it cost or paid
+ * them, with their money moving beside yours. Win, and you're back tomorrow
+ * against the next episode's three. Lose, and the run is over: the score is
+ * how far into the season you got.
+ */
+
+type Phase = 'welcome' | 'profile' | 'pick' | 'meet' | 'playing' | 'curtain' | 'final' | 'night' | 'over'
+type Outcome = 'correct' | 'wrong' | 'pass'
+type Resolved = { outcome: Outcome; delta: number; typed: string }
+
+const CLUE_SECONDS = 20
+const FINAL_SECONDS = 30
+const SIZES: { id: GameLength; label: string; desc: string }[] = [
+  { id: 'full', label: 'Full', desc: '6×5 · the whole board · ~20 min' },
+  { id: 'half', label: 'Half', desc: '6×3 · the cheaper rows · ~10 min' },
+  { id: 'rapid', label: 'Rapid', desc: '3×3 · nine a round · ~5 min' },
+]
+
+const thisYear = new Date().getFullYear()
+const YEARS = Array.from({ length: thisYear - 1984 + 1 }, (_, i) => thisYear - i)
+
+export default function CampaignPage() {
+  const [phase, setPhase] = useState<Phase>('welcome')
+  const [profile, setProfile] = useState<Profile>({ name: '', hometown: '', anecdote: '' })
+  const [run, setRun] = useState<Run | null>(null)
+
+  // Picking a starting night.
+  const [year, setYear] = useState(thisYear)
+  const [episodes, setEpisodes] = useState<EpisodeInfo[] | null>(null)
+  const [picked, setPicked] = useState<EpisodeInfo | null>(null)
+
+  // The night in progress.
+  const [episode, setEpisode] = useState<Episode | null>(null)
+  const [size, setSize] = useState<GameLength>('full')
+  const [resolved, setResolved] = useState<Record<string, Resolved>>({})
+  const [round, setRound] = useState<1 | 2>(1)
+  const [active, setActive] = useState<{ rd: number; c: number; r: number } | null>(null)
+  const [stage, setStage] = useState<'wager' | 'clue' | 'result'>('clue')
+  const [typed, setTypedState] = useState('')
+  const [wagerText, setWagerTextState] = useState('')
+  // Mirrors of the two text fields that update the instant a key lands. The
+  // resolve functions read these rather than the state values. State is what
+  // the RENDER saw; a handler that fires from a timer, or an Enter that lands
+  // ahead of React's commit, can be holding a render from twenty seconds ago
+  // — which graded a Final that timed out as an empty answer even when a
+  // perfectly good one was sitting in the box.
+  const typedRef = useRef('')
+  const wagerRef = useRef('')
+  const setTyped = (v: string) => { typedRef.current = v; setTypedState(v) }
+  const setWagerText = (v: string) => { wagerRef.current = v; setWagerTextState(v) }
+  const [stake, setStake] = useState(0)
+  const [last, setLast] = useState<Resolved | null>(null)
+  const [secondsLeft, setSecondsLeft] = useState(CLUE_SECONDS)
+  // A clue is read out before anyone can answer, exactly as on the other
+  // boards: category and value first, then the text typed across the screen.
+  // The answer box and the clock only appear once the reading is done.
+  const [revealed, setRevealed] = useState(false)
+  const [variant] = useState<'tv' | 'phone'>(() =>
+    typeof window !== 'undefined' && window.innerWidth >= 768 ? 'tv' : 'phone',
+  )
+
+  // Final Jeopardy.
+  const [fjStage, setFjStage] = useState<'category' | 'wager' | 'clue' | 'result' | null>(null)
+  const [fjResult, setFjResult] = useState<{ right: boolean; delta: number; typed: string } | null>(null)
+
+  const [night, setNight] = useState<NightResult | null>(null)
+  const [nextInfo, setNextInfo] = useState<EpisodeInfo | null | 'none'>(null)
+  const [error, setError] = useState('')
+
+  /* ── Storage ─────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    const p = loadProfile()
+    if (p) setProfile(p)
+    setRun(loadRun())
+  }, [])
+
+  /* ── Derived ─────────────────────────────────────────────────────────── */
+  const board = useMemo(() => (episode ? boardFor(episode, size) : null), [episode, size])
+  const resolvedKeys = useMemo(() => new Set(Object.keys(resolved)), [resolved])
+  const myScore = useMemo(
+    () => Object.values(resolved).reduce((a, r) => a + r.delta, 0) + (fjResult?.delta ?? 0),
+    [resolved, fjResult],
+  )
+  const theirScores = useMemo(() => {
+    if (!episode || !board) return []
+    return episode.contestants.map((c) => {
+      const base = contestantScore(board, c, resolvedKeys)
+      // Once Final is settled, their Final rides on it too.
+      if (fjResult) {
+        const f = contestantFinal(episode, c, base)
+        if (f) return base + (f.right ? f.wager : -f.wager)
+      }
+      return base
+    })
+  }, [episode, board, resolvedKeys, fjResult])
+
+  const airedYear = episode?.airedOn ? parseInt(episode.airedOn.slice(-4), 10) || null : null
+  const roundClues = (rd: number) => board?.rounds[rd - 1]?.clues ?? []
+  const roundDone = (rd: number) => roundClues(rd).every((cl) => resolvedKeys.has(cellKey(rd, cl.c, cl.r)))
+
+  /* ── Timer ───────────────────────────────────────────────────────────── */
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const clueShowing = phase === 'playing' && !!active && stage === 'clue'
+  const finalShowing = phase === 'final' && fjStage === 'clue'
+  const clueLive = clueShowing && revealed
+  const finalLive = finalShowing && revealed
+
+  // Reading time: the intro card, then the text at host pace.
+  useEffect(() => {
+    if (!clueShowing && !finalShowing) { setRevealed(false); return }
+    setRevealed(false)
+    const q = clueShowing && active && board
+      ? clueAt(board, active.rd, active.c, active.r)?.question ?? ''
+      : episode?.final?.question ?? ''
+    const t = setTimeout(() => setRevealed(true), CLUE_INTRO_MS + computeReadingMs(q))
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clueShowing, finalShowing, active?.rd, active?.c, active?.r])
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    if (!clueLive && !finalLive) return
+    setSecondsLeft(clueLive ? CLUE_SECONDS : FINAL_SECONDS)
+    timerRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s > 1) return s - 1
+        if (timerRef.current) clearInterval(timerRef.current)
+        // Out of time: on the board that's not ringing in; in Final it's
+        // whatever's on the paper.
+        if (clueLive) resolveClue('pass')
+        else resolveFinal()
+        return 0
+      })
+    }, 1000)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clueLive, finalLive, active?.rd, active?.c, active?.r])
+
+  // Enter or Escape on a screen that's only waiting to be read. autoFocus on
+  // the button was meant to do this and doesn't survive the overlay
+  // re-rendering; a listener on the window does.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Enter' && e.key !== 'Escape') return
+      const el = e.target as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return
+      if (phase === 'playing' && active && stage === 'result') { e.preventDefault(); closeClue() }
+      else if (phase === 'final' && fjStage === 'category') { e.preventDefault(); setWagerText(''); setFjStage('wager') }
+      else if (phase === 'final' && fjStage === 'result') { e.preventDefault(); void settleNight() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, active, stage, fjStage])
+
+  /* ── Flow ────────────────────────────────────────────────────────────── */
+
+  function beginNew() {
+    clearRun()
+    setRun(null)
+    setPhase(profile.name ? 'pick' : 'profile')
+  }
+
+  async function resumeRun() {
+    if (!run) return
+    const info = await episodeInfo(run.currentGameId)
+    if (!info) { setError("Couldn't find the next episode."); return }
+    setPicked(info)
+    await loadNight(info)
+  }
+
+  async function loadYear(y: number) {
+    setYear(y)
+    setEpisodes(null)
+    setEpisodes(await episodesInYear(y))
+  }
+
+  /** Fetch the episode and open the green room. */
+  async function loadNight(info: EpisodeInfo) {
+    setError('')
+    setEpisode(null)
+    setResolved({})
+    setRound(1)
+    setActive(null)
+    setFjStage(null)
+    setFjResult(null)
+    setNight(null)
+    setNextInfo(null)
+    setPhase('meet')
+    const ep = await fetchEpisode(info.gameId)
+    if (!ep) { setError("The archive doesn't have a full record of that night. Pick another."); setPhase('pick'); return }
+    setEpisode(ep)
+  }
+
+  function takeThePodium() {
+    saveProfile(profile)
+    if (!run && picked) {
+      const fresh: Run = {
+        startGameId: picked.gameId,
+        currentGameId: picked.gameId,
+        season: picked.season,
+        streak: 0,
+        totalWinnings: 0,
+        history: [],
+        startedAt: new Date().toISOString(),
+        endedAt: null,
+      }
+      setRun(fresh)
+      saveRun(fresh)
+    }
+    setPhase('playing')
+  }
+
+  function openClue(rd: number, c: number, r: number) {
+    if (!board) return
+    const cl = clueAt(board, rd, c, r)
+    if (!cl || resolvedKeys.has(cellKey(rd, c, r))) return
+    setActive({ rd, c, r })
+    setTyped('')
+    setWagerText('')
+    setLast(null)
+    if (cl.ddWager != null) {
+      setStage('wager')
+    } else {
+      setStake(cl.value)
+      setStage('clue')
+    }
+  }
+
+  function confirmWager() {
+    if (!active || !board) return
+    const top = board.rounds[active.rd - 1].values.slice(-1)[0]
+    setStake(clampDailyDoubleWager(parseInt(wagerRef.current, 10), myScore, top))
+    setStage('clue')
+  }
+
+  function resolveClue(kind: 'answer' | 'pass') {
+    if (!active || !board) return
+    const cl = clueAt(board, active.rd, active.c, active.r)
+    if (!cl) return
+    const text = typedRef.current
+    let outcome: Outcome
+    if (kind === 'answer') outcome = checkAnswer(text, cl.answer) ? 'correct' : 'wrong'
+    // Nobody passes on a Daily Double: you found it, you answer it.
+    else outcome = cl.ddWager != null ? 'wrong' : 'pass'
+    const delta = outcome === 'correct' ? stake : outcome === 'wrong' ? -stake : 0
+    const res: Resolved = { outcome, delta, typed: kind === 'answer' ? text : '' }
+    setLast(res)
+    setResolved((prev) => ({ ...prev, [cellKey(active.rd, active.c, active.r)]: res }))
+    setStage('result')
+  }
+
+  function closeClue() {
+    if (!active) return
+    const rd = active.rd
+    setActive(null)
+    if (rd === 1 && roundDone(1)) setPhase('curtain')
+    else if (rd === 2 && roundDone(2)) { setPhase('final'); setFjStage('category') }
+  }
+
+  function confirmFjWager() {
+    setStake(clampFinalWager(parseInt(wagerRef.current, 10), myScore))
+    setTyped('')
+    setFjStage('clue')
+  }
+
+  function resolveFinal() {
+    if (!episode?.final) return
+    const text = typedRef.current
+    const right = text.trim().length > 0 && checkAnswer(text, episode.final.answer)
+    setFjResult({ right, delta: right ? stake : -stake, typed: text })
+    setFjStage('result')
+  }
+
+  async function settleNight() {
+    if (!episode || !run || !picked) return
+    const theirs = episode.contestants.map((c, i) => ({ name: c.first, score: theirScores[i] ?? 0 }))
+    const best = Math.max(...theirs.map((t) => t.score))
+    const won = myScore >= best
+    const result: NightResult = {
+      gameId: episode.gameId, title: episode.title, airedOn: episode.airedOn, size, myScore, theirs, won,
+    }
+    const updated: Run = {
+      ...run,
+      streak: won ? run.streak + 1 : run.streak,
+      totalWinnings: run.totalWinnings + Math.max(0, myScore),
+      history: [...run.history, result],
+      endedAt: won ? null : new Date().toISOString(),
+    }
+    setNight(result)
+    if (won) {
+      const nxt = await nextEpisode(episode.gameId)
+      if (nxt) { updated.currentGameId = nxt.gameId; setNextInfo(nxt) }
+      else { updated.endedAt = new Date().toISOString(); setNextInfo('none') }
+    }
+    setRun(updated)
+    saveRun(updated)
+    setPhase('night')
+  }
+
+  async function comeBackTomorrow() {
+    if (!nextInfo || nextInfo === 'none') return
+    setPicked(nextInfo)
+    await loadNight(nextInfo)
+  }
+
+  /* ── Screens ─────────────────────────────────────────────────────────── */
+
+  const leaderIdx = theirScores.length
+    ? theirScores.reduce((b, s, i) => (s > theirScores[b] ? i : b), 0)
+    : -1
+
+  const Rail = () => episode ? (
+    <div className="mx-auto mt-4 flex max-w-3xl flex-wrap items-stretch justify-center gap-2">
+      <Podium name={profile.name || 'You'} score={myScore} you />
+      {episode.contestants.map((c, i) => (
+        <Podium key={c.seat} name={c.first} score={theirScores[i] ?? 0} seat={c.seat} crowned={i === leaderIdx && theirScores[i] > myScore} />
+      ))}
+    </div>
+  ) : null
+
+  // ── Welcome ────────────────────────────────────────────────────────────
+  if (phase === 'welcome') {
+    const live = run && !run.endedAt
+    return (
+      <Shell>
+        <Eyebrow>Campaign · Unlisted</Eyebrow>
+        <h1 className="display-chrome mt-2 text-4xl md:text-5xl">Against Real Contestants</h1>
+        <p className="mx-auto mt-4 max-w-md text-sm text-ink-stage">
+          Take the fourth podium on a real night of Jeopardy!. The three people who played it score exactly as
+          they did — clue by clue, beside you. Win and you&apos;re back tomorrow against the next episode. The
+          run ends when you lose. How far into the season can you get?
+        </p>
+        {live && (
+          <div className="mx-auto mt-6 max-w-sm rounded-xl border border-copper/50 bg-black/40 p-4 text-left">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-copper">Your run</p>
+            <p className="mt-1 text-white">
+              <span className="font-bold">{profile.name}</span> from {profile.hometown} ·{' '}
+              <span className="font-bold text-jeopardy-gold-light">{run!.streak}</span> night{run!.streak === 1 ? '' : 's'} won ·{' '}
+              {money(run!.totalWinnings)}
+            </p>
+            <button onClick={resumeRun} className="btn-stage btn-copper btn-stage-lg mt-3 w-full">
+              Come back tomorrow →
+            </button>
+          </div>
+        )}
+        {run?.endedAt && (
+          <p className="mt-5 text-sm text-ink-stage-2">
+            Last run: {run.streak} night{run.streak === 1 ? '' : 's'} won, {money(run.totalWinnings)}.
+          </p>
+        )}
+        <button onClick={beginNew} className={`mt-6 ${live ? 'btn-stage btn-stage-ghost' : 'btn-stage btn-copper btn-stage-lg'}`}>
+          {live ? 'Start over' : 'Start a campaign'}
+        </button>
+        {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
+        <BackHome />
+      </Shell>
+    )
+  }
+
+  // ── Profile ────────────────────────────────────────────────────────────
+  if (phase === 'profile') {
+    return (
+      <Shell>
+        <Eyebrow>Contestant registration</Eyebrow>
+        <h2 className="display-chrome mt-2 text-3xl">Who&apos;s playing?</h2>
+        <p className="mt-2 text-sm text-ink-stage">The way it&apos;s read out at the top of every show.</p>
+        <div className="mx-auto mt-6 max-w-sm space-y-3 text-left">
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-stage-2">Your name</span>
+            <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+              maxLength={40} placeholder="Michael" className="field-stage mt-1 w-full" autoFocus />
+          </label>
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-stage-2">Where you&apos;re from</span>
+            <input value={profile.hometown} onChange={(e) => setProfile({ ...profile, hometown: e.target.value })}
+              maxLength={60} placeholder="Philadelphia, Pennsylvania" className="field-stage mt-1 w-full" />
+          </label>
+          <p className="pt-2 text-center text-sm italic text-white/80">
+            &ldquo;{profile.name || 'Your name'}, from {profile.hometown || 'your hometown'}.&rdquo;
+          </p>
+          <button
+            onClick={() => { saveProfile(profile); setPhase('pick') }}
+            disabled={!profile.name.trim() || !profile.hometown.trim()}
+            className="btn-stage btn-copper btn-stage-lg w-full disabled:opacity-40"
+          >
+            Continue
+          </button>
+        </div>
+        <BackHome />
+      </Shell>
+    )
+  }
+
+  // ── Pick a starting night ──────────────────────────────────────────────
+  if (phase === 'pick') {
+    return (
+      <Shell wide>
+        <Eyebrow>Where does your run begin?</Eyebrow>
+        <h2 className="display-chrome mt-2 text-3xl">Pick a night</h2>
+        <p className="mt-2 text-sm text-ink-stage">
+          Any episode, any year. From there you play forward through that season, one night at a time.
+        </p>
+        <div className="mx-auto mt-5 flex max-w-lg items-center justify-center gap-3">
+          <select value={year} onChange={(e) => loadYear(parseInt(e.target.value, 10))} className="field-stage h-[42px] cursor-pointer py-0">
+            {YEARS.map((y) => <option key={y} value={y} className="bg-gray-900">{y}</option>)}
+          </select>
+          {episodes === null && <button onClick={() => loadYear(year)} className="btn-stage btn-copper">Show that year</button>}
+        </div>
+        {episodes && (
+          <div className="mx-auto mt-4 max-h-[50vh] max-w-lg space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/40 p-2 text-left">
+            {episodes.length === 0 && <p className="p-4 text-center text-sm text-ink-stage-2">Nothing from that year.</p>}
+            {episodes.map((e) => (
+              <button key={e.gameId} onClick={() => setPicked(e)}
+                className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm transition-colors ${
+                  picked?.gameId === e.gameId ? 'bg-copper/25 text-white' : 'text-white/80 hover:bg-white/5'
+                }`}>
+                <span className="truncate">{e.title}</span>
+                <span className="ml-3 shrink-0 text-[11px] uppercase tracking-wider text-ink-stage-2">S{e.season}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
+        <div className="mt-5 flex justify-center gap-2">
+          <button onClick={() => setPhase('welcome')} className="btn-stage btn-stage-ghost btn-stage-sm">Back</button>
+          <button onClick={() => picked && loadNight(picked)} disabled={!picked} className="btn-stage btn-copper btn-stage-lg disabled:opacity-40">
+            Take the podium →
+          </button>
+        </div>
+      </Shell>
+    )
+  }
+
+  // ── Meet the contestants ───────────────────────────────────────────────
+  if (phase === 'meet') {
+    if (!episode) {
+      return <Shell><p className="py-20 text-ink-stage-2">Walking out to the podiums…</p></Shell>
+    }
+    return (
+      <Shell wide>
+        <Eyebrow>{episode.airedOn ?? episode.title}{run && run.streak > 0 ? ` · Night ${run.streak + 1} of your run` : ''}</Eyebrow>
+        <h2 className="display-chrome mt-2 text-3xl md:text-4xl">Tonight&apos;s contestants</h2>
+        <p className="mt-2 text-sm text-ink-stage">The three people who really played this board — and you.</p>
+
+        <div className="mx-auto mt-6 grid max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {episode.contestants.map((c) => <ContestantCard key={c.seat} c={c} />)}
+          <div className="rounded-xl border-2 border-jeopardy-gold/70 bg-jeopardy-gold/10 p-4 text-left">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-jeopardy-gold bg-black/40 text-4xl font-black text-jeopardy-gold-light">
+              {(profile.name || '?').slice(0, 1).toUpperCase()}
+            </div>
+            <p className="mt-3 font-bold text-white">{profile.name}</p>
+            <p className="text-xs text-white/80">from {profile.hometown}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-wider text-jeopardy-gold-light">The challenger</p>
+          </div>
+        </div>
+
+        {/* The host's question. It's part of the night, and it's yours to answer
+            differently every night. */}
+        <div className="mx-auto mt-6 max-w-lg rounded-xl border border-white/15 bg-black/40 p-4 text-left">
+          <p className="text-sm italic text-white/90">
+            &ldquo;{profile.name}, tell us a little about yourself.&rdquo;
+          </p>
+          <textarea
+            value={profile.anecdote}
+            onChange={(e) => setProfile({ ...profile, anecdote: e.target.value })}
+            maxLength={280}
+            rows={2}
+            placeholder="I once biked from Cartagena to Buenos Aires…"
+            className="field-stage mt-2 h-auto w-full resize-none py-2 text-sm"
+          />
+        </div>
+
+        <div className="mx-auto mt-5 max-w-lg text-left">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-stage-2">Board size tonight</p>
+          <div className="mt-1.5 grid grid-cols-3 gap-2">
+            {SIZES.map((s) => (
+              <button key={s.id} onClick={() => setSize(s.id)}
+                className={`rounded-lg border-2 px-2 py-2 text-left transition-colors ${
+                  size === s.id ? 'border-jeopardy-gold bg-jeopardy-gold/20 text-white' : 'border-white/15 bg-white/5 text-white/70 hover:border-white/40'
+                }`}>
+                <span className="block text-sm font-bold">{s.label}</span>
+                <span className="block text-[10px] leading-tight opacity-70">{s.desc}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-ink-stage-2">
+            A smaller board is a slice of the real one, and they&apos;re scored on that same slice — it stays a fair race.
+          </p>
+        </div>
+
+        <button onClick={takeThePodium} className="btn-stage btn-copper btn-stage-lg mt-6">
+          Everyone starts at zero. Let&apos;s play →
+        </button>
+      </Shell>
+    )
+  }
+
+  // ── The curtain between rounds ─────────────────────────────────────────
+  if (phase === 'curtain' && episode) {
+    return (
+      <Shell>
+        <Rail />
+        <div className="mt-8 rounded-xl border-2 border-jeopardy-gold bg-jeopardy-gold/10 p-8">
+          <Eyebrow>That&apos;s the Jeopardy round</Eyebrow>
+          <h2 className="display-chrome mt-4 text-3xl">Double Jeopardy</h2>
+          <p className="mt-2 text-sm text-ink-stage-2">Values double, and there are Daily Doubles out there.</p>
+          <button onClick={() => { setRound(2); setPhase('playing') }} className="btn-stage btn-copper btn-stage-lg mt-6">
+            Bring on the board
+          </button>
+        </div>
+      </Shell>
+    )
+  }
+
+  // ── The board ──────────────────────────────────────────────────────────
+  if (phase === 'playing' && episode && board) {
+    const rd = round
+    const cats = board.rounds[rd - 1].categories
+    const values = board.rounds[rd - 1].values
+    const cols = board.cfg.categories
+    const left = roundClues(rd).filter((cl) => !resolvedKeys.has(cellKey(rd, cl.c, cl.r))).length
+    const activeClue = active ? clueAt(board, active.rd, active.c, active.r) : undefined
+    return (
+      <Shell wide>
+        <Eyebrow>{episode.airedOn ?? episode.title} · {rd === 1 ? 'Jeopardy round' : 'Double Jeopardy'}</Eyebrow>
+        <Rail />
+        <div className="board-wrapper mx-auto mt-4 max-w-5xl">
+          <div className="grid gap-1 p-1" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+            {cats.map((name, c) => (
+              <div key={c} className="board-category min-h-[56px] px-1.5 py-2 text-[10px] font-bold uppercase leading-tight text-white md:text-xs">
+                {name}
+              </div>
+            ))}
+            {values.map((v, r) =>
+              cats.map((_, c) => {
+                const cl = clueAt(board, rd, c, r)
+                const res = resolved[cellKey(rd, c, r)]
+                const dead = !cl
+                return (
+                  <button
+                    key={`${c}:${r}`}
+                    onClick={() => openClue(rd, c, r)}
+                    disabled={dead || !!res}
+                    title={dead ? 'Never revealed that night' : undefined}
+                    className={`min-h-[56px] text-xl md:min-h-[72px] md:text-3xl ${
+                      dead ? 'board-cell board-cell-answered'
+                      : res ? (res.outcome === 'correct' ? 'board-cell board-cell-correct' : res.outcome === 'wrong' ? 'board-cell board-cell-wrong' : 'board-cell board-cell-answered')
+                      : 'board-cell'
+                    }`}
+                    style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
+                  >
+                    {dead ? '' : res ? (res.outcome === 'correct' ? '✓' : res.outcome === 'wrong' ? '✗' : '') : `$${v}`}
+                  </button>
+                )
+              }),
+            )}
+          </div>
+        </div>
+        <p className="mt-3 text-[11px] text-ink-stage-2">
+          {left} clue{left === 1 ? '' : 's'} left{rd === 1 ? ', then Double Jeopardy' : ', then Final Jeopardy'}.
+        </p>
+
+        {active && activeClue && (
+          <Overlay>
+            {stage === 'wager' && (
+              <>
+                <Big>Daily Double!</Big>
+                <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.28em] text-white/80">{cats[active.c]}</p>
+                <p className="mt-3 text-sm text-white/85">
+                  You have <b className="text-jeopardy-gold-light">{money(myScore)}</b>. Wager $5 up to{' '}
+                  <b className="text-jeopardy-gold-light">{money(maxDailyDoubleWager(myScore, values.slice(-1)[0]))}</b>.
+                </p>
+                <input value={wagerText} onChange={(e) => setWagerText(e.target.value.replace(/[^0-9]/g, ''))}
+                  inputMode="numeric" placeholder="Wager" autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') confirmWager() }}
+                  className="input-base mx-auto mt-4 max-w-xs text-center text-2xl" />
+                <div className="mx-auto mt-3 flex max-w-xs gap-2">
+                  <button onClick={() => setWagerText(String(maxDailyDoubleWager(myScore, values.slice(-1)[0])))} className="btn-stage btn-stage-ghost btn-stage-sm flex-1">Bet the max</button>
+                  <button onClick={confirmWager} className="btn-primary flex-1 py-2">Show the clue</button>
+                </div>
+              </>
+            )}
+            {stage === 'clue' && (
+              <>
+                <AnimatedClueReveal
+                  key={cellKey(active.rd, active.c, active.r)}
+                  category={cats[active.c]}
+                  value={stake}
+                  question={activeClue.question}
+                  revealDurationMs={computeReadingMs(activeClue.question)}
+                  variant={variant}
+                  year={airedYear}
+                />
+                {revealed ? (
+                  <>
+                    <Timer secondsLeft={secondsLeft} total={CLUE_SECONDS} />
+                    <div className="mx-auto mt-4 w-full max-w-md">
+                      <GameKeyboard value={typed} onChange={setTyped} onSubmit={() => resolveClue('answer')}
+                        mode="letters" placeholder="What is…" submitLabel="Answer" submitDisabled={!typed.trim()} maxLength={120}
+                        secondaryAction={activeClue.ddWager == null ? { label: "Don't ring in", onClick: () => resolveClue('pass') } : undefined} />
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-8 text-xs uppercase tracking-[0.3em] text-white/50">Reading…</p>
+                )}
+              </>
+            )}
+            {stage === 'result' && last && (
+              <>
+                <p className={`text-3xl font-bold ${last.outcome === 'correct' ? 'text-green-400' : last.outcome === 'wrong' ? 'text-red-400' : 'text-white/70'}`}>
+                  {last.outcome === 'correct' ? `✓ Right, ${money(last.delta)}` : last.outcome === 'wrong' ? `✗ Wrong, ${money(last.delta)}` : "Didn't ring in"}
+                </p>
+                <p className="mt-2 text-sm text-white/70">The answer: <b className="text-jeopardy-gold-light">{activeClue.answer}</b></p>
+
+                {/* The night as it happened. */}
+                <div className="mx-auto mt-6 max-w-md rounded-xl border border-copper/50 bg-black/40 p-4 text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-copper">★ That night</p>
+                  {whoAnswered(activeClue, episode.contestants).length === 0 ? (
+                    <p className="mt-2 text-sm text-white/80">Triple stumper — nobody rang in.</p>
+                  ) : (
+                    <div className="mt-2 space-y-1.5">
+                      {whoAnswered(activeClue, episode.contestants).map(({ who, right }, i) => {
+                        const amt = activeClue.ddWager != null ? activeClue.ddWager : activeClue.value
+                        return (
+                          <div key={i} className="flex items-center gap-2 text-sm">
+                            <img src={`/avatars/${who.seat + 1}.png`} alt="" className="h-8 w-8 rounded-full bg-black object-cover" />
+                            <span className="flex-1 text-white">{who.first}</span>
+                            <span className={right ? 'text-green-400' : 'text-red-400'}>
+                              {right ? '✓' : '✗'} {right ? '+' : '-'}{money(amt).replace('-', '')}
+                              {activeClue.ddWager != null && <span className="ml-1 text-[10px] text-white/60">Daily Double</span>}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <button onClick={closeClue} autoFocus className="btn-primary mt-6 px-8 py-3">Back to the board</button>
+              </>
+            )}
+          </Overlay>
+        )}
+      </Shell>
+    )
+  }
+
+  // ── Final Jeopardy ─────────────────────────────────────────────────────
+  if (phase === 'final' && episode && board) {
+    const fj = episode.final
+    if (!fj) {
+      // The archive has no Final for this night — settle on the board.
+      return (
+        <Shell>
+          <Rail />
+          <p className="mt-6 text-sm text-ink-stage-2">The archive has no Final Jeopardy recorded for this night, so the board decides it.</p>
+          <button onClick={settleNight} className="btn-stage btn-copper btn-stage-lg mt-4">See the result</button>
+        </Shell>
+      )
+    }
+    return (
+      <Shell wide>
+        <Rail />
+        <Overlay>
+          {fjStage === 'category' && (
+            <>
+              <Big>Final Jeopardy!</Big>
+              <p className="mt-3 text-sm text-white/70">The category is</p>
+              <p className="mt-2 text-2xl font-bold uppercase text-white">{fj.category}</p>
+              <button onClick={() => { setWagerText(''); setFjStage('wager') }} autoFocus className="btn-primary mt-6 px-8 py-3">Place my wager</button>
+            </>
+          )}
+          {fjStage === 'wager' && (
+            <>
+              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/80">{fj.category}</p>
+              <p className="mt-3 text-sm text-white/85">
+                You have <b className="text-jeopardy-gold-light">{money(myScore)}</b>. Wager $0 up to <b className="text-jeopardy-gold-light">{money(maxFinalWager(myScore))}</b>.
+              </p>
+              <div className="mx-auto mt-3 max-w-xs space-y-1 text-left text-sm">
+                {episode.contestants.map((c, i) => (
+                  <div key={c.seat} className="flex justify-between text-white/80"><span>{c.first}</span><span className="tabular-nums">{money(theirScores[i] ?? 0)}</span></div>
+                ))}
+              </div>
+              <input value={wagerText} onChange={(e) => setWagerText(e.target.value.replace(/[^0-9]/g, ''))}
+                inputMode="numeric" placeholder="Wager" autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmFjWager() }}
+                className="input-base mx-auto mt-4 max-w-xs text-center text-2xl" />
+              <button onClick={confirmFjWager} className="btn-primary mt-3 px-8 py-3">Lock it in</button>
+            </>
+          )}
+          {fjStage === 'clue' && (
+            <>
+              <AnimatedClueReveal
+                key="final"
+                category={fj.category}
+                value={stake}
+                question={fj.question}
+                revealDurationMs={computeReadingMs(fj.question)}
+                variant={variant}
+                year={airedYear}
+              />
+              {revealed ? (
+                <>
+                  <Timer secondsLeft={secondsLeft} total={FINAL_SECONDS} />
+                  <div className="mx-auto mt-4 w-full max-w-md">
+                    <GameKeyboard value={typed} onChange={setTyped} onSubmit={resolveFinal}
+                      mode="letters" placeholder="What is…" submitLabel="Reveal" submitDisabled={false} maxLength={120} />
+                  </div>
+                </>
+              ) : (
+                <p className="mt-8 text-xs uppercase tracking-[0.3em] text-white/50">Reading…</p>
+              )}
+            </>
+          )}
+          {fjStage === 'result' && fjResult && (
+            <>
+              <p className="text-sm text-white/70">The answer: <b className="text-jeopardy-gold-light">{fj.answer}</b></p>
+              <div className="mx-auto mt-5 max-w-md space-y-2 text-left">
+                <FinalRow name={`${profile.name} (you)`} written={fjResult.typed || '—'} right={fjResult.right} wager={stake} total={myScore} you />
+                {episode.contestants.map((c, i) => {
+                  const before = contestantScore(board, c, resolvedKeys)
+                  const f = contestantFinal(episode, c, before)
+                  return f
+                    ? <FinalRow key={c.seat} name={c.first} seat={c.seat} written={f.written} right={f.right} wager={f.wager} total={theirScores[i] ?? 0} />
+                    : <FinalRow key={c.seat} name={c.first} seat={c.seat} written="(no Final recorded)" right={false} wager={0} total={theirScores[i] ?? 0} />
+                })}
+              </div>
+              <button onClick={settleNight} autoFocus className="btn-primary mt-6 px-8 py-3">Final scores</button>
+            </>
+          )}
+        </Overlay>
+      </Shell>
+    )
+  }
+
+  // ── The night's result ─────────────────────────────────────────────────
+  if (phase === 'night' && night && run) {
+    const rows = [{ name: `${profile.name} (you)`, score: night.myScore, you: true }, ...night.theirs.map((t) => ({ ...t, you: false }))]
+      .sort((a, b) => b.score - a.score)
+    return (
+      <Shell>
+        <Eyebrow>{night.airedOn ?? night.title}</Eyebrow>
+        <h2 className={`display-chrome mt-2 text-4xl ${night.won ? 'text-jeopardy-gold-light' : ''}`}>
+          {night.won ? "You're our new champion!" : 'The champion holds'}
+        </h2>
+        <div className="mx-auto mt-5 max-w-sm space-y-2">
+          {rows.map((r, i) => (
+            <div key={r.name} className={`flex items-center justify-between rounded-xl px-4 py-3 ${r.you ? 'border-2 border-jeopardy-gold bg-jeopardy-gold/15' : 'border border-white/10 bg-white/5'}`}>
+              <span className="font-bold text-white">{i === 0 ? '🏆 ' : ''}{r.name}</span>
+              <span className={`text-lg font-bold tabular-nums ${r.score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}>{money(r.score)}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-5 text-sm text-ink-stage">
+          {night.won
+            ? <>Night <b className="text-white">{run.streak}</b> of your run. Winnings so far: <b className="text-white">{money(run.totalWinnings)}</b>.</>
+            : <>Your run ends at <b className="text-white">{run.streak}</b> night{run.streak === 1 ? '' : 's'} won and <b className="text-white">{money(run.totalWinnings)}</b>.</>}
+        </p>
+        {night.won && nextInfo && nextInfo !== 'none' && (
+          <button onClick={comeBackTomorrow} className="btn-stage btn-copper btn-stage-lg mt-6">
+            Come back tomorrow → {nextInfo.airDate ?? nextInfo.title}
+          </button>
+        )}
+        {night.won && nextInfo === 'none' && (
+          <p className="mt-6 text-lg font-bold text-jeopardy-gold-light">That was the last night of the season. You ran it.</p>
+        )}
+        {(!night.won || nextInfo === 'none') && (
+          <button onClick={() => setPhase('over')} className="btn-stage btn-stage-ghost mt-4">See the whole run</button>
+        )}
+      </Shell>
+    )
+  }
+
+  // ── Run over ───────────────────────────────────────────────────────────
+  if (phase === 'over' && run) {
+    return (
+      <Shell wide>
+        <Eyebrow>Your campaign</Eyebrow>
+        <h2 className="display-chrome mt-2 text-3xl">{run.streak} night{run.streak === 1 ? '' : 's'} · {money(run.totalWinnings)}</h2>
+        <div className="mx-auto mt-5 max-w-lg space-y-1.5 text-left">
+          {run.history.map((h, i) => (
+            <div key={h.gameId} className="flex items-center justify-between rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm">
+              <span className="text-white/80">{i + 1}. {h.airedOn ?? h.title}</span>
+              <span className={`font-bold tabular-nums ${h.won ? 'text-green-400' : 'text-red-400'}`}>{h.won ? 'Won' : 'Lost'} · {money(h.myScore)}</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={beginNew} className="btn-stage btn-copper btn-stage-lg mt-6">Start a new campaign</button>
+        <BackHome />
+      </Shell>
+    )
+  }
+
+  return <Shell><p className="py-20 text-ink-stage-2">Loading…</p></Shell>
+}
+
+/* ── Building blocks ──────────────────────────────────────────────────── */
+
+function Shell({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
+  return (
+    <main className="stage-page-deep p-4 pb-24 md:p-8">
+      <div className={`mx-auto ${wide ? 'max-w-6xl' : 'max-w-2xl'}`}>
+        <div className="frame">
+          <span className="led-strip led-strip-left" /><span className="led-strip led-strip-right" />
+          <div className="frame-inner p-5 text-center md:p-9">
+            <ChromeWordmark className="mx-auto mb-4 h-auto w-full max-w-[160px]" />
+            {children}
+          </div>
+        </div>
+      </div>
+    </main>
+  )
+}
+const Eyebrow = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-copper">{children}</p>
+)
+const Big = ({ children }: { children: React.ReactNode }) => (
+  <h2 className="text-4xl font-bold uppercase tracking-wide text-jeopardy-gold-light md:text-5xl" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '3px 3px 6px rgba(0,0,0,0.7)' }}>{children}</h2>
+)
+const BackHome = () => <p className="mt-8"><a href="/" className="text-[10px] uppercase tracking-[0.22em] text-ink-stage-2 hover:text-copper">← Home</a></p>
+
+function Overlay({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#060CE9] px-5 py-8">
+      <div className="w-full max-w-2xl text-center">{children}</div>
+    </div>
+  )
+}
+function Timer({ secondsLeft, total }: { secondsLeft: number; total: number }) {
+  return (
+    <>
+      <div className="mx-auto mt-6 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-black/40">
+        <div className={`h-full rounded-full transition-all duration-300 ${secondsLeft <= 5 ? 'bg-red-500' : 'bg-jeopardy-gold-light'}`} style={{ width: `${(secondsLeft / total) * 100}%` }} />
+      </div>
+      <p className={`mt-1 text-xs tabular-nums ${secondsLeft <= 5 ? 'text-red-300' : 'text-white/60'}`}>{secondsLeft}s</p>
+    </>
+  )
+}
+function Podium({ name, score, you, seat, crowned }: { name: string; score: number; you?: boolean; seat?: number; crowned?: boolean }) {
+  return (
+    <div className={`flex min-w-[120px] items-center gap-2 rounded-lg border px-3 py-2 ${you ? 'border-jeopardy-gold bg-jeopardy-gold/15' : 'border-copper/40 bg-black/40'}`}>
+      {seat != null
+        ? <img src={`/avatars/${seat + 1}.png`} alt="" className="h-9 w-9 rounded-full bg-black object-cover" />
+        : <span className="flex h-9 w-9 items-center justify-center rounded-full border border-jeopardy-gold text-sm font-black text-jeopardy-gold-light">{name.slice(0, 1).toUpperCase()}</span>}
+      <div className="min-w-0 text-left">
+        <p className="truncate text-[11px] font-bold uppercase tracking-wider text-white/80">{crowned ? '👑 ' : ''}{name}</p>
+        <p className={`text-lg font-bold tabular-nums ${score < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}>{money(score)}</p>
+      </div>
+    </div>
+  )
+}
+function ContestantCard({ c }: { c: EpisodeContestant }) {
+  return (
+    <div className="rounded-xl border border-copper/50 bg-black/40 p-4 text-left">
+      <img src={`/avatars/${c.seat + 1}.png`} alt="" className="h-24 w-24 rounded-full bg-black object-cover" />
+      <p className="mt-3 font-bold text-white">{c.name}</p>
+      <p className="text-xs text-white/80">{c.occupation ? `${/^[aeiou]/i.test(c.occupation) ? 'an' : 'a'} ${c.occupation}` : ''}{c.hometown ? ` from ${c.hometown}` : ''}</p>
+      {c.note && <p className="mt-1 text-[10px] uppercase tracking-wider text-jeopardy-gold-light">🏆 {c.note.replace(/^whose\s+/i, '')}</p>}
+    </div>
+  )
+}
+function FinalRow({ name, seat, written, right, wager, total, you }: { name: string; seat?: number; written: string; right: boolean; wager: number; total: number; you?: boolean }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${you ? 'border-jeopardy-gold bg-jeopardy-gold/15' : 'border-white/10 bg-black/40'}`}>
+      {seat != null ? <img src={`/avatars/${seat + 1}.png`} alt="" className="h-9 w-9 rounded-full bg-black object-cover" /> : <span className="w-9" />}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-white">{name} <span className="ml-1 text-[10px] font-normal text-white/60">wagered {money(wager)}</span></p>
+        <p className={`truncate text-xs ${right ? 'text-green-400' : 'text-red-400'}`}>{right ? '✓' : '✗'} &ldquo;{written}&rdquo;</p>
+      </div>
+      <span className={`shrink-0 text-lg font-bold tabular-nums ${total < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}>{money(total)}</span>
+    </div>
+  )
+}

@@ -10,7 +10,10 @@
 
 CREATE TABLE IF NOT EXISTS chat_messages (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    game_id      UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    -- A message belongs to a game OR to a standing room like the Community
+    -- lobby — exactly one of the two.
+    game_id      UUID REFERENCES games(id) ON DELETE CASCADE,
+    room         VARCHAR(64),
     -- Kept even if the player row goes, so their messages don't vanish
     -- mid-conversation when they leave.
     player_id    UUID REFERENCES players(id) ON DELETE SET NULL,
@@ -18,11 +21,14 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     body         VARCHAR(300) NOT NULL,
     created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
 
-    CONSTRAINT chat_body_not_blank CHECK (length(btrim(body)) > 0)
+    CONSTRAINT chat_body_not_blank CHECK (length(btrim(body)) > 0),
+    CONSTRAINT chat_one_scope CHECK ((game_id IS NULL) <> (room IS NULL))
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_messages_game
-    ON chat_messages (game_id, created_at);
+    ON chat_messages (game_id, created_at) WHERE game_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_chat_messages_room
+    ON chat_messages (room, created_at) WHERE room IS NOT NULL;
 
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 

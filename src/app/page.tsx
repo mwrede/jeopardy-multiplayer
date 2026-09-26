@@ -7,6 +7,7 @@ import { useUser } from '@/lib/auth'
 import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { HomeLeaderboards } from '@/components/HomeLeaderboards'
+import { RoomChat } from '@/components/RoomChat'
 import { ProfileMenu } from '@/components/ProfileMenu'
 
 /**
@@ -270,6 +271,12 @@ export default function Home() {
           </div>
         </div>
 
+        {/* The room: one standing conversation for everyone who plays here.
+            Under the doors, above the standings, in the flow of the page. */}
+        <div className="mt-2">
+          <RoomChat room="lobby" prompt="who's playing · what to add" />
+        </div>
+
         {/* Standings, not a single crowned name: one name says who's ahead
             but not by how much, and gives nobody in second anything to aim
             at. */}
@@ -342,6 +349,12 @@ export default function Home() {
 
         <p className="mt-7 text-center text-[11px] text-ink-stage-2">
           Joining someone&apos;s game? Scan the QR code on their screen, or type the room code above.
+        </p>
+        {/* Unlisted, on purpose — it's not announced yet. */}
+        <p className="mt-6 text-center">
+          <a href="/campaign" className="text-[10px] uppercase tracking-[0.22em] text-ink-stage-2/60 transition-colors hover:text-copper">
+            Against Real Contestants
+          </a>
         </p>
 
 

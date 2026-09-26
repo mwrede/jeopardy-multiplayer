@@ -19,15 +19,18 @@ function Board({
   empty: string
 }) {
   return (
-    <a href={href} className="banner !block !py-0 !px-0 overflow-hidden">
-      <div className="flex items-baseline justify-between gap-2 border-b border-white/10 px-3 py-2">
+    <div className="banner !block !py-0 !px-0 overflow-hidden">
+      <a href={href} className="flex items-baseline justify-between gap-2 border-b border-white/10 px-3 py-2 transition-colors hover:bg-white/5">
         <span className="banner-title text-jeopardy-gold-light">{title}</span>
         <span className="banner-sub shrink-0 text-blue-100/60">{note}</span>
-      </div>
+      </a>
       {rows.length === 0 ? (
         <p className="px-3 py-3 text-[11px] text-blue-100/60">{empty}</p>
       ) : (
-        <ol className="divide-y divide-white/5">
+        /* Everyone, scrolling — not a top five. The height is about six rows,
+           so the board reads as a list you can dig into rather than a
+           podium. */
+        <ol className="max-h-[236px] divide-y divide-white/5 overflow-y-auto overscroll-contain">
           {rows.map((r, i) => (
             <li key={`${r.name}-${i}`} className="flex items-center gap-2.5 px-3 py-1.5">
               {/* Rank is its own column so names of any length still line up. */}
@@ -51,7 +54,7 @@ function Board({
           ))}
         </ol>
       )}
-    </a>
+    </div>
   )
 }
 
@@ -67,9 +70,9 @@ export function HomeLeaderboards() {
   const [solo, setSolo] = useState<OverallRow[] | null>(null)
 
   useEffect(() => {
-    getPlayLeaderboard(5).then(setPlay).catch(() => setPlay([]))
+    getPlayLeaderboard(500).then(setPlay).catch(() => setPlay([]))
     fetchAllChallengeResults()
-      .then((r) => setSolo(overallLeaderboard(r).slice(0, 5)))
+      .then((r) => setSolo(overallLeaderboard(r)))
       .catch(() => setSolo([]))
   }, [])
 
@@ -77,7 +80,7 @@ export function HomeLeaderboards() {
     <div className="mt-2 grid gap-2 sm:gap-2.5 sm:grid-cols-2">
       <Board
         title="👑 Most wins"
-        note="friends + strangers"
+        note="everyone who's finished a game"
         href="/find"
         rows={(play ?? []).map((r) => ({
           name: r.name,

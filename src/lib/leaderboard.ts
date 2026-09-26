@@ -19,8 +19,11 @@
 
 import { supabase } from './supabase'
 
-/** Below this, a rate says more about luck than the player. */
-export const MIN_GAMES = 3
+/** Games needed to appear. One: a table of strangers is small enough that
+ *  waiting for three games left the board empty for weeks, and the
+ *  sample-adjusted rating below already keeps a single lucky win from
+ *  outranking a real record. */
+export const MIN_GAMES = 1
 
 /** Strength of the pull toward chance — worth this many "average" games. */
 const PRIOR_GAMES = 4
@@ -40,10 +43,8 @@ export type LeaderboardRow = {
 /**
  * Standings across finished Community Play games.
  *
- * Grouped by account, not by name: community play requires signing in, so two
- * people typing "Mike" keep separate records, and changing your display name
- * carries your history with it. Rows with no account are ignored — they'd be
- * unattributable.
+ * Grouped by account when there is one and by name when there isn't, so
+ * guests appear too.
  */
 /**
  * The winningest player across finished PRIVATE games — the friends-and-
@@ -124,16 +125,20 @@ export async function getCommunityLeaderboard(limit = 25): Promise<LeaderboardRo
 
   const agg = new Map<string, { name: string; games: number; wins: number; total: number }>()
   for (const p of players as any[]) {
-    // No account, no ranking — there'd be no way to tell two players apart.
-    if (!p.user_id) continue
-    const row = agg.get(p.user_id) ?? { name: '', games: 0, wins: 0, total: 0 }
+    const nm = (p.name ?? '').trim()
+    if (!nm || nm === 'Presenter') continue
+    // Account when there is one, name when there isn't. Two guests called
+    // Mike will share a row; the alternative was a board most of the room
+    // couldn't find themselves on.
+    const key = p.user_id ? `user:${p.user_id}` : `name:${nm.toLowerCase()}`
+    const row = agg.get(key) ?? { name: '', games: 0, wins: 0, total: 0 }
     // Whatever they called themselves most recently is the name shown.
-    row.name = (p.name ?? '').trim() || row.name || 'Player'
+    row.name = nm || row.name || 'Player'
     row.games += 1
     row.total += p.score ?? 0
     // A tie at the top counts as a win for everyone tied — nobody lost it.
     if (p.score === best.get(p.game_id)) row.wins += 1
-    agg.set(p.user_id, row)
+    agg.set(key, row)
   }
 
   return [...agg.values()]
@@ -219,8 +224,9 @@ export async function getPlayLeaderboard(limit = 8): Promise<WinsRow[]> {
     agg.set(key, row)
   }
 
+  // Everyone who has finished a game, wins or not — a table people can find
+  // themselves on is the whole point of it.
   return [...agg.values()]
-    .filter((r) => r.wins > 0)
-    .sort((a, b) => b.wins - a.wins || b.best - a.best)
+    .sort((a, b) => b.wins - a.wins || b.total - a.total || b.best - a.best)
     .slice(0, limit)
 }

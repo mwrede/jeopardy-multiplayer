@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useChat } from '@/hooks/useChat'
-import { MAX_MESSAGE_LENGTH } from '@/lib/chat'
+import { MAX_MESSAGE_LENGTH, type ChatScope } from '@/lib/chat'
 
 /** hh:mm, local. */
 const clock = (iso: string) =>
@@ -23,20 +23,22 @@ const clock = (iso: string) =>
  * Renders nothing at all until supabase-migration-chat.sql has been run.
  */
 export function GameChat({
-  gameId,
+  scope,
   myPlayerId,
   myName,
+  title = 'Chat',
 }: {
-  gameId: string
+  scope: ChatScope
   myPlayerId: string | null
   myName: string
+  title?: string
 }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
 
   const { messages, available, unread, latest, send, dismissPeek } = useChat(
-    gameId, myPlayerId, myName, !open,
+    scope, myPlayerId, myName, !open,
   )
 
   const endRef = useRef<HTMLDivElement>(null)
@@ -119,7 +121,7 @@ export function GameChat({
           <div className="flex max-h-[58vh] flex-col rounded-xl border border-copper/40 bg-jeopardy-dark/95 shadow-2xl backdrop-blur sm:max-h-[440px]">
             <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-copper">
-                💬 Chat
+                💬 {title}
               </span>
               <button
                 onClick={() => setOpen(false)}

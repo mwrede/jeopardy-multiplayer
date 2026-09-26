@@ -19,9 +19,16 @@ export const MAX_MESSAGE_LENGTH = 300
  *  small on a long one. */
 const HISTORY = 200
 
+/** Where a conversation lives: inside one game, or in a standing room such
+ *  as the Community lobby. */
+export type ChatScope = { gameId: string } | { room: string }
+
+export const scopeKey = (s: ChatScope) => ('gameId' in s ? `game:${s.gameId}` : `room:${s.room}`)
+
 export type ChatMessage = {
   id: string
-  game_id: string
+  game_id: string | null
+  room: string | null
   player_id: string | null
   player_name: string
   body: string
@@ -38,13 +45,12 @@ export type ChatLoad =
   | { ok: true; messages: ChatMessage[] }
   | { ok: false; missing: boolean }
 
-export async function loadMessages(gameId: string): Promise<ChatLoad> {
-  const { data, error } = await supabase
+export async function loadMessages(scope: ChatScope): Promise<ChatLoad> {
+  let q = supabase
     .from('chat_messages')
-    .select('id, game_id, player_id, player_name, body, created_at')
-    .eq('game_id', gameId)
-    .order('created_at', { ascending: false })
-    .limit(HISTORY)
+    .select('id, game_id, room, player_id, player_name, body, created_at')
+  q = 'gameId' in scope ? q.eq('game_id', scope.gameId) : q.eq('room', scope.room)
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(HISTORY)
 
   if (error) return { ok: false, missing: isMissingTable(error.message) }
   // Fetched newest-first so the LIMIT keeps the most recent; shown oldest-first.
@@ -56,7 +62,7 @@ export async function loadMessages(gameId: string): Promise<ChatLoad> {
  * text back rather than swallowing what someone typed.
  */
 export async function sendMessage(
-  gameId: string,
+  scope: ChatScope,
   playerId: string | null,
   playerName: string,
   body: string,
@@ -65,7 +71,8 @@ export async function sendMessage(
   if (!text) return false
 
   const { error } = await supabase.from('chat_messages').insert({
-    game_id: gameId,
+    game_id: 'gameId' in scope ? scope.gameId : null,
+    room: 'room' in scope ? scope.room : null,
     player_id: playerId,
     player_name: (playerName || 'Player').slice(0, 40),
     body: text,

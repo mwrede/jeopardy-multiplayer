@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { loadMessages, sendMessage, type ChatMessage } from '@/lib/chat'
+import { loadMessages, scopeKey, sendMessage, type ChatMessage, type ChatScope } from '@/lib/chat'
 
 /**
  * A room's chat: history, live arrivals, and what you haven't read.
@@ -13,7 +13,7 @@ import { loadMessages, sendMessage, type ChatMessage } from '@/lib/chat'
  * doesn't matter. A chat subscription failing must not take the game with it.
  */
 export function useChat(
-  gameId: string | null | undefined,
+  scope: ChatScope | null | undefined,
   myPlayerId: string | null,
   myName: string,
   /** While true, arrivals are counted as unread. */
@@ -37,27 +37,31 @@ export function useChat(
     }
   }, [])
 
+  const key = scope ? scopeKey(scope) : null
+
   // History
   useEffect(() => {
-    if (!gameId) return
+    if (!scope) return
     let cancelled = false
-    loadMessages(gameId).then((res) => {
+    loadMessages(scope).then((res) => {
       if (cancelled) return
       if (!res.ok) { setAvailable(false); return }
       setAvailable(true)
       setMessages(res.messages)
     })
     return () => { cancelled = true }
-  }, [gameId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
 
   // Live arrivals
   useEffect(() => {
-    if (!gameId || !available) return
+    if (!scope || !available) return
+    const filter = 'gameId' in scope ? `game_id=eq.${scope.gameId}` : `room=eq.${scope.room}`
     const channel = supabase
-      .channel(`chat:${gameId}`)
+      .channel(`chat:${key}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `game_id=eq.${gameId}` },
+        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter },
         (payload) => {
           const m = payload.new as ChatMessage
           add(m, !!myPlayerId && m.player_id === myPlayerId)
@@ -65,26 +69,29 @@ export function useChat(
       )
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [gameId, available, myPlayerId, add])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, available, myPlayerId, add])
 
   // Realtime can drop a message during a socket flap, and chat is not worth a
   // reconnect dance — a slow poll while the panel is open closes the gap.
   useEffect(() => {
-    if (!gameId || !available || hidden) return
+    if (!scope || !available || hidden) return
     const t = setInterval(() => {
-      loadMessages(gameId).then((res) => { if (res.ok) setMessages(res.messages) })
+      loadMessages(scope).then((res) => { if (res.ok) setMessages(res.messages) })
     }, 6000)
     return () => clearInterval(t)
-  }, [gameId, available, hidden])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, available, hidden])
 
   useEffect(() => { if (!hidden) { setUnread(0); setLatest(null) } }, [hidden])
 
   const send = useCallback(
     async (body: string) => {
-      if (!gameId) return false
-      return sendMessage(gameId, myPlayerId, myName, body)
+      if (!scope) return false
+      return sendMessage(scope, myPlayerId, myName, body)
     },
-    [gameId, myPlayerId, myName],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key, myPlayerId, myName],
   )
 
   return { messages, available, unread, latest, send, dismissPeek: () => setLatest(null) }

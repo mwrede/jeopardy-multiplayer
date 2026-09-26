@@ -1251,9 +1251,9 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
               </p>
               <div className="grid grid-cols-3 gap-2 mb-4">
                 {([
-                  { id: 'full' as GameLength, label: 'Full', desc: '6×5', sub: '30 clues' },
-                  { id: 'half' as GameLength, label: 'Half', desc: '6×3', sub: '18 clues' },
-                  { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3', sub: '9 clues' },
+                  { id: 'full' as GameLength, label: 'Full', desc: '6×5', sub: '30 clues · ~20 min' },
+                  { id: 'half' as GameLength, label: 'Half', desc: '6×3', sub: '18 clues · ~10 min' },
+                  { id: 'rapid' as GameLength, label: 'Rapid', desc: '3×3', sub: '9 clues · ~5 min' },
                 ]).map((s) => (
                   <button
                     key={s.id}

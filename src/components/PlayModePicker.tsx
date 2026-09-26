@@ -5,10 +5,10 @@ import type { GameLength } from '@/types/game'
 
 export type PlayMode = 'party' | 'multiplayer' | 'hosted'
 
-const SIZES: Array<{ id: GameLength; label: string; desc: string }> = [
-  { id: 'full', label: 'Full', desc: '6×5' },
-  { id: 'half', label: 'Half', desc: '6×3' },
-  { id: 'rapid', label: 'Rapid', desc: '3×3' },
+const SIZES: Array<{ id: GameLength; label: string; desc: string; time: string }> = [
+  { id: 'full', label: 'Full', desc: '6×5', time: '~20 min' },
+  { id: 'half', label: 'Half', desc: '6×3', time: '~10 min' },
+  { id: 'rapid', label: 'Rapid', desc: '3×3', time: '~5 min' },
 ]
 
 /**
@@ -138,7 +138,7 @@ export function PlayModePicker({
               >
                 <span>
                   {s.label}
-                  <span className="block text-[10px] font-normal opacity-80">{s.desc}</span>
+                  <span className="block text-[10px] font-normal opacity-80">{s.desc} · {s.time}</span>
                 </span>
               </button>
             ))}
@@ -160,7 +160,7 @@ export function PlayModePicker({
               >
                 <span>
                   {s.label}
-                  <span className="block text-[10px] font-normal opacity-80">{s.desc}</span>
+                  <span className="block text-[10px] font-normal opacity-80">{s.desc} · {s.time}</span>
                 </span>
               </button>
             ))}

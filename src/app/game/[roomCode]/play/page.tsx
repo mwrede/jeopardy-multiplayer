@@ -16,6 +16,7 @@ import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { GameChat } from '@/components/GameChat'
 import { WagerStandings } from '@/components/WagerStandings'
 import { ContestantScores } from '@/components/ContestantScores'
+import { FinalStandings } from '@/components/FinalStandings'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
 import { GameKeyboard } from '@/components/GameKeyboard'
@@ -828,7 +829,7 @@ export default function PlayPage() {
    */
   const chat =
     players.length > 1 ? (
-      <GameChat gameId={game.id} myPlayerId={myPlayerId} myName={myPlayer.name || 'Player'} />
+      <GameChat scope={{ gameId: game.id }} myPlayerId={myPlayerId} myName={myPlayer.name || 'Player'} />
     ) : null
 
   const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
@@ -1240,20 +1241,16 @@ export default function PlayPage() {
         <h1 className="text-3xl font-bold text-jeopardy-gold mb-2">
           {game.phase === 'game_over' ? (players.sort((a, b) => b.score - a.score)[0]?.name || 'Winner') + ' wins!' : 'Final Results...'}
         </h1>
-        <div className="w-full max-w-sm space-y-3 mt-6">
-          {players.sort((a, b) => b.score - a.score).map((p, i) => (
-            <div key={p.id} className={`flex items-center justify-between px-5 py-4 rounded-xl ${
-              i === 0 ? 'bg-jeopardy-gold/20 border-2 border-jeopardy-gold' : 'bg-white/5'
-            }`}>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{i === 0 ? '🏆' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</span>
-                <span className="font-bold text-xl">{p.name}</span>
-              </div>
-              <span className={`text-xl font-bold ${p.score < 0 ? 'text-red-400' : 'text-jeopardy-gold'}`}>
-                ${p.score.toLocaleString()}
-              </span>
-            </div>
-          ))}
+        {/* Everyone in one ranked list — the people at this table and the
+            people who really played the board, the latter in copper and tagged
+            REAL, so you can see exactly where you finished among them. */}
+        <div className="mt-6 flex w-full justify-center">
+          <FinalStandings
+            players={players}
+            sourceGameId={sourceGameId}
+            size={game.settings?.gameLength || 'full'}
+            myPlayerId={myPlayerId}
+          />
         </div>
         {/* How everyone actually did on the buzzer — the record of the game,
             not just the scores it produced. */}

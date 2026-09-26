@@ -146,9 +146,9 @@ export default function MultiplayerPage() {
   }
 
   const gameLengthOptions: Array<{ id: GameLength; label: string; desc: string }> = [
-    { id: 'full', label: 'Full', desc: '6x5' },
-    { id: 'half', label: 'Half', desc: '6x3' },
-    { id: 'rapid', label: 'Rapid', desc: '3x3' },
+    { id: 'full', label: 'Full', desc: '6×5 · ~20 min' },
+    { id: 'half', label: 'Half', desc: '6×3 · ~10 min' },
+    { id: 'rapid', label: 'Rapid', desc: '3×3 · ~5 min' },
   ]
 
   // === LANDING SCREEN ===

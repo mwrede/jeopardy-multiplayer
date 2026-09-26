@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser, signInWithGoogle } from '@/lib/auth'
+import { RoomChat } from '@/components/RoomChat'
 import { ProfileMenu } from '@/components/ProfileMenu'
-import { getCommunityLeaderboard, MIN_GAMES, type LeaderboardRow } from '@/lib/leaderboard'
+import { getCommunityLeaderboard, type LeaderboardRow } from '@/lib/leaderboard'
 import {
   listCommunityLobbies,
   findOrCreateGame,
@@ -224,13 +225,13 @@ export default function CommunityPage() {
           third who never shows.
         </p>
 
-        {/* Playing needs no account. Signing in only adds the leaderboard —
-            standings can't be kept for someone there's no way to recognise
-            again, so guests are simply skipped in the rankings. */}
+        {/* Playing needs no account. Signing in keeps your record together
+            across devices and name changes; guests are ranked by the name they
+            play under. */}
         {!userLoading && !user && (
           <div className="mt-6 rounded-xl border border-white/15 bg-black/30 p-4 text-center">
             <p className="text-sm text-ink-stage-2">
-              Playing as a guest. Sign in if you want your wins to count toward the leaderboard.
+              Playing as a guest. Sign in to keep your record together across devices.
             </p>
             <button
               onClick={() => signInWithGoogle('/community')}
@@ -406,17 +407,25 @@ export default function CommunityPage() {
           </div>
         </div>
 
+        {/* The room — the same conversation as the home page. This is where
+            people say what they thought of a game and what the site should do
+            next, so it sits right under the tables. */}
+        <div className="mt-10">
+          <div className="eyebrow-copper mb-3">The room</div>
+          <RoomChat room="lobby" prompt="how was the game · what to add" />
+        </div>
+
         {/* Standings */}
         <div className="mt-10">
           <div className="eyebrow-copper mb-1">Leaderboard</div>
           <p className="mb-3 text-xs text-ink-stage-2">
             Ranked by win rate adjusted for how much you&apos;ve played, so a single
-            lucky game doesn&apos;t outrank a long record. {MIN_GAMES}+ games to appear.
+            lucky game doesn&apos;t outrank a long record.
           </p>
 
           {board.length === 0 ? (
             <p className="rounded-lg border border-white/10 bg-black/30 px-4 py-6 text-center text-sm text-ink-stage-2">
-              Nobody has played {MIN_GAMES} games yet. Be the first.
+              Nobody has finished a game yet. Be the first.
             </p>
           ) : (
             <div className="overflow-x-auto">

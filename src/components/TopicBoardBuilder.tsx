@@ -14,10 +14,10 @@ export type { PlayMode }
  * strings elsewhere — an invalid key makes GAME_LENGTH_CONFIG[key] undefined
  * and crashes the render.
  */
-const SIZES: { key: GameLength; label: string }[] = [
-  { key: 'rapid', label: 'Rapid' },
-  { key: 'half', label: 'Half' },
-  { key: 'full', label: 'Full' },
+const SIZES: { key: GameLength; label: string; time: string }[] = [
+  { key: 'rapid', label: 'Rapid', time: '~5 min' },
+  { key: 'half', label: 'Half', time: '~10 min' },
+  { key: 'full', label: 'Full', time: '~20 min' },
 ]
 
 /**
@@ -182,7 +182,7 @@ export function TopicBoardBuilder({
         Board size
       </p>
       <div className="flex gap-2 mb-5">
-        {SIZES.map(({ key, label }) => {
+        {SIZES.map(({ key, label, time }) => {
           const cfg = GAME_LENGTH_CONFIG[key]
           return (
             <button
@@ -196,7 +196,7 @@ export function TopicBoardBuilder({
             >
               <span>{label}</span>
               <span className="block text-[10px] opacity-70">
-                {cfg.categories}×{cfg.cluesPerCat}
+                {cfg.categories}×{cfg.cluesPerCat} · {time}
               </span>
             </button>
           )
