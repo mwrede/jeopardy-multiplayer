@@ -8,6 +8,7 @@ import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { HomeLeaderboards } from '@/components/HomeLeaderboards'
 import { RoomChat } from '@/components/RoomChat'
+import { CampaignRow, CampaignStandings } from '@/components/CampaignRow'
 import { ProfileMenu } from '@/components/ProfileMenu'
 
 /**
@@ -231,6 +232,11 @@ export default function Home() {
           </div>
         </div>
 
+        {/* The campaign: a wide row under the board, with the three podiums.
+            A different kind of game from the three cells above it. */}
+        <CampaignRow />
+        <CampaignStandings />
+
         {/* Banners. The two doors first, in copper so nobody mistakes them
             for a clue, then whoever currently holds each crown. */}
         <div className="mt-3 grid gap-2 sm:mt-4 sm:gap-2.5 sm:grid-cols-2">
@@ -350,12 +356,7 @@ export default function Home() {
         <p className="mt-7 text-center text-[11px] text-ink-stage-2">
           Joining someone&apos;s game? Scan the QR code on their screen, or type the room code above.
         </p>
-        {/* Unlisted, on purpose — it's not announced yet. */}
-        <p className="mt-6 text-center">
-          <a href="/campaign" className="text-[10px] uppercase tracking-[0.22em] text-ink-stage-2/60 transition-colors hover:text-copper">
-            Against Real Contestants
-          </a>
-        </p>
+
 
 
         {/* How do you want to play this board? Same three ways the editor

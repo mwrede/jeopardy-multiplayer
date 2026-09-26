@@ -10,10 +10,13 @@ import { clampDailyDoubleWager, clampFinalWager, maxDailyDoubleWager, maxFinalWa
 import { fetchEpisode, money, type Episode, type EpisodeContestant } from '@/lib/episode'
 import {
   boardFor, cellKey, clearRun, clueAt, contestantFinal, contestantScore, episodeInfo, episodesInYear,
-  loadProfile, loadRun, nextEpisode, saveProfile, saveRun, whoAnswered,
-  type EpisodeInfo, type NightResult, type Profile, type Run,
+  loadBest, loadProfile, loadRun, newRunId, nextEpisode, noteBest, recordNight, saveProfile, saveRun, whoAnswered,
+  type BestRun, type EpisodeInfo, type NightResult, type Profile, type Run,
 } from '@/lib/campaign'
 import type { GameLength } from '@/types/game'
+import { REAL_STREAKS, rankAmongReal } from '@/lib/streaks'
+import { useUser } from '@/lib/auth'
+import { getChallengeIdentity } from '@/lib/challenge'
 
 /**
  * AGAINST REAL CONTESTANTS — the campaign.
@@ -44,9 +47,11 @@ const thisYear = new Date().getFullYear()
 const YEARS = Array.from({ length: thisYear - 1984 + 1 }, (_, i) => thisYear - i)
 
 export default function CampaignPage() {
+  const { user } = useUser()
   const [phase, setPhase] = useState<Phase>('welcome')
   const [profile, setProfile] = useState<Profile>({ name: '', hometown: '', anecdote: '' })
   const [run, setRun] = useState<Run | null>(null)
+  const [best, setBest] = useState<BestRun | null>(null)
 
   // Picking a starting night.
   const [year, setYear] = useState(thisYear)
@@ -96,6 +101,7 @@ export default function CampaignPage() {
     const p = loadProfile()
     if (p) setProfile(p)
     setRun(loadRun())
+    setBest(loadBest())
   }, [])
 
   /* ── Derived ─────────────────────────────────────────────────────────── */
@@ -219,6 +225,7 @@ export default function CampaignPage() {
     saveProfile(profile)
     if (!run && picked) {
       const fresh: Run = {
+        id: newRunId(),
         startGameId: picked.gameId,
         currentGameId: picked.gameId,
         season: picked.season,
@@ -318,6 +325,8 @@ export default function CampaignPage() {
     }
     setRun(updated)
     saveRun(updated)
+    setBest(noteBest(updated, profile.name))
+    void recordNight(updated, profile, getChallengeIdentity(user?.id), result)
     setPhase('night')
   }
 
@@ -376,6 +385,7 @@ export default function CampaignPage() {
           {live ? 'Start over' : 'Start a campaign'}
         </button>
         {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
+        <StreakTable best={best} />
         <BackHome />
       </Shell>
     )
@@ -809,6 +819,7 @@ export default function CampaignPage() {
           ))}
         </div>
         <button onClick={beginNew} className="btn-stage btn-copper btn-stage-lg mt-6">Start a new campaign</button>
+        <StreakTable best={best} />
         <BackHome />
       </Shell>
     )
@@ -844,7 +855,7 @@ const BackHome = () => <p className="mt-8"><a href="/" className="text-[10px] up
 
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#060CE9] px-5 py-8">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#030845] px-5 py-8">
       <div className="w-full max-w-2xl text-center">{children}</div>
     </div>
   )
@@ -891,6 +902,71 @@ function FinalRow({ name, seat, written, right, wager, total, you }: { name: str
         <p className={`truncate text-xs ${right ? 'text-green-400' : 'text-red-400'}`}>{right ? '✓' : '✗'} &ldquo;{written}&rdquo;</p>
       </div>
       <span className={`shrink-0 text-lg font-bold tabular-nums ${total < 0 ? 'text-red-400' : 'text-jeopardy-gold-light'}`}>{money(total)}</span>
+    </div>
+  )
+}
+
+/**
+ * The real record, with your best run placed on it. Every real streak is
+ * regular play only — the number a campaign compares to. Your row is what a
+ * run would rank if it were on the list, whether or not it makes the cut.
+ */
+function StreakTable({ best }: { best: BestRun | null }) {
+  const mine = best && best.streak > 0 ? best : null
+  const rank = mine ? rankAmongReal(mine.streak) : null
+  return (
+    <div className="mx-auto mt-10 max-w-md text-left">
+      <p className="text-center text-[10px] font-bold uppercase tracking-[0.28em] text-copper">
+        Longest streaks in Jeopardy! history
+      </p>
+      <p className="mt-1 text-center text-[11px] text-ink-stage-2">
+        Regular play, since the five-game limit came off in 2003.
+      </p>
+      <ol className="mt-3 divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+        {REAL_STREAKS.map((r) => (
+          <li key={r.name}>
+            {/* Your best slots in above the first real streak it beats. */}
+            {mine && rank === r.rank && <MyStreakRow best={mine} rank={rank} />}
+            <div className="flex items-center gap-3 px-3 py-2">
+              <span className={`w-5 shrink-0 text-center text-[11px] font-black tabular-nums ${r.rank <= 3 ? 'text-jeopardy-gold-light' : 'text-white/40'}`}>
+                {r.rank}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-white">{r.name}</span>
+                <span className="block text-[10px] text-ink-stage-2">{r.when} · {money(r.winnings)}</span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block text-base font-bold tabular-nums text-jeopardy-gold-light">{r.games}</span>
+                <span className="block text-[9px] uppercase leading-none text-ink-stage-2">games</span>
+              </span>
+            </div>
+          </li>
+        ))}
+        {mine && rank !== null && rank > REAL_STREAKS.length && <li><MyStreakRow best={mine} rank={rank} /></li>}
+        {!mine && (
+          <li className="px-3 py-2.5 text-center text-[11px] text-ink-stage-2">
+            Win a night and your run appears here, ranked against them.
+          </li>
+        )}
+      </ol>
+    </div>
+  )
+}
+
+function MyStreakRow({ best, rank }: { best: BestRun; rank: number }) {
+  return (
+    <div className="flex items-center gap-3 border-y border-jeopardy-gold/50 bg-jeopardy-gold/15 px-3 py-2">
+      <span className="w-5 shrink-0 text-center text-[11px] font-black tabular-nums text-jeopardy-gold-light">{rank}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-white">
+          {best.name} <span className="text-[10px] uppercase text-jeopardy-gold-light">you</span>
+        </span>
+        <span className="block text-[10px] text-ink-stage-2">your best run · {money(best.winnings)}</span>
+      </span>
+      <span className="shrink-0 text-right">
+        <span className="block text-base font-bold tabular-nums text-jeopardy-gold-light">{best.streak}</span>
+        <span className="block text-[9px] uppercase leading-none text-ink-stage-2">{best.streak === 1 ? 'night' : 'nights'}</span>
+      </span>
     </div>
   )
 }

@@ -25,6 +25,19 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     CONSTRAINT chat_one_scope CHECK ((game_id IS NULL) <> (room IS NULL))
 );
 
+-- An earlier version of this table had only game_id. CREATE TABLE IF NOT
+-- EXISTS skips a table that's already there, so bring it up to date
+-- explicitly: add the room column, let game_id be null, add the constraint.
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS room VARCHAR(64);
+ALTER TABLE chat_messages ALTER COLUMN game_id DROP NOT NULL;
+DO $$
+BEGIN
+    ALTER TABLE chat_messages
+        ADD CONSTRAINT chat_one_scope CHECK ((game_id IS NULL) <> (room IS NULL));
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_chat_messages_game
     ON chat_messages (game_id, created_at) WHERE game_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_chat_messages_room

@@ -36,6 +36,8 @@ export type NightResult = {
 }
 
 export type Run = {
+  /** Client-minted, so nights can be grouped without an account. */
+  id?: string
   startGameId: number
   currentGameId: number
   season: string
@@ -50,6 +52,10 @@ export type Run = {
 
 const PROFILE_KEY = 'campaign:profile'
 const RUN_KEY = 'campaign:run'
+const BEST_KEY = 'campaign:best'
+
+/** The best run this browser has ever put together, kept across campaigns. */
+export type BestRun = { streak: number; winnings: number; name: string; startGameId: number }
 
 const canStore = () => typeof window !== 'undefined' && !!window.localStorage
 
@@ -70,6 +76,16 @@ export const saveProfile = (p: Profile) => write(PROFILE_KEY, p)
 export const loadRun = () => read<Run>(RUN_KEY)
 export const saveRun = (r: Run) => write(RUN_KEY, r)
 export function clearRun() { if (canStore()) localStorage.removeItem(RUN_KEY) }
+export const loadBest = () => read<BestRun>(BEST_KEY)
+
+/** Record a run against the all-time best if it beats it. Returns the best. */
+export function noteBest(run: Run, name: string): BestRun {
+  const cur = loadBest()
+  const mine: BestRun = { streak: run.streak, winnings: run.totalWinnings, name, startGameId: run.startGameId }
+  const better = !cur || mine.streak > cur.streak || (mine.streak === cur.streak && mine.winnings > cur.winnings)
+  if (better) write(BEST_KEY, mine)
+  return better ? mine : cur!
+}
 
 export type EpisodeInfo = { gameId: number; title: string; airDate: string | null; season: string }
 
@@ -185,4 +201,92 @@ export function contestantFinal(
   const rec = episode.final?.responses.find((r) => r.name === who.first)
   if (!rec) return null
   return { wager: Math.min(rec.wager, Math.max(0, before)), right: rec.right, written: rec.written }
+}
+
+/* ── The shared record ─────────────────────────────────────────────────── */
+
+export type NightRow = {
+  run_id: string
+  identity_key: string
+  player_name: string
+  hometown: string | null
+  game_id_source: number
+  aired_on: string | null
+  size: string
+  my_score: number
+  their_scores: { name: string; score: number }[]
+  won: boolean
+  streak_after: number
+  winnings_after: number
+  created_at: string
+}
+
+export const newRunId = () =>
+  (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+
+/**
+ * Publish a settled night. Fire-and-forget: the run is already saved locally,
+ * and the table may not exist yet (supabase-migration-campaign.sql is hand-run
+ * like the rest), so a failure here changes nothing the player can see.
+ */
+export async function recordNight(run: Run, profile: Profile, identity: string, night: NightResult) {
+  try {
+    await supabase.from('campaign_nights').insert({
+      run_id: run.id ?? newRunId(),
+      identity_key: identity,
+      player_name: profile.name.slice(0, 40),
+      hometown: profile.hometown.slice(0, 60) || null,
+      game_id_source: night.gameId,
+      aired_on: night.airedOn,
+      size: night.size,
+      my_score: night.myScore,
+      their_scores: night.theirs,
+      won: night.won,
+      streak_after: run.streak,
+      winnings_after: run.totalWinnings,
+    })
+  } catch {}
+}
+
+export type Standings = {
+  available: boolean
+  /** Best night reached per run, longest first. */
+  streaks: { name: string; hometown: string | null; streak: number; winnings: number; when: string }[]
+  /** Most recent nights won. */
+  beat: NightRow[]
+  /** Most recent nights lost. */
+  fell: NightRow[]
+}
+
+export async function campaignStandings(): Promise<Standings> {
+  const { data, error } = await supabase
+    .from('campaign_nights')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1000)
+  if (error) return { available: false, streaks: [], beat: [], fell: [] }
+
+  const rows = (data ?? []) as NightRow[]
+  const byRun = new Map<string, { name: string; hometown: string | null; streak: number; winnings: number; when: string }>()
+  for (const r of rows) {
+    const cur = byRun.get(r.run_id)
+    if (!cur || r.streak_after > cur.streak) {
+      byRun.set(r.run_id, {
+        name: r.player_name, hometown: r.hometown, streak: r.streak_after,
+        winnings: r.winnings_after, when: r.created_at,
+      })
+    }
+  }
+  const streaks = [...byRun.values()]
+    .filter((x) => x.streak > 0)
+    .sort((a, b) => b.streak - a.streak || b.winnings - a.winnings)
+
+  return {
+    available: true,
+    streaks,
+    beat: rows.filter((r) => r.won),
+    fell: rows.filter((r) => !r.won),
+  }
 }
