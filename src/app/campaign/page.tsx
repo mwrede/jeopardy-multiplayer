@@ -31,7 +31,7 @@ import { getChallengeIdentity } from '@/lib/challenge'
  * how far into the season you got.
  */
 
-type Phase = 'welcome' | 'profile' | 'pick' | 'meet' | 'playing' | 'curtain' | 'final' | 'night' | 'over'
+type Phase = 'welcome' | 'profile' | 'pick' | 'journey' | 'meet' | 'playing' | 'curtain' | 'final' | 'night' | 'over'
 type Outcome = 'correct' | 'wrong' | 'pass'
 type Resolved = { outcome: Outcome; delta: number; typed: string }
 
@@ -204,8 +204,13 @@ export default function CampaignPage() {
     setEpisodes(await episodesInYear(y))
   }
 
-  /** Fetch the episode and open the green room. */
-  async function loadNight(info: EpisodeInfo) {
+  /**
+   * Fetch the episode and open the green room. The first night of a run is
+   * the trip out — bags, the flight, the studio doors, the stage — so it
+   * goes through the journey while the episode loads underneath. Every night
+   * after that you're already in Culver City, and you walk straight on.
+   */
+  async function loadNight(info: EpisodeInfo, travel = false) {
     setError('')
     setEpisode(null)
     setResolved({})
@@ -215,7 +220,7 @@ export default function CampaignPage() {
     setFjResult(null)
     setNight(null)
     setNextInfo(null)
-    setPhase('meet')
+    setPhase(travel ? 'journey' : 'meet')
     const ep = await fetchEpisode(info.gameId)
     if (!ep) { setError("The archive doesn't have a full record of that night. Pick another."); setPhase('pick'); return }
     setEpisode(ep)
@@ -409,6 +414,16 @@ export default function CampaignPage() {
             <input value={profile.hometown} onChange={(e) => setProfile({ ...profile, hometown: e.target.value })}
               maxLength={60} placeholder="Philadelphia, Pennsylvania" className="field-stage mt-1 w-full" />
           </label>
+          {/* The host's question, asked here so it's on the card when you
+              walk out. It stays editable in the green room. */}
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-stage-2">
+              &ldquo;Tell us a little about yourself&rdquo;
+            </span>
+            <textarea value={profile.anecdote} onChange={(e) => setProfile({ ...profile, anecdote: e.target.value })}
+              maxLength={280} rows={2} placeholder="I once biked from Cartagena to Buenos Aires…"
+              className="field-stage mt-1 h-auto w-full resize-none py-2 text-sm" />
+          </label>
           <p className="pt-2 text-center text-sm italic text-white/80">
             &ldquo;{profile.name || 'Your name'}, from {profile.hometown || 'your hometown'}.&rdquo;
           </p>
@@ -457,11 +472,23 @@ export default function CampaignPage() {
         {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
         <div className="mt-5 flex justify-center gap-2">
           <button onClick={() => setPhase('welcome')} className="btn-stage btn-stage-ghost btn-stage-sm">Back</button>
-          <button onClick={() => picked && loadNight(picked)} disabled={!picked} className="btn-stage btn-copper btn-stage-lg disabled:opacity-40">
-            Take the podium →
+          <button onClick={() => picked && loadNight(picked, true)} disabled={!picked} className="btn-stage btn-copper btn-stage-lg disabled:opacity-40">
+            Fly out →
           </button>
         </div>
       </Shell>
+    )
+  }
+
+  // ── The trip out ───────────────────────────────────────────────────────
+  if (phase === 'journey') {
+    return (
+      <Journey
+        name={profile.name}
+        hometown={profile.hometown}
+        dateLine={picked?.airDate ? longDate(picked.airDate) : picked?.title ?? ''}
+        onDone={() => setPhase('meet')}
+      />
     )
   }
 
@@ -488,8 +515,8 @@ export default function CampaignPage() {
           </div>
         </div>
 
-        {/* The host's question. It's part of the night, and it's yours to answer
-            differently every night. */}
+        {/* The host's question, read back. Answered at registration; still
+            yours to change any night. */}
         <div className="mx-auto mt-6 max-w-lg rounded-xl border border-white/15 bg-black/40 p-4 text-left">
           <p className="text-sm italic text-white/90">
             &ldquo;{profile.name}, tell us a little about yourself.&rdquo;
@@ -499,7 +526,7 @@ export default function CampaignPage() {
             onChange={(e) => setProfile({ ...profile, anecdote: e.target.value })}
             maxLength={280}
             rows={2}
-            placeholder="I once biked from Cartagena to Buenos Aires…"
+            placeholder="Something the host can read out…"
             className="field-stage mt-2 h-auto w-full resize-none py-2 text-sm"
           />
         </div>
@@ -967,6 +994,98 @@ function MyStreakRow({ best, rank }: { best: BestRun; rank: number }) {
         <span className="block text-base font-bold tabular-nums text-jeopardy-gold-light">{best.streak}</span>
         <span className="block text-[9px] uppercase leading-none text-ink-stage-2">{best.streak === 1 ? 'night' : 'nights'}</span>
       </span>
+    </div>
+  )
+}
+
+/** "Friday, September 25, 2026" from an ISO date. */
+function longDate(iso: string): string {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  })
+}
+
+const SCENE_MS = [3400, 3800, 4200, 4200]
+
+/**
+ * Four scenes, each a few seconds, then the green room. Bags in the hometown,
+ * the flight west, the studio doors, the stage. Skip is always there — the
+ * second time through nobody needs the airport.
+ */
+function Journey({
+  name, hometown, dateLine, onDone,
+}: {
+  name: string
+  hometown: string
+  dateLine: string
+  onDone: () => void
+}) {
+  const [scene, setScene] = useState(0)
+  useEffect(() => {
+    if (scene >= SCENE_MS.length) { onDone(); return }
+    const t = setTimeout(() => setScene((n) => n + 1), SCENE_MS[scene])
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene])
+
+  const initial = (name || '?').slice(0, 1).toUpperCase()
+  const Caption = ({ kicker, line }: { kicker: string; line: string }) => (
+    <div className="journey-rise absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/50 to-transparent px-6 pb-8 pt-16 text-center">
+      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-copper">{kicker}</p>
+      <p className="mt-1.5 text-xl font-bold text-white md:text-2xl">{line}</p>
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden bg-[#030845]">
+      {/* Scene 1 — packed */}
+      {scene === 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <p className="journey-rise text-[10px] font-bold uppercase tracking-[0.3em] text-copper">Taping day · {dateLine}</p>
+          <div className="journey-walk mt-8 flex items-end gap-3">
+            <div className="flex h-28 w-28 items-center justify-center rounded-full border-4 border-jeopardy-gold bg-black/50 text-6xl font-black text-jeopardy-gold-light shadow-2xl">
+              {initial}
+            </div>
+            <span className="mb-1 text-5xl" aria-hidden>🧳</span>
+          </div>
+          <Caption kicker={hometown || 'Home'} line={`${name}. Bags packed.`} />
+        </div>
+      )}
+
+      {/* Scene 2 — the flight */}
+      {scene === 1 && (
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1c3fbf] via-[#4f7fe6] to-[#dbe7ff]">
+          <span className="journey-drift absolute left-[12%] top-[22%] text-6xl opacity-80" aria-hidden>☁️</span>
+          <span className="journey-drift absolute left-[58%] top-[38%] text-7xl opacity-70 [animation-delay:-2s]" aria-hidden>☁️</span>
+          <span className="journey-drift absolute left-[80%] top-[16%] text-5xl opacity-60 [animation-delay:-4s]" aria-hidden>☁️</span>
+          <span className="journey-fly absolute text-6xl drop-shadow-xl" aria-hidden>✈️</span>
+          <Caption kicker="Wheels up" line={`${hometown || 'Home'} → Los Angeles`} />
+        </div>
+      )}
+
+      {/* Scene 3 — the studio */}
+      {scene === 2 && (
+        <div className="absolute inset-0">
+          <img src="/studio-outside.jpg" alt="" className="journey-burns absolute inset-0 h-full w-full object-cover" />
+          <Caption kicker="Culver City, California" line="Jeopardy! Studios. You're on the list." />
+        </div>
+      )}
+
+      {/* Scene 4 — the stage */}
+      {scene === 3 && (
+        <div className="absolute inset-0">
+          <img src="/studio-stage.jpg" alt="" className="journey-burns absolute inset-0 h-full w-full object-cover" />
+          <div className="journey-flicker pointer-events-none absolute inset-0 bg-white" />
+          <Caption kicker="Places, please" line="Podium four is yours." />
+        </div>
+      )}
+
+      <button
+        onClick={onDone}
+        className="absolute right-3 top-3 z-10 rounded-full border border-white/25 bg-black/50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white/80 backdrop-blur hover:text-white"
+      >
+        Skip
+      </button>
     </div>
   )
 }

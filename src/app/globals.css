@@ -633,3 +633,24 @@ body {
     text-shadow: 0 2px 0 rgba(0,0,0,0.55);
   }
 }
+
+/* ── Campaign journey ───────────────────────────────────────────────────
+   Four short scenes between "who are you" and "meet the contestants": bags,
+   the flight, the studio, the stage. Plain CSS, no library. */
+@keyframes journey-rise    { from { opacity: 0; transform: translateY(18px) } to { opacity: 1; transform: none } }
+@keyframes journey-fly     { 0% { left: -12%; top: 58%; transform: rotate(-8deg) }
+                             50% { top: 30% }
+                             100% { left: 104%; top: 44%; transform: rotate(-4deg) } }
+@keyframes journey-drift   { from { transform: translateX(0) } to { transform: translateX(-60px) } }
+@keyframes journey-burns   { from { transform: scale(1.02) } to { transform: scale(1.14) } }
+@keyframes journey-flicker { 0%, 100% { opacity: .0 } 8% { opacity: .35 } 12% { opacity: 0 } 40% { opacity: .25 } 44% { opacity: 0 } }
+@keyframes journey-walk    { from { transform: translateX(-140px) scale(.9); opacity: 0 } to { transform: none; opacity: 1 } }
+.journey-rise    { animation: journey-rise .7s ease-out both }
+.journey-fly     { animation: journey-fly 3.4s cubic-bezier(.4,.1,.6,1) both }
+.journey-drift   { animation: journey-drift 6s linear infinite alternate }
+.journey-burns   { animation: journey-burns 5s ease-out both }
+.journey-flicker { animation: journey-flicker 3.2s ease-in-out both }
+.journey-walk    { animation: journey-walk 1s cubic-bezier(.2,.8,.2,1) both }
+@media (prefers-reduced-motion: reduce) {
+  .journey-fly, .journey-drift, .journey-burns, .journey-flicker, .journey-walk, .journey-rise { animation: none }
+}
