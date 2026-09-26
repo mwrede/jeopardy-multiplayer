@@ -630,8 +630,11 @@ export default function PlayPage() {
   // that shouldn't cost anyone their turn.
   const currentPlayerOnline =
     !game?.current_player_id || onlineIds.has(game.current_player_id)
-  const SKIP_GRACE_ONLINE_MS = 20000
-  const SKIP_GRACE_OFFLINE_MS = 6000
+  // Eight seconds longer than they used to be. The old windows fired while the
+  // picker was still reading the board, and "X hasn't picked" showing up over
+  // someone who is plainly still there reads as the game nagging them.
+  const SKIP_GRACE_ONLINE_MS = 28000
+  const SKIP_GRACE_OFFLINE_MS = 14000
 
   // Phases that wait on one named player, and so can stall on them.
   //
@@ -1299,6 +1302,7 @@ export default function PlayPage() {
               category={categories.find((c) => c.id === currentClue.category_id)?.name ?? null}
               value={currentClue.value}
               question={currentClue.question}
+              year={currentClue.source_year}
               revealDurationMs={
                 (game.settings?.reading_period_ms && game.settings.reading_period_ms > 0)
                   ? game.settings.reading_period_ms

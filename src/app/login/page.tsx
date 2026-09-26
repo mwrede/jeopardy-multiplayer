@@ -42,7 +42,7 @@ function LoginContent() {
           <div className="plate-surface p-8 text-center md:p-10">
             <div
               className="mb-3 text-[11px] uppercase tracking-[0.36em] text-copper"
-              style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.5)' }}
+              style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
             >
               ▸ Account ◂
             </div>

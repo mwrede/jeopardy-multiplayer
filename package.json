@@ -9,7 +9,8 @@
     "lint": "next lint",
     "seed": "tsx src/scripts/seed-game-data.ts",
     "scrape": "tsx src/scripts/scrape-jarchive.ts",
-    "seed:jarchive": "tsx src/scripts/seed-jarchive-data.ts"
+    "seed:jarchive": "tsx src/scripts/seed-jarchive-data.ts",
+    "update:jarchive": "tsx src/scripts/update-jarchive.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",

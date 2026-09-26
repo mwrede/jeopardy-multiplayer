@@ -18,6 +18,55 @@ const STOPWORDS = new Set([
   'is', 'are', 'was', 'were', 'his', 'her', 'its', 'their',
 ])
 
+/**
+ * Generational suffixes. Nobody is wrong for leaving "Jr." off, and leaving it
+ * ON used to break the initialism rule outright ("MLK Jr." vs "Martin Luther
+ * King, Jr." made initials of "mlkj" against "mlkj"... but "MLK" against
+ * "Martin Luther King, Jr." made "mlk" against "mlkj"). Dropped on both sides.
+ */
+const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v'])
+function dropSuffix(s: string): string {
+  const w = s.split(' ').filter(Boolean)
+  while (w.length > 1 && SUFFIXES.has(w[w.length - 1])) w.pop()
+  return w.join(' ')
+}
+
+/**
+ * Abbreviations whose letters live INSIDE the words they stand for, so no
+ * first-letter rule can ever reach them: DNA is deoxyribonucleic acid, not
+ * "D... N... A...". Small and hand-kept on purpose — each entry is an
+ * abbreviation a Jeopardy player would plausibly type instead of the full
+ * phrase (or the other way round).
+ */
+const ABBREV_EXPANSIONS: Record<string, string> = {
+  dna: 'deoxyribonucleic acid',
+  rna: 'ribonucleic acid',
+  tv: 'television',
+  atm: 'automated teller machine',
+  gps: 'global positioning system',
+  hiv: 'human immunodeficiency virus',
+  aids: 'acquired immunodeficiency syndrome',
+  radar: 'radio detection and ranging',
+  sonar: 'sound navigation and ranging',
+  scuba: 'self contained underwater breathing apparatus',
+  laser: 'light amplification by stimulated emission of radiation',
+  mph: 'miles per hour',
+  ceo: 'chief executive officer',
+  cpr: 'cardiopulmonary resuscitation',
+  ufo: 'unidentified flying object',
+  rsvp: 'repondez sil vous plait',
+}
+
+/** True when one side is a known abbreviation of the other. */
+function knownAbbreviationMatches(a: string, b: string): boolean {
+  const tryOne = (abbr: string, full: string) => {
+    const exp = ABBREV_EXPANSIONS[abbr]
+    if (!exp) return false
+    return exp === full || containsAllWords(exp, full) || containsAllWords(full, exp)
+  }
+  return tryOne(a, b) || tryOne(b, a)
+}
+
 /** Strip "What is", "Who's", "Where are", etc. — repeatedly. */
 export function stripPrefix(s: string): string {
   let prev: string
@@ -197,7 +246,18 @@ function initialismMatches(a: string, b: string): boolean {
     if (!abbr || abbr.includes(' ')) return false
     if (abbr.length < 2 || abbr.length > 5) return false
     if (!/^[a-z]+$/.test(abbr)) return false
-    return initials(full) === abbr
+    const init = initials(dropSuffix(full))
+    if (!init) return false
+    if (init === abbr) return true
+    // A dropped middle name is still the right person: "John Kennedy" for JFK,
+    // "Lyndon Johnson" for LBJ. Accept when the spelled-out side's initials are
+    // a subsequence of the abbreviation AND both ends line up — the anchoring
+    // is what keeps this from turning into a free-for-all.
+    if (init.length < 2 || init.length >= abbr.length) return false
+    if (init[0] !== abbr[0] || init[init.length - 1] !== abbr[abbr.length - 1]) return false
+    let i = 0
+    for (const ch of abbr) if (ch === init[i]) i++
+    return i === init.length
   }
   return tryOne(a, b) || tryOne(b, a)
 }
@@ -249,7 +309,6 @@ export function checkAnswerDetailed(playerAnswer: string, correctAnswer: string)
   const correct = normalize(correctAnswer)
 
   if (!player) return { correct: false, method: 'none', borderline: false }
-  if (!player) return { correct: false, method: 'none', borderline: false }
 
   // Check the player's answer against EVERY acceptable spelling of the stored
   // answer, not just the one normalize() happens to produce.
@@ -263,7 +322,11 @@ export function checkAnswerDetailed(playerAnswer: string, correctAnswer: string)
 }
 
 /** One player answer vs one acceptable spelling. */
-function matchOne(player: string, correct: string): CheckResult {
+function matchOne(rawPlayer: string, rawCorrect: string): CheckResult {
+  // "Martin Luther King" and "Martin Luther King, Jr." are the same man.
+  const player = dropSuffix(rawPlayer)
+  const correct = dropSuffix(rawCorrect)
+
   if (!correct) return { correct: false, method: 'none', borderline: false }
   if (player === correct) return { correct: true, method: 'exact', borderline: false }
 
@@ -272,6 +335,11 @@ function matchOne(player: string, correct: string): CheckResult {
   if (playerExp === correctExp) return { correct: true, method: 'alias', borderline: false }
 
   if (replaceNumbers(player) === replaceNumbers(correct)) {
+    return { correct: true, method: 'alias', borderline: false }
+  }
+
+  // DNA / deoxyribonucleic acid — letters buried inside the words.
+  if (knownAbbreviationMatches(player, correct)) {
     return { correct: true, method: 'alias', borderline: false }
   }
 

@@ -28,11 +28,11 @@ const ALL_SEASONS = [
   '11','12','13','14','15','16','17','18','19','20',
   '21','22','23','24','25','26','27','28','29','30',
   '31','32','33','34','35','36','37','38','39','40',
-  '41','42',
+  '41','42','43',
   'bbab','cwcpi','goattournament','jm','ncc','pcj','superjeopardy','trebekpilots'
 ]
 
-interface ScrapedClue {
+export interface ScrapedClue {
   game_id_source: number
   category: string
   round: string
@@ -49,7 +49,7 @@ interface ScrapedClue {
   notes: string
 }
 
-interface GameListing {
+export interface GameListing {
   gameId: number
   title: string
   airDate: string | null
@@ -89,7 +89,7 @@ async function fetchPage(url: string, retries = 3): Promise<string> {
   return ''
 }
 
-async function getGameIdsFromSeason(season: string): Promise<GameListing[]> {
+export async function getGameIdsFromSeason(season: string): Promise<GameListing[]> {
   const url = `${BASE_URL}/showseason.php?season=${season}`
   const html = await fetchPage(url)
   if (!html) return []
@@ -219,7 +219,7 @@ function parseFinalJeopardy(
   return null
 }
 
-async function scrapeGame(gameId: number, season: string, listing: GameListing): Promise<ScrapedClue[]> {
+export async function scrapeGame(gameId: number, season: string, listing: GameListing): Promise<ScrapedClue[]> {
   const url = `${BASE_URL}/showgame.php?game_id=${gameId}`
   const html = await fetchPage(url)
   if (!html) return []
@@ -389,7 +389,11 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err)
-  process.exit(1)
-})
+// Only run the full scrape when this file is the entry point — the
+// catch-up script imports getGameIdsFromSeason/scrapeGame from here.
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fatal error:', err)
+    process.exit(1)
+  })
+}

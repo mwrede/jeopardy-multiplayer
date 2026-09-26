@@ -27,10 +27,18 @@ export function PlayModePicker({
   onPick,
   onBack,
   creating,
+  fixedSize,
 }: {
   onPick: (mode: PlayMode, size: GameLength) => void
   onBack: () => void
   creating?: boolean
+  /**
+   * Board size already chosen by the caller (the mashup builder picks one
+   * inline, so that it can show the per-topic column split). Given this, the
+   * picker drops its own size grid and asks only how you're playing — the
+   * wording stays identical to the modals either way.
+   */
+  fixedSize?: GameLength
 }) {
   const [pendingSize, setPendingSize] = useState<GameLength | null>(null)
 
@@ -39,7 +47,7 @@ export function PlayModePicker({
       <div className="flex flex-col items-center gap-4 border-t border-white/10 pt-5">
         <p
           className="text-copper uppercase text-sm tracking-[0.28em]"
-          style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}
+          style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
         >
           ▸ How are you playing? ◂
         </p>
@@ -70,11 +78,47 @@ export function PlayModePicker({
     )
   }
 
+  if (fixedSize) {
+    return (
+      <div className="flex flex-col items-center gap-4 border-t border-white/10 pt-5">
+        <p
+          className="text-copper uppercase text-sm tracking-[0.28em]"
+          style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
+        >
+          ▸ Pick a mode ◂
+        </p>
+        <div className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            onClick={() => setPendingSize(fixedSize)}
+            disabled={creating}
+            className="btn-stage btn-copper !h-auto flex-col py-4"
+          >
+            <span className="text-lg">🎮</span>
+            <span>Multiplayer</span>
+            <span className="text-[10px] font-normal opacity-75">Play together</span>
+          </button>
+          <button
+            onClick={() => onPick('hosted', fixedSize)}
+            disabled={creating}
+            className="btn-stage btn-stage-ghost !h-auto flex-col py-4"
+          >
+            <span className="text-lg">🎤</span>
+            <span>Hosted</span>
+            <span className="text-[10px] font-normal opacity-75">You run it</span>
+          </button>
+        </div>
+        <button onClick={onBack} className="mt-1 text-xs text-ink-stage-2 hover:text-copper">
+          Back
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-center gap-4 border-t border-white/10 pt-5">
       <p
         className="text-copper uppercase text-sm tracking-[0.28em]"
-        style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.4)' }}
+        style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
       >
         ▸ Pick a mode and board size ◂
       </p>

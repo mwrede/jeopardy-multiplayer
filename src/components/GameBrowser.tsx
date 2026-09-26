@@ -9,89 +9,16 @@ import type { GameSearchResult, GameSearchFilters, GameLength } from '@/types/ga
 import { useUser } from '@/lib/auth'
 import { MASHUPS, MIXABLE_THEMES, THEME_STYLES, type Mashup } from './mashup-themes'
 import { TopicBoardBuilder } from './TopicBoardBuilder'
-import type { BoardTopic } from '@/lib/topic-board'
+import type { BoardTopic, TopicFilters } from '@/lib/topic-board'
 import { BoardPreview } from './BoardPreview'
 import { PlayModePicker, type PlayMode } from './PlayModePicker'
+import { trackGameStart } from '@/lib/analytics'
+import { DIFFICULTIES, seasonToYear, yearOptions } from '@/lib/difficulty'
 import { rememberBoard, forgetBoard, isRemembered } from '@/lib/board-library'
 import type { CustomBoard } from '@/types/game'
 
 
 type CustomBoardRow = CustomBoardApiRow
-
-/**
- * Difficulty tiers, ordered easiest → hardest. Each tier maps to a filter
- * the backend already understands (notesFilter or season). The "standard"
- * tier carries no filter — it pulls from the regular daily tape, which is
- * harder than kids/teen/college but not at Tournament-of-Champions level.
- * Pop Culture Jeopardy is reachable via the Season dropdown — it doesn't
- * belong on a difficulty axis.
- */
-const DIFFICULTIES: Array<{
-  id: string
-  label: string
-  emoji: string
-  description: string
-  season?: string
-  notesFilter?: string
-  /** Tailwind classes for the active state — subtle green→red gradient across the row. */
-  activeClass: string
-  hoverClass: string
-}> = [
-  {
-    id: 'kids',
-    label: 'Kids',
-    emoji: '🍼',
-    description: 'Kids Week — easiest',
-    notesFilter: 'Kids Week',
-    activeClass: 'bg-emerald-500 text-black border-emerald-300',
-    hoverClass: 'hover:bg-emerald-500/20 hover:border-emerald-400/60',
-  },
-  {
-    id: 'teen',
-    label: 'Teen',
-    emoji: '🎓',
-    description: 'Teen Tournament',
-    notesFilter: 'Teen Tournament',
-    activeClass: 'bg-lime-500 text-black border-lime-300',
-    hoverClass: 'hover:bg-lime-500/20 hover:border-lime-400/60',
-  },
-  {
-    id: 'college',
-    label: 'College',
-    emoji: '🏛️',
-    description: 'College Championship',
-    notesFilter: 'College',
-    activeClass: 'bg-yellow-500 text-black border-yellow-300',
-    hoverClass: 'hover:bg-yellow-500/20 hover:border-yellow-400/60',
-  },
-  {
-    id: 'standard',
-    label: 'Standard',
-    emoji: '⭐',
-    description: 'Regular nightly Jeopardy!',
-    // no filter — full clue pool
-    activeClass: 'bg-orange-500 text-black border-orange-300',
-    hoverClass: 'hover:bg-orange-500/20 hover:border-orange-400/60',
-  },
-  {
-    id: 'champions',
-    label: 'Champions',
-    emoji: '🏆',
-    description: 'Tournament of Champions — top adult players',
-    notesFilter: 'Tournament of Champions',
-    activeClass: 'bg-red-500 text-white border-red-300',
-    hoverClass: 'hover:bg-red-500/20 hover:border-red-400/60',
-  },
-  {
-    id: 'masters',
-    label: 'Masters',
-    emoji: '👑',
-    description: 'Jeopardy! Masters — hardest',
-    season: 'jm',
-    activeClass: 'bg-red-700 text-white border-red-400',
-    hoverClass: 'hover:bg-red-700/30 hover:border-red-500/60',
-  },
-]
 
 const SPECIAL_SEASON_LABELS: Record<string, string> = {
   bbab: 'Battle of the Bay Area Brains',
@@ -264,25 +191,10 @@ export function GameBrowser({ compact = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  /** The calendar year a season STARTED in. Season 42 opened in 2025. */
-  const seasonToYear = (s: string) => {
-    const n = parseInt(s)
-    if (isNaN(n)) return null
-    return 1983 + n
-  }
-
   const numericSeasons = seasons.filter((s) => /^\d+$/.test(s))
   const specialSeasons = seasons.filter((s) => !/^\d+$/.test(s))
 
-  // Years to offer, newest first. Derived from the season list rather than
-  // hardcoded: a season runs September to July, so the newest one reaches into
-  // the FOLLOWING calendar year — season 42 opened in 2025 and its games run
-  // through 2026. The old list stopped at 2025 and hid every 2026 episode.
-  const latestYear = numericSeasons.length
-    ? Math.max(...numericSeasons.map(Number)) + 1984
-    : 2026
-  const years: number[] = []
-  for (let y = latestYear; y >= 1984; y--) years.push(y)
+  const years = yearOptions(numericSeasons)
 
   const buildFilters = useCallback((p: number = 0): GameSearchFilters => {
     const diff = DIFFICULTIES.find((d) => d.id === difficultyFilter)
@@ -417,12 +329,19 @@ export function GameBrowser({ compact = false }: Props) {
       return (b.created_at || '').localeCompare(a.created_at || '')
     })
 
+  // Popularity first is right for an unfiltered browse — it surfaces the games
+  // people actually play. It is wrong the moment someone picks a year or a
+  // season: they asked for a slice of the archive in order, and a game with two
+  // plays jumping the queue just reads as a bug. So filtered/searched results
+  // go strictly newest-first by air date.
   const gameVisible = (showGames ? gameResults : [])
     .slice()
     .sort((a, b) => {
-      const ca = gameCounts.get(String(a.game_id_source)) || 0
-      const cb = gameCounts.get(String(b.game_id_source)) || 0
-      if (cb !== ca) return cb - ca
+      if (!filtersActive && !queryActive) {
+        const ca = gameCounts.get(String(a.game_id_source)) || 0
+        const cb = gameCounts.get(String(b.game_id_source)) || 0
+        if (cb !== ca) return cb - ca
+      }
       return (b.air_date || '').localeCompare(a.air_date || '')
     })
 
@@ -474,6 +393,7 @@ export function GameBrowser({ compact = false }: Props) {
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       void incrementPlayCount('game', String(sourceGameId))
+      trackGameStart('game', mode, size)
       await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create game:', e)
@@ -490,6 +410,7 @@ export function GameBrowser({ compact = false }: Props) {
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       void incrementPlayCount('mashup', mashup.id)
+      trackGameStart('mashup', mode, size)
       await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create mashup:', e)
@@ -585,6 +506,7 @@ export function GameBrowser({ compact = false }: Props) {
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       void incrementPlayCount('mashup', 'topic:' + term.toLowerCase())
+      trackGameStart('topics', mode, size)
       await routeToGame(game.room_code, mode)
     } catch (e: any) {
       console.error('Failed to create topic mashup:', e)
@@ -598,15 +520,22 @@ export function GameBrowser({ compact = false }: Props) {
    * Topic Board: user-chosen mix of curated themes and typed headers.
    * The board splits its category slots evenly across them.
    */
-  async function handlePlayTopicBoard(topics: BoardTopic[], mode: PlayMode, size: GameLength) {
+  async function handlePlayTopicBoard(
+    topics: BoardTopic[],
+    mode: PlayMode,
+    size: GameLength,
+    filters?: TopicFilters,
+  ) {
     if (topics.length === 0) return
     setCreating(true)
     setSearchError('')
     try {
       const settings: any = { ...DEFAULT_CASUAL_SETTINGS, gameLength: size, boardTopics: topics }
+      if (filters) settings.boardTopicFilters = filters
       if (mode === 'multiplayer') settings.gameMode = 'multiplayer'
       const { game } = await createGame(settings)
       void incrementPlayCount('mashup', 'topics:' + topics.map((t) => t.value).sort().join('+'))
+      trackGameStart('topics', mode, size)
       await routeToGame(game.room_code, mode)
     } catch (e: any) {
       console.error('Failed to create topic board:', e)
@@ -626,6 +555,7 @@ export function GameBrowser({ compact = false }: Props) {
       const { game } = await createGame(settings)
       // Record the mix under a stable key so popular combos rise in the count.
       void incrementPlayCount('mashup', 'mix:' + [...themes].sort().join('+'))
+      trackGameStart('mix', mode, size)
       await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create mix:', e)
@@ -645,6 +575,7 @@ export function GameBrowser({ compact = false }: Props) {
         settings: { ...settings, customBoard: board.board_data },
       }).eq('id', game.id)
       void incrementPlayCount('custom', boardId)
+      trackGameStart('custom', mode, size)
       await routeToGame(game.room_code, mode)
     } catch (e) {
       console.error('Failed to create custom game:', e)
@@ -674,9 +605,9 @@ export function GameBrowser({ compact = false }: Props) {
         <label className="flex items-center gap-3 h-[68px] px-5 bg-black/75 border border-white/25 rounded-lg shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)] focus-within:border-copper focus-within:shadow-[inset_0_2px_4px_rgba(0,0,0,0.35),0_0_0_3px_rgba(255,155,68,0.2)] transition-all">
           <span
             aria-hidden
-            className="relative w-8 h-8 rounded-full border-2 border-copper shadow-[0_0_10px_rgba(255,155,68,0.55)] shrink-0"
+            className="relative w-8 h-8 rounded-full border-2 border-copper shrink-0"
           >
-            <span className="absolute -bottom-2 -right-1.5 w-3 h-[3px] bg-copper rounded-sm rotate-45 origin-left shadow-[0_0_8px_rgba(255,155,68,0.7)]" />
+            <span className="absolute -bottom-2 -right-1.5 w-3 h-[3px] bg-copper rounded-sm rotate-45 origin-left" />
           </span>
           <input
             type="text"
@@ -829,6 +760,7 @@ export function GameBrowser({ compact = false }: Props) {
             onPlay={handlePlayTopicBoard}
             creating={creating}
             error={searchError}
+            seasons={seasons}
           />
         )}
 
@@ -870,7 +802,7 @@ export function GameBrowser({ compact = false }: Props) {
           >
             <span
               className="text-copper text-2xl tabular-nums self-start"
-              style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 10px rgba(255,155,68,0.5)' }}
+              style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
             >
               {g.game_id_source}
             </span>
@@ -1009,7 +941,7 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                 <div className="relative">
                   <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-white/10">
                     <div className="min-w-0">
-                      <p className="text-copper uppercase text-[11px] tracking-[0.28em] mb-1.5" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.45)' }}>
+                      <p className="text-copper uppercase text-[11px] tracking-[0.28em] mb-1.5" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
                         ▸ {style.icons[0]} {mp.kind === 'mix' ? 'Mix Mashup' : mp.kind === 'topic' ? 'Topic Mashup' : 'Mashup'}
                       </p>
                       <h2 className="display-chrome text-3xl sm:text-4xl leading-none truncate">{title}</h2>
@@ -1146,7 +1078,7 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
               <div className="plate-surface p-5 sm:p-7">
                 <div className="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-white/10">
                   <div className="min-w-0">
-                    <p className="text-copper uppercase text-[11px] tracking-[0.28em] mb-1.5" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.45)' }}>
+                    <p className="text-copper uppercase text-[11px] tracking-[0.28em] mb-1.5" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
                       ▸ {headerLabel}
                     </p>
                     <h2 className="display-chrome text-3xl sm:text-4xl leading-none truncate">{pb.title}</h2>
@@ -1296,7 +1228,7 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
         >
           <div className="plate max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="plate-surface p-6">
-              <p className="text-copper uppercase text-[11px] tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '0 0 8px rgba(255,155,68,0.45)' }}>
+              <p className="text-copper uppercase text-[11px] tracking-[0.28em]" style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}>
                 ▸ Starting
               </p>
               <p className="text-white font-bold text-lg mt-1 mb-5 truncate" title={pendingPlay.label}>

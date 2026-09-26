@@ -115,6 +115,22 @@ export default function PresentPage() {
   }, [usingBuzzers, game?.id, activeClue?.id, phase])
 
   /**
+   * The clue this screen is showing, once the SERVER agrees it's the live one.
+   *
+   * Clicking a cell sets activeClue immediately but hostSelectClue is a round
+   * trip, so for a moment the game row still describes the PREVIOUS clue —
+   * phase 'board_selection' or 'clue_result'. The follow-the-phone effect
+   * below read that stale phase as "this clue is over", closed the clue the
+   * host had only just opened and marked it answered, so it could never be
+   * opened again. That's the "I click it and nothing shows up" bug. Waiting
+   * for current_clue_id to name our clue is what makes the phase trustworthy.
+   */
+  const [liveClueId, setLiveClueId] = useState<string | null>(null)
+  useEffect(() => {
+    if (activeClue && game?.current_clue_id === activeClue.id) setLiveClueId(activeClue.id)
+  }, [game?.current_clue_id, activeClue])
+
+  /**
    * Follow the phone. When the presenter rules on an answer from their own
    * device the clue resolves server-side, and this screen — which may be the
    * one projected — has to come back to the board on its own. Without this the
@@ -122,6 +138,7 @@ export default function PresentPage() {
    */
   useEffect(() => {
     if (!usingBuzzers || !activeClue) return
+    if (liveClueId !== activeClue.id) return
     if (game?.phase === 'clue_result' || game?.phase === 'board_selection') {
       setAnsweredClueIds((prev) => new Set([...prev, activeClue.id]))
       setActiveClue(null)
@@ -129,7 +146,7 @@ export default function PresentPage() {
       setBuzzOrder([])
       setPhase('board')
     }
-  }, [game?.phase, usingBuzzers, activeClue])
+  }, [game?.phase, usingBuzzers, activeClue, liveClueId])
 
   function handleCellClick(clue: Clue) {
     if (answeredClueIds.has(clue.id)) return
@@ -365,6 +382,9 @@ export default function PresentPage() {
           </button>
           <span className="truncate text-sm font-bold">
             {activeCategory?.name} for {activeClue.value}
+            {activeClue.source_year ? (
+              <span className="ml-2 font-normal text-blue-200/60">· {activeClue.source_year}</span>
+            ) : null}
           </span>
           {waitingToOpen ? (
             <button onClick={openBuzzers} className="flex items-center gap-2 text-sm font-bold text-jeopardy-gold-light hover:text-white">

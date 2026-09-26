@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import { MIXABLE_THEMES, THEME_STYLES } from './mashup-themes'
-import { MAX_TOPICS, type BoardTopic } from '@/lib/topic-board'
+import { PlayModePicker, type PlayMode } from './PlayModePicker'
+import { MAX_TOPICS, type BoardTopic, type TopicFilters } from '@/lib/topic-board'
+import { DIFFICULTIES, filtersForDifficulty, yearOptions } from '@/lib/difficulty'
 import { GAME_LENGTH_CONFIG, type GameLength } from '@/types/game'
 
-export type PlayMode = 'party' | 'multiplayer'
+export type { PlayMode }
 
 /**
  * Board sizes, keyed to the real GameLength union. Do NOT hand-write these
@@ -32,15 +34,31 @@ export function TopicBoardBuilder({
   onPlay,
   creating,
   error,
+  seasons = [],
 }: {
-  onPlay: (topics: BoardTopic[], mode: PlayMode, size: GameLength) => void
+  onPlay: (topics: BoardTopic[], mode: PlayMode, size: GameLength, filters?: TopicFilters) => void
   creating?: boolean
   error?: string | null
+  /** Season list from the browser, used to derive the year dropdown. */
+  seasons?: string[]
 }) {
   const [themes, setThemes] = useState<Set<string>>(new Set())
   const [custom, setCustom] = useState<string[]>([])
   const [draft, setDraft] = useState('')
   const [size, setSize] = useState<GameLength>('full')
+  const [year, setYear] = useState('')
+  const [difficulty, setDifficulty] = useState('')
+  const [choosingMode, setChoosingMode] = useState(false)
+
+  const years = yearOptions(seasons.filter((s) => /^\d+$/.test(s)))
+
+  /** What the chosen year/difficulty mean as a clue_pool narrowing. */
+  const filters: TopicFilters | undefined = (() => {
+    const y = parseInt(year, 10)
+    const f: TopicFilters = { ...filtersForDifficulty(difficulty) }
+    if (!isNaN(y)) f.year = y
+    return f.year || f.notesFilter || f.season ? f : undefined
+  })()
 
   const total = themes.size + custom.length
   const atCap = total >= MAX_TOPICS
@@ -185,6 +203,46 @@ export function TopicBoardBuilder({
         })}
       </div>
 
+      {/* Same two axes the game browser offers, so a mashup can be pinned to a
+          year or to Teen / Champions tape instead of the whole archive. */}
+      <p className="text-gray-400 text-[11px] uppercase tracking-[0.2em] font-bold mb-2">
+        Year &amp; difficulty <span className="normal-case tracking-normal font-normal opacity-70">(optional)</span>
+      </p>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <select
+          value={year}
+          onChange={(e) => setYear(e.target.value)}
+          className="input-base text-sm cursor-pointer py-2"
+        >
+          <option value="" className="bg-gray-900">Any year</option>
+          {years.map((y) => (
+            <option key={y} value={String(y)} className="bg-gray-900">{y}</option>
+          ))}
+        </select>
+        {DIFFICULTIES.map((d) => {
+          const active = difficulty === d.id
+          return (
+            <button
+              key={d.id}
+              onClick={() => setDifficulty(active ? '' : d.id)}
+              title={d.description}
+              className={`px-3 py-2 rounded-xl text-sm font-semibold border-2 transition-all ${
+                active
+                  ? 'bg-jeopardy-gold/25 border-jeopardy-gold text-white'
+                  : 'bg-white/5 border-white/15 text-gray-400 hover:text-white'
+              }`}
+            >
+              <span className="mr-1">{d.emoji}</span>{d.label}
+            </button>
+          )
+        })}
+      </div>
+      {filters && (
+        <p className="text-gray-500 text-xs mb-5">
+          Narrowing to a slice of the archive — if a topic comes up short, widen this first.
+        </p>
+      )}
+
       {/* Split preview */}
       {topics.length > 0 && (
         <p className="text-jeopardy-gold-light text-xs mb-4">
@@ -196,22 +254,25 @@ export function TopicBoardBuilder({
 
       {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
 
-      <div className="flex gap-2">
+      {/* Same mode wording as every other Play button in the app — Multiplayer
+          (then TV vs. phones) or Hosted. Size is already chosen above, so the
+          picker runs in its fixedSize form. */}
+      {choosingMode ? (
+        <PlayModePicker
+          fixedSize={size}
+          creating={creating}
+          onBack={() => setChoosingMode(false)}
+          onPick={(mode) => onPlay(topics, mode, size, filters)}
+        />
+      ) : (
         <button
-          onClick={() => onPlay(topics, 'party', size)}
+          onClick={() => setChoosingMode(true)}
           disabled={topics.length === 0 || !!creating}
-          className="btn-primary flex-1 py-3 disabled:opacity-40"
+          className="btn-primary w-full py-3 disabled:opacity-40"
         >
-          {creating ? 'Building…' : 'Play Party Mode'}
+          {creating ? 'Building…' : '▶ Play'}
         </button>
-        <button
-          onClick={() => onPlay(topics, 'multiplayer', size)}
-          disabled={topics.length === 0 || !!creating}
-          className="btn-secondary flex-1 py-3 disabled:opacity-40"
-        >
-          Multiplayer
-        </button>
-      </div>
+      )}
     </div>
   )
 }

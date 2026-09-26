@@ -189,6 +189,9 @@ export interface Clue {
   is_answered: boolean
   answered_by: string | null
   answered_correct: boolean | null
+  /** Year this clue originally aired; null for custom boards and until
+   *  supabase-migration-clue-source-year.sql has been run. */
+  source_year?: number | null
 }
 
 export interface Buzz {

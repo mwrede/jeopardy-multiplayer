@@ -6,8 +6,10 @@ import {
   pickTopicFinal,
   MAX_TOPICS,
   type BoardTopic,
+  type TopicFilters,
   themeForTerm,
 } from './topic-board'
+import { insertClue, yearOf } from './clue-insert'
 import { checkAnswer, checkAnswerDetailed } from './answer-check'
 
 // Generate a 6-character room code
@@ -280,11 +282,12 @@ async function buildTopicBoard(
   gameId: string,
   topics: BoardTopic[],
   lengthConfig: (typeof GAME_LENGTH_CONFIG)[keyof typeof GAME_LENGTH_CONFIG],
+  filters?: TopicFilters,
 ) {
   const trimmed = topics.slice(0, MAX_TOPICS)
 
   const round1ClueIds = await buildTopicRound({
-    gameId, topics: trimmed,
+    gameId, topics: trimmed, filters,
     roundName: 'Jeopardy Round', roundNumber: 1, roundIndex: 0,
     values: lengthConfig.values1,
     numCategories: lengthConfig.categories,
@@ -292,7 +295,7 @@ async function buildTopicBoard(
   })
 
   const round2ClueIds = await buildTopicRound({
-    gameId, topics: trimmed,
+    gameId, topics: trimmed, filters,
     roundName: 'Double Jeopardy', roundNumber: 2, roundIndex: 1,
     values: lengthConfig.values2,
     numCategories: lengthConfig.categories,
@@ -318,7 +321,7 @@ async function buildTopicBoard(
   let finalCategoryName = 'Final Jeopardy'
   let finalClueText = 'No Final Jeopardy clue available.'
   let finalAnswerText = ''
-  const topicFinal = await pickTopicFinal(trimmed)
+  const topicFinal = await pickTopicFinal(trimmed, filters)
   if (topicFinal) {
     finalCategoryName = topicFinal.category
     finalClueText = topicFinal.question
@@ -382,7 +385,8 @@ export async function startGame(gameId: string) {
   // separate build path — see lib/topic-board.ts.
   const boardTopics = (settings as any)?.boardTopics as BoardTopic[] | undefined
   if (boardTopics && boardTopics.length > 0) {
-    await buildTopicBoard(gameId, boardTopics, lengthConfig)
+    const topicFilters = (settings as any)?.boardTopicFilters as TopicFilters | undefined
+    await buildTopicBoard(gameId, boardTopics, lengthConfig, topicFilters)
     return
   }
 
@@ -614,7 +618,7 @@ export async function startGame(gameId: string) {
   async function pickClues(categoryName: string, roundName: string) {
     let clueQuery = supabase
       .from('clue_pool')
-      .select('question, answer')
+      .select('question, answer, air_date')
       .eq('category', categoryName)
       .eq('round', roundName)
 
@@ -655,18 +659,15 @@ export async function startGame(gameId: string) {
       if (catErr || !cat) continue
 
       for (let i = 0; i < CLUES_PER_CAT; i++) {
-        const { data: clue } = await supabase
-          .from('clues')
-          .insert({
-            category_id: cat.id,
-            value: values[i],
-            question: clueData[i].question,
-            answer: clueData[i].answer,
-            is_daily_double: false,
-          })
-          .select('id')
-          .single()
-        if (clue) clueIds.push(clue.id)
+        const id = await insertClue({
+          category_id: cat.id,
+          value: values[i],
+          question: clueData[i].question,
+          answer: clueData[i].answer,
+          is_daily_double: false,
+          source_year: yearOf((clueData[i] as any).air_date),
+        })
+        if (id) clueIds.push(id)
       }
       pos++
     }
@@ -986,6 +987,22 @@ export async function submitFinalAnswer(playerId: string, answer: string) {
  * Judges all answers and moves to the reveal phase.
  */
 export async function startFinalReveal(gameId: string) {
+  // Claim the reveal before judging anything.
+  //
+  // Every screen races to call this — whichever clock runs out first wins, and
+  // when a player leaves several of them fire seconds apart. Judging applies
+  // each wager to the score, so a second pass would apply it twice. The claim
+  // is atomic on the row: exactly one caller flips final_answering shut, and
+  // the rest get no row back and stop here.
+  const { data: claimed } = await supabase
+    .from('games')
+    .update({ status: 'finished', updated_at: new Date().toISOString() })
+    .eq('id', gameId)
+    .eq('phase', 'final_answering')
+    .select('id')
+
+  if (!claimed || claimed.length === 0) return
+
   // Get the game to get the correct answer
   const { data: game } = await supabase
     .from('games')
@@ -2501,20 +2518,17 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
     for (let i = 0; i < cluesForCat.length; i++) {
       const srcClue = cluesForCat[i]
       const isDd = srcClue.is_daily_double === true
-      const { data: clue, error: clueErr } = await supabase
-        .from('clues')
-        .insert({
-          category_id: cat.id,
-          value: ROUND_1_VALUES[i] || (i + 1) * 200,
-          question: srcClue.question,
-          answer: srcClue.answer,
-          is_daily_double: isDd,
-        })
-        .select('id')
-        .single()
-      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
-      round1ClueIds.push(clue.id)
-      if (isDd) round1DailyDoubles.add(clue.id)
+      const clueId = await insertClue({
+        category_id: cat.id,
+        value: ROUND_1_VALUES[i] || (i + 1) * 200,
+        question: srcClue.question,
+        answer: srcClue.answer,
+        is_daily_double: isDd,
+        source_year: yearOf(srcClue.air_date),
+      })
+      if (!clueId) throw new Error('Failed to create clue')
+      round1ClueIds.push(clueId)
+      if (isDd) round1DailyDoubles.add(clueId)
     }
   }
 
@@ -2546,20 +2560,17 @@ export async function startGameFromSource(gameId: string, sourceGameId: number) 
     for (let i = 0; i < cluesForCat.length; i++) {
       const srcClue = cluesForCat[i]
       const isDd = srcClue.is_daily_double === true
-      const { data: clue, error: clueErr } = await supabase
-        .from('clues')
-        .insert({
-          category_id: cat.id,
-          value: ROUND_2_VALUES[i] || (i + 1) * 400,
-          question: srcClue.question,
-          answer: srcClue.answer,
-          is_daily_double: isDd,
-        })
-        .select('id')
-        .single()
-      if (clueErr || !clue) throw clueErr || new Error('Failed to create clue')
-      round2ClueIds.push(clue.id)
-      if (isDd) round2DailyDoubles.add(clue.id)
+      const clueId = await insertClue({
+        category_id: cat.id,
+        value: ROUND_2_VALUES[i] || (i + 1) * 400,
+        question: srcClue.question,
+        answer: srcClue.answer,
+        is_daily_double: isDd,
+        source_year: yearOf(srcClue.air_date),
+      })
+      if (!clueId) throw new Error('Failed to create clue')
+      round2ClueIds.push(clueId)
+      if (isDd) round2DailyDoubles.add(clueId)
     }
   }
 

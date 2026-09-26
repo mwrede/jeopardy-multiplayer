@@ -892,7 +892,12 @@ export default function PlayerPage() {
 
           {/* Correct answer — always shown on the result screen */}
           <div className="mt-6 text-center">
-            <p className="text-gray-500 text-sm mb-1">Correct answer:</p>
+            <p className="text-gray-500 text-sm mb-1">
+              Correct answer:
+              {currentClue.source_year ? (
+                <span className="ml-1.5 text-blue-300/70">({currentClue.source_year})</span>
+              ) : null}
+            </p>
             <p className="text-white text-lg font-bold">{currentClue.answer}</p>
           </div>
 

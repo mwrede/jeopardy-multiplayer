@@ -815,7 +815,12 @@ export default function DisplayPage() {
           {/* Correct answer — always shown */}
           {resultClue && (
             <div className="text-center">
-              <p className="text-gray-400 text-lg mb-2">The correct answer:</p>
+              <p className="text-gray-400 text-lg mb-2">
+                The correct answer:
+                {resultClue.source_year ? (
+                  <span className="ml-2 text-blue-300/70">({resultClue.source_year})</span>
+                ) : null}
+              </p>
               <p className="text-3xl md:text-4xl text-white font-bold">
                 {resultClue.answer}
               </p>
@@ -965,6 +970,7 @@ export default function DisplayPage() {
             category={categories.find((c) => c.id === currentClue.category_id)?.name ?? null}
             value={currentClue.value}
             question={currentClue.question}
+            year={currentClue.source_year}
             revealDurationMs={
               (game.settings?.reading_period_ms && game.settings.reading_period_ms > 0)
                 ? game.settings.reading_period_ms

@@ -192,10 +192,7 @@ body {
       rgba(255, 155, 68, 0.6) 4px 10px,
       rgba(180, 90, 20, 0.45) 10px 14px
     );
-    box-shadow:
-      0 0 6px rgba(255, 155, 68, 0.55),
-      0 0 22px 2px rgba(255, 155, 68, 0.45),
-      inset 0 0 4px rgba(255, 240, 200, 0.7);
+    box-shadow: inset 0 0 4px rgba(255, 240, 200, 0.5);
     pointer-events: none;
   }
   .led-strip-left  { left: 6px; }
@@ -473,7 +470,7 @@ body {
   }
   .field-stage::placeholder { color: rgba(169, 180, 216, 0.6); }
 
-  /* Room-code / mono input — copper glow. */
+  /* Room-code / mono input. */
   .field-code-stage {
     text-align: center;
     letter-spacing: 0.4em;
@@ -481,7 +478,6 @@ body {
     font-family: "Impact", "Arial Black", sans-serif;
     font-size: 22px;
     color: #FF9B44;
-    text-shadow: 0 0 10px rgba(255, 155, 68, 0.6);
     font-variant-numeric: tabular-nums;
   }
 
@@ -511,7 +507,6 @@ body {
     color: #2B0D00;
     border-color: #FFD9A3;
     text-shadow: 0 1px 0 rgba(255,255,255,0.4);
-    box-shadow: 0 0 16px rgba(255, 155, 68, 0.5);
   }
 
   /* Section eyebrow with hairline rules on either side. */
@@ -524,7 +519,6 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.3em;
     font-size: 12px;
-    text-shadow: 0 0 8px rgba(255, 155, 68, 0.35);
   }
   .eyebrow-copper::before,
   .eyebrow-copper::after {
@@ -540,8 +534,6 @@ body {
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: #FFF;
-    text-shadow:
-      0 2px 0 rgba(0,0,0,0.55),
-      0 0 20px rgba(255,255,255,0.14);
+    text-shadow: 0 2px 0 rgba(0,0,0,0.55);
   }
 }

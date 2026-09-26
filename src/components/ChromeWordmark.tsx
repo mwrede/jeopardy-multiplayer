@@ -42,7 +42,7 @@ export function ChromeWordmark({ className, style, text = 'JEOPARDY!' }: Props) 
         </linearGradient>
         <filter id={`${uid}-shadow`} x="-8%" y="-20%" width="116%" height="140%">
           <feDropShadow dx="0" dy="6" stdDeviation="0" floodColor="#050E4E" floodOpacity="0.85" />
-          <feDropShadow dx="0" dy="10" stdDeviation="14" floodColor="#3A6BFF" floodOpacity="0.55" />
+          <feDropShadow dx="0" dy="10" stdDeviation="10" floodColor="#050E4E" floodOpacity="0.45" />
         </filter>
       </defs>
       <g filter={`url(#${uid}-shadow)`}>

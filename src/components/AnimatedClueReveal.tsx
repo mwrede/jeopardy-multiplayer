@@ -23,6 +23,7 @@ export function AnimatedClueReveal({
   revealDurationMs,
   variant,
   anchorAt,
+  year,
   skipAnimation = false,
 }: {
   category: string | null
@@ -30,6 +31,8 @@ export function AnimatedClueReveal({
   question: string
   revealDurationMs: number
   variant: 'tv' | 'phone'
+  /** The year this clue originally aired. Null on custom boards. */
+  year?: number | null
   /**
    * When the clue actually went up, as epoch ms from the SERVER clock. The
    * buzzers open from that same instant, so without it the two drift apart: a
@@ -87,6 +90,7 @@ export function AnimatedClueReveal({
         <p className={`text-jeopardy-gold font-bold ${isTv ? 'text-8xl md:text-9xl' : 'text-5xl'}`}>
           ${value.toLocaleString()}
         </p>
+        <ClueYear year={year} isTv={isTv} />
       </div>
     )
   }
@@ -100,9 +104,10 @@ export function AnimatedClueReveal({
           {category}
         </p>
       )}
-      <p className={`text-jeopardy-gold font-bold mb-6 ${isTv ? 'text-4xl' : 'text-2xl mb-3'}`}>
+      <p className={`text-jeopardy-gold font-bold ${isTv ? 'text-4xl' : 'text-2xl'}`}>
         ${value.toLocaleString()}
       </p>
+      <ClueYear year={year} isTv={isTv} className={isTv ? 'mb-6' : 'mb-3'} />
       <p
         className={`text-center clue-type max-w-5xl ${
           isTv ? 'text-4xl md:text-6xl' : 'text-xl px-2'
@@ -116,5 +121,29 @@ export function AnimatedClueReveal({
         </span>
       </p>
     </div>
+  )
+}
+
+/**
+ * The year the clue first aired. A mashup board is stitched together from
+ * many different shows, so this genuinely changes clue to clue — knowing a
+ * clue is from 1997 is half of answering it.
+ */
+function ClueYear({
+  year,
+  isTv,
+  className = '',
+}: {
+  year?: number | null
+  isTv: boolean
+  className?: string
+}) {
+  if (!year) return <span className={className} />
+  return (
+    <p
+      className={`${isTv ? 'text-lg mt-2' : 'text-[11px] mt-1'} uppercase tracking-[0.28em] text-blue-300/70 ${className}`}
+    >
+      {year}
+    </p>
   )
 }

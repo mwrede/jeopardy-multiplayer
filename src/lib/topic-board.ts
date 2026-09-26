@@ -21,6 +21,7 @@
  */
 
 import { supabase } from './supabase'
+import { insertClue, yearOf } from './clue-insert'
 
 export const MAX_TOPICS = 12
 
@@ -38,6 +39,41 @@ export type PoolClue = {
   category: string
   question: string
   answer: string
+  /** The episode it aired in. Two columns both called SCIENCE are only the
+   *  same column if this matches. */
+  gameIdSource: number | null
+  /** Its original dollar value — the difficulty ramp inside its column. */
+  sourceValue: number
+  /** Air date of that episode, for the year shown on the clue. */
+  airDate: string | null
+}
+
+/**
+ * Narrows which episodes a mashup may draw from — the same two axes the game
+ * browser offers. `year` is a calendar year (Jan 1 to Dec 31); `difficulty`
+ * is a DIFFICULTY id, expressed here as the filter it maps to.
+ */
+export type TopicFilters = {
+  year?: number
+  /** Substring of clue_pool.notes, e.g. "Teen Tournament". */
+  notesFilter?: string
+  /** clue_pool.season, e.g. "jm" for Jeopardy! Masters. */
+  season?: string
+}
+
+/** The columns every pool query needs. */
+const POOL_COLUMNS = 'category, question, answer, game_id_source, air_date, value'
+
+/** Apply the year/difficulty narrowing to any clue_pool query. */
+function applyFilters<T>(q: T, f?: TopicFilters): T {
+  if (!f) return q
+  let out: any = q
+  if (f.year) {
+    out = out.gte('air_date', `${f.year}-01-01`).lte('air_date', `${f.year}-12-31`)
+  }
+  if (f.notesFilter) out = out.ilike('notes', `%${f.notesFilter}%`)
+  if (f.season) out = out.eq('season', f.season)
+  return out
 }
 
 /**
@@ -204,7 +240,14 @@ function dedupe(rows: any[]): PoolClue[] {
     const key = q.trim().toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ category: (row?.category as string) ?? '', question: q, answer: a })
+    out.push({
+      category: (row?.category as string) ?? '',
+      question: q,
+      answer: a,
+      gameIdSource: (row?.game_id_source as number) ?? null,
+      sourceValue: Number(row?.value) || 0,
+      airDate: (row?.air_date as string) ?? null,
+    })
   }
   return out
 }
@@ -223,18 +266,28 @@ export function groupIntoRealCategories(
   pool: PoolClue[],
   cluesPerCat: number,
 ): { name: string; clues: PoolClue[] }[] {
-  const byCategory = new Map<string, PoolClue[]>()
+  // Keyed on the EPISODE as well as the name. "SCIENCE" has headed a column in
+  // hundreds of different shows; grouping on the name alone built a column out
+  // of five unrelated SCIENCE clues from five different years, which is exactly
+  // the mashed-together feel a whole column is supposed to avoid. Keyed this
+  // way, a column is the column that actually aired.
+  const byColumn = new Map<string, PoolClue[]>()
   for (const clue of pool) {
     const name = (clue.category ?? '').trim()
     if (!name) continue
-    const list = byCategory.get(name) ?? []
+    const key = `${clue.gameIdSource ?? 'x'}|${name.toUpperCase()}`
+    const list = byColumn.get(key) ?? []
     list.push(clue)
-    byCategory.set(name, list)
+    byColumn.set(key, list)
   }
 
   const full: { name: string; clues: PoolClue[] }[] = []
-  for (const [name, clues] of byCategory) {
-    if (clues.length >= cluesPerCat) full.push({ name, clues })
+  for (const clues of byColumn.values()) {
+    if (clues.length < cluesPerCat) continue
+    // Cheapest clue first, so the board's $200 → $1000 ramp is the ramp the
+    // writers intended for that column.
+    const ordered = [...clues].sort((a, b) => a.sourceValue - b.sourceValue)
+    full.push({ name: (ordered[0].category ?? '').trim(), clues: ordered })
   }
   return shuffle(full)
 }
@@ -266,17 +319,20 @@ export async function fetchTopicPool(
   rawTopic: BoardTopic,
   roundName: string,
   limit = 800,
+  filters?: TopicFilters,
 ): Promise<PoolClue[]> {
   const topic = resolveTopic(rawTopic)
 
   // Curated theme: one indexed equality lookup on the pre-tagged column.
   if (topic.kind === 'theme') {
-    const { data, error } = await supabase
-      .from('clue_pool')
-      .select('category, question, answer')
-      .eq('round', roundName)
-      .eq('category_type', topic.value)
-      .limit(limit)
+    const { data, error } = await applyFilters(
+      supabase
+        .from('clue_pool')
+        .select(POOL_COLUMNS)
+        .eq('round', roundName)
+        .eq('category_type', topic.value),
+      filters,
+    ).limit(limit)
     if (error) {
       console.warn(`[topic-board] theme fetch failed for "${topic.label}":`, error.message)
       throw new Error(describeQueryError(error.message, topic.label))
@@ -307,12 +363,18 @@ export async function fetchTopicPool(
   const [categoryResults, byQuestion] = await Promise.all([
     Promise.all(
       catTerms.map((t) =>
-        supabase.from('clue_pool').select('category, question, answer')
-          .eq('round', roundName).ilike('category', `%${t}%`).limit(per),
+        applyFilters(
+          supabase.from('clue_pool').select(POOL_COLUMNS)
+            .eq('round', roundName).ilike('category', `%${t}%`),
+          filters,
+        ).limit(per),
       ),
     ),
-    supabase.from('clue_pool').select('category, question, answer')
-      .eq('round', roundName).ilike('question', pattern).limit(per),
+    applyFilters(
+      supabase.from('clue_pool').select(POOL_COLUMNS)
+        .eq('round', roundName).ilike('question', pattern),
+      filters,
+    ).limit(per),
   ])
 
   const byCategory = {
@@ -347,7 +409,7 @@ export async function fetchTopicPool(
   const terms = significantWords(safe)
   if (exact.length >= 40 || terms.length < 2) return exact
 
-  const widened = await fetchAllWordsPool(terms, roundName, per)
+  const widened = await fetchAllWordsPool(terms, roundName, per, filters)
   return dedupe([...exact, ...widened])
 }
 
@@ -370,15 +432,16 @@ async function fetchAllWordsPool(
   terms: string[],
   roundName: string,
   limit: number,
+  filters?: TopicFilters,
 ): Promise<PoolClue[]> {
   const anchor = [...terms].sort((a, b) => b.length - a.length)[0]
   const pattern = `%${anchor}%`
 
   const [cat, q] = await Promise.all([
-    supabase.from('clue_pool').select('category, question, answer')
-      .eq('round', roundName).ilike('category', pattern).limit(limit),
-    supabase.from('clue_pool').select('category, question, answer')
-      .eq('round', roundName).ilike('question', pattern).limit(limit),
+    applyFilters(supabase.from('clue_pool').select(POOL_COLUMNS)
+      .eq('round', roundName).ilike('category', pattern), filters).limit(limit),
+    applyFilters(supabase.from('clue_pool').select(POOL_COLUMNS)
+      .eq('round', roundName).ilike('question', pattern), filters).limit(limit),
   ])
 
   const rows = [...(cat.data ?? []), ...(q.data ?? [])]
@@ -416,10 +479,11 @@ export async function buildTopicRound(opts: {
   values: number[]
   numCategories: number
   cluesPerCat: number
+  filters?: TopicFilters
 }): Promise<string[]> {
   const {
     gameId, topics, roundName, roundNumber, roundIndex,
-    values, numCategories, cluesPerCat,
+    values, numCategories, cluesPerCat, filters,
   } = opts
 
   const slotTopics = allocateTopics(topics, numCategories, roundIndex)
@@ -430,7 +494,7 @@ export async function buildTopicRound(opts: {
   await Promise.all(
     distinct.map(async (value) => {
       const topic = slotTopics.find((t) => t.value === value)!
-      pools.set(value, shuffle(await fetchTopicPool(topic, roundName)))
+      pools.set(value, shuffle(await fetchTopicPool(topic, roundName, 800, filters)))
     }),
   )
 
@@ -483,18 +547,15 @@ export async function buildTopicRound(opts: {
     for (const clue of slice) usedQuestions.add(clueKey(clue))
 
     for (let i = 0; i < cluesPerCat; i++) {
-      const { data: clue } = await supabase
-        .from('clues')
-        .insert({
-          category_id: cat.id,
-          value: values[i],
-          question: slice[i].question,
-          answer: slice[i].answer,
-          is_daily_double: false,
-        })
-        .select('id')
-        .single()
-      if (clue) clueIds.push(clue.id)
+      const id = await insertClue({
+        category_id: cat.id,
+        value: values[i],
+        question: slice[i].question,
+        answer: slice[i].answer,
+        is_daily_double: false,
+        source_year: yearOf(slice[i].airDate),
+      })
+      if (id) clueIds.push(id)
     }
     position++
     return true
@@ -584,7 +645,10 @@ export async function buildTopicRound(opts: {
  * Pick a Final Jeopardy clue that matches one of the chosen topics, falling
  * back to any FJ clue when none of them hit.
  */
-export async function pickTopicFinal(topics: BoardTopic[]): Promise<{
+export async function pickTopicFinal(
+  topics: BoardTopic[],
+  filters?: TopicFilters,
+): Promise<{
   category: string
   question: string
   answer: string
@@ -594,12 +658,14 @@ export async function pickTopicFinal(topics: BoardTopic[]): Promise<{
     let rows: any[] = []
 
     if (topic.kind === 'theme') {
-      const { data } = await supabase
-        .from('clue_pool')
-        .select('category, question, answer')
-        .eq('round', 'Final Jeopardy')
-        .eq('category_type', topic.value)
-        .limit(50)
+      const { data } = await applyFilters(
+        supabase
+          .from('clue_pool')
+          .select('category, question, answer')
+          .eq('round', 'Final Jeopardy')
+          .eq('category_type', topic.value),
+        filters,
+      ).limit(50)
       rows = data ?? []
     } else {
       const safe = sanitizeTerm(topic.value)
@@ -607,10 +673,10 @@ export async function pickTopicFinal(topics: BoardTopic[]): Promise<{
       const pattern = `%${safe}%`
       // Separate .ilike() calls for the same reason as fetchTopicPool.
       const [cat, q] = await Promise.all([
-        supabase.from('clue_pool').select('category, question, answer')
-          .eq('round', 'Final Jeopardy').ilike('category', pattern).limit(25),
-        supabase.from('clue_pool').select('category, question, answer')
-          .eq('round', 'Final Jeopardy').ilike('question', pattern).limit(25),
+        applyFilters(supabase.from('clue_pool').select('category, question, answer')
+          .eq('round', 'Final Jeopardy').ilike('category', pattern), filters).limit(25),
+        applyFilters(supabase.from('clue_pool').select('category, question, answer')
+          .eq('round', 'Final Jeopardy').ilike('question', pattern), filters).limit(25),
       ])
       rows = [...(cat.data ?? []), ...(q.data ?? [])]
     }

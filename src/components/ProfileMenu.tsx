@@ -103,7 +103,7 @@ export function ProfileMenu() {
       >
         <span
           className="w-7 h-7 rounded-full text-black text-xs font-bold flex items-center justify-center"
-          style={{ background: 'linear-gradient(180deg, #FFC57A, #F58A2C)', boxShadow: '0 0 10px rgba(255,155,68,0.55)' }}
+          style={{ background: 'linear-gradient(180deg, #FFC57A, #F58A2C)' }}
         >
           {initials || 'P'}
         </span>
