@@ -67,24 +67,76 @@ body {
   /* Board wrapper */
   /* Home board: clue cells that hold words instead of a dollar value, so
      they need to stack and wrap where a real cell never does. */
+  /* Home board: clue cells that hold words instead of a dollar value, so
+     they need to stack and wrap where a real cell never does. Tall, because
+     three of them across is the whole board and a squat row doesn't read as
+     one. */
   .home-board .home-cell {
     @apply flex flex-col items-center justify-center text-center;
-    min-height: 118px;
-    padding: 14px 12px;
+    min-height: 150px;
+    padding: 18px 12px;
   }
   @screen md {
-    .home-board .home-cell { min-height: 132px; }
+    .home-board .home-cell { min-height: 210px; }
   }
   .home-cell-title {
     font-family: "Impact", "Arial Black", sans-serif;
     text-transform: uppercase;
     letter-spacing: 0.02em;
     line-height: 1.05;
-    font-size: 17px;
+    font-size: 19px;
     color: var(--jeopardy-gold-light);
+    text-shadow: 1px 2px 3px rgba(0,0,0,0.6);
   }
   @screen md {
-    .home-cell-title { font-size: 21px; }
+    .home-cell-title { font-size: 30px; }
+  }
+
+  /* ── Banners ───────────────────────────────────────────────────────────
+     Everything that ISN'T a game to play lives under the board as a banner,
+     not as more clue cells — a cell is a clue, and using one for "create a
+     board" made the board mean two different things at once. Rounded, copper
+     or walnut rather than clue blue, so they read as furniture around the
+     board instead of part of it. */
+  .banner {
+    @apply relative flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all;
+    border: 2px solid rgba(255, 213, 154, 0.25);
+    background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(0,0,0,0.25));
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .banner:hover { border-color: rgba(255, 213, 154, 0.6); transform: translateY(-1px); }
+  .banner:active { transform: translateY(0) scale(0.995); }
+
+  /* The two doors: make a board, or get into someone else's game. Copper, so
+     they're plainly not clue cells. */
+  .banner-copper {
+    background: linear-gradient(180deg, #FFC57A 0%, #F58A2C 100%);
+    border-color: #FFD9A3;
+    color: #2B0D00;
+  }
+  .banner-copper:hover { filter: brightness(1.06); border-color: #FFF0D0; }
+
+  .banner-walnut {
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 5px),
+      linear-gradient(90deg, #3D1B0E 0%, #6A3218 30%, #7A3C1E 50%, #6A3218 70%, #3D1B0E 100%);
+    border-color: rgba(255, 190, 130, 0.35);
+    color: #FFE3C2;
+  }
+
+  .banner-emoji {
+    @apply shrink-0 select-none;
+    font-size: 26px;
+    line-height: 1;
+    filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));
+  }
+  .banner-title {
+    @apply block text-sm font-black uppercase;
+    letter-spacing: 0.08em;
+  }
+  .banner-sub {
+    @apply block text-[11px] font-semibold;
+    opacity: 0.75;
   }
 
   .board-wrapper {

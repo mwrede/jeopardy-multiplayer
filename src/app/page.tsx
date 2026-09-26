@@ -11,42 +11,68 @@ import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { ProfileMenu } from '@/components/ProfileMenu'
 
 /**
- * One cell of the home board.
+ * One cell of the home board — a game you can go and play.
  *
- * `column` is the category it sits under. On a wide screen the header row
- * carries those names and the cell shows only its own text; on a phone the
- * header row is hidden and each cell wears its category as an eyebrow, so the
- * grid can reflow to two columns without losing what anything means.
+ * Only games get cells. Create, Join and the champions used to sit in a
+ * second row of cells, which quietly made a clue cell mean two different
+ * things; they're banners under the board now.
  */
 function BoardCell({
   column,
   title,
   sub,
   href,
-  onClick,
-  className = '',
 }: {
   column: string
   title: string
   sub?: string
-  href?: string
-  onClick?: () => void
-  className?: string
+  href: string
 }) {
-  const inner = (
-    <>
-      <span className="mb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-blue-200/60 md:hidden">
+  return (
+    <a href={href} className="board-cell home-cell">
+      {/* The header row is hidden on a phone, so each cell wears its own
+          category there instead. */}
+      <span className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-blue-200/60 md:hidden">
         {column}
       </span>
       <span className="home-cell-title">{title}</span>
-      {sub && <span className="mt-1.5 text-[11px] font-semibold text-blue-100/70">{sub}</span>}
+      {sub && <span className="mt-2 text-[11px] font-semibold text-blue-100/70 md:text-xs">{sub}</span>}
+    </a>
+  )
+}
+
+/** A banner under the board: not a clue, so not a clue cell. */
+function Banner({
+  emoji,
+  title,
+  sub,
+  href,
+  onClick,
+  variant = 'plain',
+  className = '',
+}: {
+  emoji: string
+  title: string
+  sub?: string
+  href?: string
+  onClick?: () => void
+  variant?: 'plain' | 'copper' | 'walnut'
+  className?: string
+}) {
+  const cls = `banner ${variant === 'copper' ? 'banner-copper' : variant === 'walnut' ? 'banner-walnut' : ''} ${className}`
+  const inner = (
+    <>
+      <span className="banner-emoji">{emoji}</span>
+      <span className="min-w-0">
+        <span className="banner-title">{title}</span>
+        {sub && <span className="banner-sub truncate">{sub}</span>}
+      </span>
     </>
   )
-  const cls = `board-cell home-cell ${className}`
   return href ? (
     <a href={href} className={cls}>{inner}</a>
   ) : (
-    <button onClick={onClick} className={cls}>{inner}</button>
+    <button onClick={onClick} className={`${cls} w-full`}>{inner}</button>
   )
 }
 
@@ -155,7 +181,27 @@ export default function Home() {
     setTimeout(() => setCopiedId((id) => (id === boardId ? null : id)), 2000)
   }
 
-  const COLUMNS = ['Friends', 'Strangers', 'Solo', 'Create', 'Join']
+  /** The three columns of the board — the games. */
+  const GAMES = [
+    {
+      column: 'Friends',
+      title: 'Browse the archive',
+      sub: 'Every game, 1984 to last night',
+      href: '/find',
+    },
+    {
+      column: 'Strangers',
+      title: 'Play the room',
+      sub: 'Public tables, real people',
+      href: '/community',
+    },
+    {
+      column: 'Solo',
+      title: 'Daily Challenge',
+      sub: 'One board, one shot',
+      href: '/challenge',
+    },
+  ]
 
   return (
     <main className="stage-page-deep flat-stage px-4 pb-20 md:px-8">
@@ -172,188 +218,149 @@ export default function Home() {
           </p>
         </header>
 
-        {/* The board. Walnut panel, black gutters, clue cells — the same
-            construction the game itself uses. */}
-        <div className="board-panel mt-7 md:mt-10">
+        {/* The board: three categories, three clue cells, nothing else. Same
+            walnut panel, black gutters and bevelled cells the game itself
+            uses — the front door and the game are the same object. */}
+        <div className="board-panel mt-6 md:mt-9">
           <div className="board-wrapper">
-            <div className="home-board grid grid-cols-2 gap-[3px] md:grid-cols-5 md:gap-1">
-
-              {/* Header row — the categories. Hidden on a phone, where each
-                  cell wears its own eyebrow instead. */}
-              {COLUMNS.map((name) => (
-                <div key={name} className="board-category hidden min-h-[46px] px-2 md:flex">
-                  <span className="text-[13px] font-black uppercase tracking-[0.1em] text-white lg:text-sm">
-                    {name}
+            <div className="home-board grid grid-cols-3 gap-[3px] md:gap-1">
+              {GAMES.map((g) => (
+                <div key={g.column} className="board-category hidden min-h-[48px] px-2 md:flex">
+                  <span className="text-[13px] font-black uppercase tracking-[0.1em] text-white lg:text-base">
+                    {g.column}
                   </span>
                 </div>
               ))}
-
-              {/* Row 1 */}
-              <BoardCell
-                column="Friends"
-                title="Browse the archive"
-                sub="Every game, 1984 to last night"
-                href="/find"
-              />
-              <BoardCell
-                column="Strangers"
-                title="Play the room"
-                sub="Public tables, real people"
-                href="/community"
-              />
-              <BoardCell
-                column="Solo"
-                title="Daily Challenge"
-                sub="One board, one shot"
-                href="/challenge"
-              />
-              <BoardCell
-                column="Create"
-                title="Build a board"
-                sub="Write your own clues"
-                href="/create"
-              />
-
-              {/* JOIN — one tall cell holding the room code. Last on a phone
-                  so the grid reads top to bottom; column five on a wide
-                  screen, spanning both clue rows like a podium. */}
-              <div className="board-cell home-cell order-last col-span-2 !cursor-default flex-col hover:brightness-100 active:scale-100 md:order-none md:col-span-1 md:col-start-5 md:row-span-2 md:row-start-2">
-                <span className="mb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-blue-200/60 md:hidden">
-                  Join
-                </span>
-                <span className="home-cell-title">Got a code?</span>
-                <span className="mb-3 mt-1.5 text-[11px] font-semibold text-blue-100/70">
-                  Rejoin your seat and score
-                </span>
-                {/* Stacked, not side by side: this cell is one board column
-                    wide, and a code field plus a button on one line squeezed
-                    "ROOM CODE" down to "ROOM C". */}
-                <div className="flex w-full max-w-[220px] flex-col gap-2">
-                  <input
-                    type="text"
-                    value={rejoinCode}
-                    onChange={(e) => setRejoinCode(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleRejoin() }}
-                    placeholder="ROOM CODE"
-                    maxLength={6}
-                    autoCapitalize="characters"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    className="field-stage w-full text-center font-mono text-sm tracking-[0.18em]"
-                  />
-                  <button onClick={handleRejoin} className="btn-stage btn-copper w-full">
-                    Go
-                  </button>
-                </div>
-              </div>
-
-              {/* Row 2 */}
-              <BoardCell
-                column="Friends"
-                title={friendsChamp ? `👑 ${friendsChamp.name}` : 'Mashups'}
-                sub={friendsChamp ? `Top player · ${friendsChamp.stat}` : 'Mix any categories you like'}
-                href="/find?type=mashups"
-              />
-              <BoardCell
-                column="Strangers"
-                title="Who's playing"
-                sub="Open tables right now"
-                href="/community"
-              />
-              <BoardCell
-                column="Solo"
-                title={soloChamp ? `👑 ${soloChamp.name}` : 'High score'}
-                sub={soloChamp ? `Best run · ${soloChamp.stat}` : 'Up for grabs'}
-                href="/challenge"
-              />
-              <BoardCell
-                column="Create"
-                title={myBoards.length > 0 ? `Your boards · ${myBoards.length}` : 'Your boards'}
-                sub={myBoards.length > 0 ? 'Play, edit or share below' : 'Nothing saved yet'}
-                href={myBoards.length > 0 ? '#your-boards' : '/create'}
-              />
+              {GAMES.map((g) => (
+                <BoardCell key={g.title} {...g} />
+              ))}
             </div>
           </div>
         </div>
 
+        {/* Banners. The two doors first, in copper so nobody mistakes them
+            for a clue, then whoever currently holds each crown. */}
+        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+          <Banner
+            emoji="✏️"
+            title="Create a board"
+            sub="Write your own clues"
+            href="/create"
+            variant="copper"
+          />
+
+          <div className="banner banner-walnut !py-2.5">
+            <span className="banner-emoji">🎟️</span>
+            <span className="min-w-0 flex-1">
+              <span className="banner-title">Join a game</span>
+              <span className="banner-sub">Rejoin your seat and score</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <input
+                type="text"
+                value={rejoinCode}
+                onChange={(e) => setRejoinCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleRejoin() }}
+                placeholder="CODE"
+                maxLength={6}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                className="field-stage h-9 w-[104px] px-2 text-center font-mono text-sm tracking-[0.14em]"
+              />
+              <button onClick={handleRejoin} className="btn-stage btn-copper btn-stage-sm px-3">
+                Go
+              </button>
+            </span>
+          </div>
+        </div>
+
+        {/* The crowns. Real names, real records — and a nudge when nobody
+            holds one yet. */}
+        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+          <Banner
+            emoji="👑"
+            title={friendsChamp ? friendsChamp.name : 'Top player'}
+            sub={friendsChamp ? `Most wins · ${friendsChamp.stat}` : 'Up for grabs — go win one'}
+            href="/find"
+          />
+          <Banner
+            emoji="🏅"
+            title={soloChamp ? soloChamp.name : 'Best solo run'}
+            sub={soloChamp ? `Best run · ${soloChamp.stat}` : 'Up for grabs — go set it'}
+            href="/challenge"
+          />
+        </div>
+
         {error && <p className="mt-5 text-center text-sm text-copper-glow">{error}</p>}
 
-        {/* Your boards — only when there are some. An empty slab here was as
-            visually heavy as the board above it and said nothing. */}
+        {/* Your boards, as banners rather than a table of rows — same reason
+            the rest of this is banners. Only shown when you have some. */}
         {myBoards.length > 0 && (
-          <section id="your-boards" className="mt-6 scroll-mt-6">
-            <div className="board-panel">
-              <div className="board-panel-inner">
-                <div className="bg-[#070E9A] px-4 py-2.5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-jeopardy-gold-light">
-                    Your boards
-                  </p>
-                </div>
-                <div className="mt-1 border-t-2 border-black bg-[#070E9A]">
-                  {myBoards.slice(0, 8).map((b) => (
-                    <div
-                      key={b.id}
-                      className="flex items-center gap-1.5 border-b border-black/40 px-3 py-2 last:border-b-0"
+          <section className="mt-6">
+            <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.24em] text-blue-100/55">
+              Your boards
+            </p>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {myBoards.slice(0, 8).map((b) => (
+                <div key={b.id} className="banner !gap-2.5 !py-2.5">
+                  <span className="banner-emoji">{b.mine ? '📋' : '⭐'}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="banner-title truncate text-white" title={b.title}>
+                      {b.title}
+                    </span>
+                    <span className="banner-sub text-blue-100/70">
+                      {b.mine ? 'Yours' : 'Saved from someone else'}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => setPickerBoard({ id: b.id, title: b.title })}
+                      disabled={busyBoard === b.id}
+                      className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-green-300 hover:bg-white/20 disabled:opacity-50"
                     >
-                      <span className="flex-1 truncate text-sm font-semibold text-white" title={b.title}>
-                        {b.title}
-                        {!b.mine && (
-                          <span className="ml-1.5 text-[9px] uppercase tracking-wider text-blue-100/50">
-                            Saved
-                          </span>
-                        )}
-                      </span>
-
-                      <button
-                        onClick={() => setPickerBoard({ id: b.id, title: b.title })}
-                        disabled={busyBoard === b.id}
-                        className="shrink-0 rounded bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-green-300 hover:bg-white/20 disabled:opacity-50"
+                      {busyBoard === b.id ? '…' : '▶ Play'}
+                    </button>
+                    {/* Only what you authored can be edited. */}
+                    {b.mine && (
+                      <a
+                        href={`/create?boardId=${b.id}`}
+                        className="rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
                       >
-                        {busyBoard === b.id ? '…' : 'Play'}
-                      </button>
-
-                      {/* Only what you authored can be edited. */}
-                      {b.mine && (
-                        <a
-                          href={`/create?boardId=${b.id}`}
-                          className="shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
-                        >
-                          Edit
-                        </a>
-                      )}
-
-                      <button
-                        onClick={() => handleShareBoard(b.id)}
-                        className="shrink-0 rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
-                      >
-                        {copiedId === b.id ? 'Copied' : 'Share'}
-                      </button>
-
-                      {/* Deleting your own removes it for everyone; removing
-                          someone else's just takes it off your list. */}
-                      <button
-                        onClick={() => (b.mine ? handleDeleteBoard(b.id, b.title) : handleRemoveBoard(b.id))}
-                        className="shrink-0 rounded px-2 py-1 text-[10px] font-bold text-blue-100/50 hover:bg-white/10 hover:text-red-300"
-                        title={b.mine ? 'Delete this board' : 'Remove from your list'}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                  {myBoards.length > 8 && (
-                    <p className="px-3 py-2 text-center text-[11px] text-blue-100/60">
-                      +{myBoards.length - 8} more
-                    </p>
-                  )}
+                        Edit
+                      </a>
+                    )}
+                    <button
+                      onClick={() => handleShareBoard(b.id)}
+                      className="rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
+                    >
+                      {copiedId === b.id ? 'Copied' : 'Share'}
+                    </button>
+                    {/* Deleting your own removes it for everyone; removing
+                        someone else's just takes it off your list. */}
+                    <button
+                      onClick={() => (b.mine ? handleDeleteBoard(b.id, b.title) : handleRemoveBoard(b.id))}
+                      className="rounded-lg px-1.5 py-1.5 text-[11px] font-bold text-blue-100/50 hover:bg-white/10 hover:text-red-300"
+                      title={b.mine ? 'Delete this board' : 'Remove from your list'}
+                    >
+                      ✕
+                    </button>
+                  </span>
                 </div>
-              </div>
+              ))}
             </div>
+            {myBoards.length > 8 && (
+              <p className="mt-2 text-center text-[11px] text-blue-100/60">
+                +{myBoards.length - 8} more
+              </p>
+            )}
           </section>
         )}
 
-        <p className="mt-6 text-center text-[11px] text-ink-stage-2">
+        <p className="mt-7 text-center text-[11px] text-ink-stage-2">
           Joining someone&apos;s game? Scan the QR code on their screen, or type the room code above.
         </p>
+
 
         {/* How do you want to play this board? Same three ways the editor
             offers, so Play here never silently picks for you. */}
