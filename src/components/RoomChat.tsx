@@ -21,7 +21,7 @@ const clock = (iso: string) =>
  * box people can't type into.
  */
 export function RoomChat({ room, prompt }: { room: string; prompt: string }) {
-  const { user, profile } = useUser()
+  const { profile } = useUser()
   const [name, setName] = useState('')
   // Whether the name field is showing. Its own flag, not `!name`: keyed on
   // the value, the field unmounted on the first keystroke and took the
@@ -47,7 +47,11 @@ export function RoomChat({ room, prompt }: { room: string; prompt: string }) {
     setAskName(false)
   }, [askName, name, profile?.display_name])
 
-  const { messages, available, send } = useChat({ room }, user?.id ?? null, name || 'Guest', false)
+  // No player id here: chat_messages.player_id is a foreign key to the
+  // players table (a seat in a game), and an auth user id is not one. Passing
+  // it made every signed-in send fail the constraint — the message just
+  // bounced back into the box. In the room you're your name.
+  const { messages, available, send } = useChat({ room }, null, name || 'Guest', false)
 
   // Stick to the newest message, but only if the reader was already at the
   // bottom — nobody wants the list yanked out from under them mid-scroll.
@@ -86,7 +90,7 @@ export function RoomChat({ room, prompt }: { room: string; prompt: string }) {
           </p>
         )}
         {messages.map((m) => {
-          const mine = (user?.id && m.player_id === user.id) || (!user && m.player_name === name && !!name)
+          const mine = !!name && m.player_name === name
           return (
             <div key={m.id}>
               <span className="text-[10px] uppercase tracking-wider text-blue-100/50">
