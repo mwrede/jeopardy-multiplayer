@@ -31,12 +31,12 @@ function BoardCell({
     <a href={href} className="board-cell home-cell">
       {/* The header row is hidden on a phone, so each cell wears its own
           category there instead. */}
-      <span className="mb-1 text-[8px] font-bold uppercase tracking-[0.16em] text-blue-200/60 sm:mb-1.5 sm:text-[9px] md:hidden">
+      <span className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-blue-200/70 sm:hidden">
         {column}
       </span>
       <span className="home-cell-title">{title}</span>
       {sub && (
-        <span className="mt-1 text-[9px] font-semibold leading-tight text-blue-100/75 sm:mt-1.5 sm:text-[11px] md:mt-2 md:text-xs">
+        <span className="mt-1.5 text-[12px] font-semibold leading-tight text-blue-100/75 sm:mt-1.5 sm:text-[11px] md:mt-2 md:text-xs">
           {sub}
         </span>
       )}
@@ -215,9 +215,9 @@ export default function Home() {
             uses — the front door and the game are the same object. */}
         <div className="board-panel mt-5 md:mt-9">
           <div className="board-wrapper">
-            <div className="home-board grid grid-cols-3 gap-[3px] md:gap-1">
+            <div className="home-board grid grid-cols-1 gap-[3px] sm:grid-cols-3 md:gap-1">
               {GAMES.map((g) => (
-                <div key={g.column} className="board-category hidden min-h-[48px] px-2 md:flex">
+                <div key={g.column} className="board-category hidden min-h-[48px] px-2 sm:flex">
                   <span className="text-[13px] font-black uppercase tracking-[0.1em] text-white lg:text-base">
                     {g.column}
                   </span>

@@ -71,10 +71,14 @@ body {
      they need to stack and wrap where a real cell never does. Tall, because
      three of them across is the whole board and a squat row doesn't read as
      one. */
+  /* On a phone the three cells stack, so each one gets the full width and
+     can be properly large — this is the whole point of the page there, and
+     three thumbnails across a 375px screen wasn't it. From sm they go back
+     to sitting side by side as a board row. */
   .home-board .home-cell {
     @apply flex flex-col items-center justify-center text-center;
-    min-height: 106px;
-    padding: 10px 6px;
+    min-height: 112px;
+    padding: 16px 14px;
   }
   @screen sm {
     .home-board .home-cell { min-height: 150px; padding: 16px 12px; }
@@ -87,7 +91,7 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.02em;
     line-height: 1.02;
-    font-size: 13px;
+    font-size: 30px;
     color: var(--jeopardy-gold-light);
     text-shadow: 1px 2px 3px rgba(0,0,0,0.6);
   }

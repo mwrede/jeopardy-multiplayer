@@ -24,9 +24,10 @@ import { BuzzerConsole } from '@/components/BuzzerConsole'
  *
  * Two ways to score, chosen at setup:
  *
- *   Manual   — the host keeps score for teams in the room. Nothing to join,
- *              nothing to sync; the whole game lives in this tab.
- *   Buzzers  — players join on their phones and become the teams. The host
+ *   Manual   — the host keeps score for whoever is in the room, however many
+ *              of them there are. Nothing to join, nothing to sync; the whole
+ *              game lives in this tab.
+ *   Buzzers  — players join on their phones and become the players. The host
  *              still drives the board, but decides when buzzers open, sees
  *              who got in first, and rules on each answer. Players never see
  *              the clue until the buzzers open, so nobody reads ahead.
@@ -57,11 +58,22 @@ export default function PresentPage() {
 
   const [scoring, setScoring] = useState<Scoring>('manual')
   const [teams, setTeams] = useState<Team[]>([
-    { name: 'Team 1', score: 0 },
-    { name: 'Team 2', score: 0 },
-    { name: 'Team 3', score: 0 },
+    { name: 'Player 1', score: 0 },
+    { name: 'Player 2', score: 0 },
+    { name: 'Player 3', score: 0 },
   ])
-  const [teamCount, setTeamCount] = useState(3)
+  /** Fewer than two isn't a game; past a dozen the score cards are unreadable
+   *  and ScoreRow switches to a top-ten leaderboard anyway. */
+  const MIN_PLAYERS = 1
+  const MAX_PLAYERS = 12
+
+  /** Grow or shrink the list to exactly n, keeping any names already typed. */
+  const setPlayerCount = (n: number) => {
+    const size = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, n))
+    setTeams((prev) =>
+      Array.from({ length: size }, (_, i) => prev[i] || { name: `Player ${i + 1}`, score: 0 }),
+    )
+  }
 
   const [phase, setPhase] = useState<PresentPhase>('setup')
   const [activeClue, setActiveClue] = useState<Clue | null>(null)
@@ -250,7 +262,7 @@ export default function PresentPage() {
                   scoring === 'manual' ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
-                Manual teams
+                Manual scoring
                 <span className="mt-0.5 block text-[10px] font-normal opacity-70">You keep score</span>
               </button>
               <button
@@ -314,48 +326,79 @@ export default function PresentPage() {
           ) : (
             <>
               <div>
-                <label className="mb-2 block text-sm text-gray-300">Number of Teams</label>
+                <label className="mb-2 block text-sm text-gray-300">Number of Players</label>
                 <div className="flex gap-2">
                   {[2, 3, 4, 5, 6].map((n) => (
                     <button
                       key={n}
-                      onClick={() => {
-                        setTeamCount(n)
-                        setTeams((prev) =>
-                          Array.from({ length: n }, (_, i) => prev[i] || { name: `Team ${i + 1}`, score: 0 }),
-                        )
-                      }}
+                      onClick={() => setPlayerCount(n)}
                       className={`flex-1 rounded-lg py-2 font-bold transition-colors ${
-                        teamCount === n ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                        teams.length === n ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
                       }`}
                     >
                       {n}
                     </button>
                   ))}
+                  {/* The presets cover a living room; a classroom needs more
+                      than six, so the count isn't capped at the buttons. */}
+                  <button
+                    onClick={() => setPlayerCount(teams.length + 1)}
+                    disabled={teams.length >= MAX_PLAYERS}
+                    title={teams.length >= MAX_PLAYERS ? `${MAX_PLAYERS} is the most` : 'Add another player'}
+                    className={`w-11 shrink-0 rounded-lg py-2 font-bold transition-colors disabled:opacity-30 ${
+                      teams.length > 6 ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    +
+                  </button>
                 </div>
+                {teams.length > 6 && (
+                  <p className="mt-1.5 text-[11px] text-gray-400">
+                    {teams.length} players
+                    {teams.length > 10 && ' — the score strip shows the top ten'}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
-                <label className="block text-sm text-gray-300">Team Names</label>
-                {teams.slice(0, teamCount).map((team, i) => (
-                  <input
-                    key={i}
-                    type="text"
-                    value={team.name}
-                    onChange={(e) =>
-                      setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, name: e.target.value } : t)))
-                    }
-                    className="input-base text-base"
-                    placeholder={`Team ${i + 1}`}
-                  />
+                <label className="block text-sm text-gray-300">Player Names</label>
+                {teams.map((team, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={team.name}
+                      onChange={(e) =>
+                        setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, name: e.target.value } : t)))
+                      }
+                      className="input-base flex-1 text-base"
+                      placeholder={`Player ${i + 1}`}
+                    />
+                    {/* Removing a row is the only way back down from a count
+                        the preset buttons can't express. */}
+                    <button
+                      onClick={() => setTeams((prev) => prev.filter((_, j) => j !== i))}
+                      disabled={teams.length <= MIN_PLAYERS}
+                      aria-label={`Remove ${team.name || `Player ${i + 1}`}`}
+                      title={`Remove ${team.name || `Player ${i + 1}`}`}
+                      className="shrink-0 rounded-lg px-3 py-2 text-lg leading-none text-gray-500 transition-colors hover:bg-white/10 hover:text-red-400 disabled:opacity-20 disabled:hover:bg-transparent disabled:hover:text-gray-500"
+                    >
+                      ×
+                    </button>
+                  </div>
                 ))}
+                <button
+                  onClick={() => setPlayerCount(teams.length + 1)}
+                  disabled={teams.length >= MAX_PLAYERS}
+                  className="w-full rounded-lg border border-dashed border-white/20 py-2 text-sm font-semibold text-gray-400 transition-colors hover:border-jeopardy-gold/60 hover:text-white disabled:opacity-30"
+                >
+                  + Add a player
+                </button>
               </div>
             </>
           )}
 
           <button
             onClick={() => {
-              if (!usingBuzzers) setTeams((prev) => prev.slice(0, teamCount))
-              else if (game) {
+              if (usingBuzzers && game) {
                 // Phones key off gameMode to decide whether to show the clue
                 // when buzzers open. Without this they'd sit on "Watch the TV".
                 supabase.from('games')
@@ -577,7 +620,7 @@ export default function PresentPage() {
           <div className="w-full max-w-xs space-y-3 rounded-2xl border border-white/20 bg-jeopardy-dark p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-center text-lg font-bold text-white">Menu</h3>
             <button onClick={() => { setPhase('setup'); setShowMenu(false) }} className="btn-secondary w-full py-2 text-sm">
-              {usingBuzzers ? 'Scoring & players' : 'Edit teams'}
+              {usingBuzzers ? 'Scoring & players' : 'Edit players'}
             </button>
             <button
               onClick={() => {
@@ -604,7 +647,8 @@ function Kbd({ children }: { children: React.ReactNode }) {
   return <kbd className="rounded bg-white px-2 py-0.5 text-xs font-semibold text-black">{children}</kbd>
 }
 
-/** Team cards. Buzzer games score the real players; manual games score local teams. */
+/** Score cards. Buzzer games score the real players; manual games score the
+ *  local list the host set up. */
 function ScoreRow({
   usingBuzzers, players, teams, step, onManual, onPlayer, bare,
 }: {
