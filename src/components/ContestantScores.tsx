@@ -64,22 +64,26 @@ export function ContestantScores({ gameIdSource }: { gameIdSource: number }) {
 
   return (
     <div className="mb-5 overflow-hidden rounded-md border border-copper/30 bg-black/40">
-      {/* The podium art from the home board — the three people whose night
-          this was. Full-bleed: capped at max-w-md it sat in the middle of a
-          wide panel with dark voids either side and 40% of itself cropped
-          away, which is what made this read as squashed. */}
-      <div className="relative h-[104px] overflow-hidden sm:h-[150px] md:h-[184px]">
+      {/* The three people whose night this was, podiums and all.
+          No fixed height and no object-cover: any crop tight enough to keep
+          this strip a sensible depth cut the podiums off at the rail. The
+          image keeps its own proportions and is capped on WIDTH instead, so
+          the whole thing is always visible and the depth follows from it.
+          The surround is black because the artwork's own background is —
+          there's no seam to see, just more stage. */}
+      {/* The eyebrow gets its own bar rather than floating over the art:
+          overlaid, it landed on the left contestant's face as soon as the
+          image filled a phone's width. */}
+      <p className="bg-black/60 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.24em] text-copper sm:text-[10px]">
+        ▸ The night this aired
+      </p>
+      <div className="flex justify-center bg-black">
         <img
           src="/contestants.png"
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full select-none object-cover opacity-90"
-          style={{ objectPosition: 'center 12%' }}
+          className="w-full max-w-[520px] select-none"
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
-        <p className="absolute left-3 top-2.5 text-[9px] font-bold uppercase tracking-[0.24em] text-copper sm:text-[10px]">
-          ▸ The night this aired
-        </p>
       </div>
 
       <div className="grid grid-cols-3 divide-x divide-white/10 border-t border-white/10">
