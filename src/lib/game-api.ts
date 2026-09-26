@@ -11,6 +11,7 @@ import {
 } from './topic-board'
 import { insertClue, yearOf } from './clue-insert'
 import { checkAnswer, checkAnswerDetailed } from './answer-check'
+import { clampDailyDoubleWager, clampFinalWager, topClueValue } from './wager'
 
 // Generate a 6-character room code
 function generateRoomCode(): string {
@@ -965,10 +966,23 @@ export async function advanceToFinalAnswering(gameId: string) {
 /**
  * Submit a Final Jeopardy wager.
  */
+/**
+ * Lock in a Final Jeopardy wager.
+ *
+ * Clamped HERE, not just in the form. This used to write whatever number it
+ * was handed straight onto the player row, and startFinalReveal applies that
+ * number to the score — so a stale client, a second tab, or anyone poking at
+ * it could move the final standings by an arbitrary amount.
+ */
 export async function submitFinalWager(playerId: string, wager: number) {
+  const { data: player } = await supabase
+    .from('players').select('score').eq('id', playerId).single()
+
+  const clamped = clampFinalWager(wager, player?.score ?? 0)
+
   await supabase
     .from('players')
-    .update({ final_wager: wager })
+    .update({ final_wager: clamped })
     .eq('id', playerId)
 }
 
@@ -2060,12 +2074,25 @@ export async function hostJudge(
   clueId: string,
   playerId: string,
   correct: boolean,
+  /**
+   * Wager, for a Daily Double. The presenter types it on their own screen and
+   * it never reached the server, so a host-run Daily Double was scored at the
+   * cell's face value — a $400 cell settled for $400 no matter what the player
+   * had actually bet.
+   */
+  dailyDoubleWager?: number,
 ) {
-  const [{ data: clue }, { data: player }] = await Promise.all([
-    supabase.from('clues').select('value').eq('id', clueId).single(),
+  const [{ data: clue }, { data: player }, { data: game }] = await Promise.all([
+    supabase.from('clues').select('value, is_daily_double').eq('id', clueId).single(),
     supabase.from('players').select('score').eq('id', playerId).single(),
+    supabase.from('games').select('current_round, settings').eq('id', gameId).single(),
   ])
-  const value = clue?.value ?? 0
+
+  let value = clue?.value ?? 0
+  if (clue?.is_daily_double && dailyDoubleWager != null && player) {
+    const top = topClueValue((game?.settings as any)?.gameLength, game?.current_round ?? 1)
+    value = clampDailyDoubleWager(dailyDoubleWager, player.score, top)
+  }
 
   if (player) {
     await supabase
@@ -2122,9 +2149,10 @@ export async function submitWager(gameId: string, playerId: string, wager: numbe
     supabase.from('players').select('score').eq('id', playerId).single(),
   ])
 
-  const roundMax = game?.current_round === 2 ? 2000 : 1000
-  const maxWager = Math.max(player?.score ?? 0, roundMax)
-  const clamped = Math.min(Math.max(Math.floor(wager) || 5, 5), maxWager)
+  // The cap is the top value on THIS board, not a fixed $1,000/$2,000 — a
+  // Rapid board's rows stop lower, and betting past them was never legal.
+  const top = topClueValue((game?.settings as any)?.gameLength, game?.current_round ?? 1)
+  const clamped = clampDailyDoubleWager(wager, player?.score ?? 0, top)
 
   await supabase
     .from('players')
@@ -2244,12 +2272,13 @@ const TOURNAMENT_GAME_IDS: Record<string, number[]> = {
  * so the caller can fall back to the legacy clue_pool scan.
  * See supabase-migration-games-index.sql.
  */
-async function searchGamesIndexed(filters: GameSearchFilters): Promise<GameSearchResult[] | null> {
-  const { query, season, notesFilter, dateFrom, dateTo, page = 0, limit = 50 } = filters
-
-  let qb = supabase
-    .from('games_index')
-    .select('game_id_source, game_title, air_date, player1, player2, player3, season, clue_count')
+/**
+ * Apply the browse filters. games_index and clue_pool carry the same column
+ * names for everything filtered on, so one builder serves both.
+ * Returns null when the query is self-evidently empty.
+ */
+function applyGameFilters(qb: any, filters: GameSearchFilters): any | null {
+  const { query, season, notesFilter, dateFrom, dateTo } = filters
 
   if (season) qb = qb.eq('season', season)
   if (dateFrom) qb = qb.gte('air_date', dateFrom)
@@ -2271,7 +2300,7 @@ async function searchGamesIndexed(filters: GameSearchFilters): Promise<GameSearc
       // Safe inside .or() — quote the value and use * as the wildcard, since
       // this string is spliced into the URL rather than encoded.
       const safe = trimmed.replace(/["(),]/g, ' ').trim()
-      if (!safe) return []
+      if (!safe) return null
       qb = qb.or(
         [
           `game_title.ilike."%${safe}%"`,
@@ -2283,9 +2312,82 @@ async function searchGamesIndexed(filters: GameSearchFilters): Promise<GameSearc
       )
     }
   }
+  return qb
+}
+
+/**
+ * Games imported since the last `REFRESH MATERIALIZED VIEW games_index`.
+ *
+ * games_index is materialized, so a fresh import is invisible to every search
+ * until someone remembers to refresh it — which is exactly how the browser
+ * ended up still stopping at March 2026 with September already in clue_pool.
+ * Rather than depend on that being remembered, read straight past the index
+ * for anything newer than its own newest row. Once the refresh does happen
+ * the cutoff moves and this returns nothing, costing one indexed lookup.
+ *
+ * Only ever merged into the first page: these are by definition the newest
+ * games, so they belong at the top of a date-ordered list.
+ */
+async function gamesNewerThanIndex(filters: GameSearchFilters): Promise<GameSearchResult[]> {
+  const { data: newest } = await supabase
+    .from('games_index')
+    .select('air_date')
+    .order('air_date', { ascending: false, nullsFirst: false })
+    .limit(1)
+
+  const cutoff = newest?.[0]?.air_date
+  if (!cutoff) return []
+
+  let qb = supabase
+    .from('clue_pool')
+    .select('game_id_source, game_title, air_date, player1, player2, player3, season')
+    .gt('air_date', cutoff)
+
+  const built = applyGameFilters(qb, filters)
+  if (!built) return []
+
+  const { data, error } = await built
+    .order('air_date', { ascending: false, nullsFirst: false })
+    .limit(4000)
+  if (error) {
+    console.warn('[searchGames] post-index catch-up failed:', error.message)
+    return []
+  }
+
+  // clue_pool is one row per CLUE; fold them back into games.
+  const byGame = new Map<number, GameSearchResult>()
+  for (const r of data ?? []) {
+    const id = (r as any).game_id_source
+    if (id == null) continue
+    const existing = byGame.get(id)
+    if (existing) { existing.clue_count += 1; continue }
+    byGame.set(id, {
+      game_id_source: id,
+      game_title: (r as any).game_title || '',
+      air_date: (r as any).air_date,
+      player1: (r as any).player1 || '',
+      player2: (r as any).player2 || '',
+      player3: (r as any).player3 || '',
+      season: (r as any).season || '',
+      clue_count: 1,
+    })
+  }
+  return [...byGame.values()].sort((a, b) => (b.air_date || '').localeCompare(a.air_date || ''))
+}
+
+async function searchGamesIndexed(filters: GameSearchFilters): Promise<GameSearchResult[] | null> {
+  const { page = 0, limit = 50 } = filters
+
+  const built = applyGameFilters(
+    supabase
+      .from('games_index')
+      .select('game_id_source, game_title, air_date, player1, player2, player3, season, clue_count'),
+    filters,
+  )
+  if (!built) return []
 
   const from = page * limit
-  const { data, error } = await qb
+  const { data, error } = await built
     .order('air_date', { ascending: false, nullsFirst: false })
     .range(from, from + limit - 1)
 
@@ -2298,7 +2400,7 @@ async function searchGamesIndexed(filters: GameSearchFilters): Promise<GameSearc
     throw error
   }
 
-  return (data ?? []).map((r: any) => ({
+  const indexed: GameSearchResult[] = (data ?? []).map((r: any) => ({
     game_id_source: r.game_id_source,
     game_title: r.game_title || '',
     air_date: r.air_date,
@@ -2308,6 +2410,14 @@ async function searchGamesIndexed(filters: GameSearchFilters): Promise<GameSearc
     season: r.season || '',
     clue_count: r.clue_count ?? 0,
   }))
+
+  if (page > 0) return indexed
+
+  const fresh = await gamesNewerThanIndex(filters)
+  if (fresh.length === 0) return indexed
+
+  const seen = new Set(indexed.map((g) => g.game_id_source))
+  return [...fresh.filter((g) => !seen.has(g.game_id_source)), ...indexed]
 }
 
 export async function searchGames(filters: GameSearchFilters = {}): Promise<GameSearchResult[]> {

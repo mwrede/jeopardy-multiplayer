@@ -10,6 +10,7 @@ import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
+import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { CommunityVote } from '@/components/CommunityVote'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
@@ -577,9 +578,8 @@ export default function PlayPage() {
     }, 250)
     wagerTimerRef.current = setTimeout(async () => {
       if (!myPlayer) return
-      const maxWager = Math.max(myPlayer.score, 0)
       const typed = parseInt(finalWagerInputRef.current) || 0
-      await submitFinalWager(myPlayer.id, Math.min(Math.max(typed, 0), maxWager))
+      await submitFinalWager(myPlayer.id, clampFinalWager(typed, myPlayer.score))
       setFinalWagerLocked(true)
       setFinalWagerInput('')
     }, remaining())
@@ -754,19 +754,14 @@ export default function PlayPage() {
 
   const handleSubmitWager = () => doAction(async () => {
     if (!game || !myPlayer) return
-    const wagerConfig = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']
-    const roundValues = game.current_round === 2 ? wagerConfig.values2 : wagerConfig.values1
-    const maxWager = Math.max(myPlayer.score, roundValues[roundValues.length - 1] || 1000)
-    const w = parseInt(wager) || 5
-    await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
+    const top = topClueValue(game.settings?.gameLength, game.current_round)
+    await submitWager(game.id, myPlayer.id, clampDailyDoubleWager(parseInt(wager), myPlayer.score, top))
     setWager('')
   })
 
   const handleFinalWager = () => doAction(async () => {
     if (!myPlayer) return
-    const maxWager = Math.max(myPlayer.score, 0)
-    const w = parseInt(finalWagerInput) || 0
-    await submitFinalWager(myPlayer.id, Math.min(Math.max(w, 0), maxWager))
+    await submitFinalWager(myPlayer.id, clampFinalWager(parseInt(finalWagerInput), myPlayer.score))
     setFinalWagerLocked(true); setFinalWagerInput('')
   })
 
@@ -1106,7 +1101,7 @@ export default function PlayPage() {
   }
 
   if (game.phase === 'final_wager') {
-    const maxWager = Math.max(myPlayer.score, 0)
+    const maxWager = maxFinalWager(myPlayer.score)
     if (finalWagerLocked || myPlayer.final_wager != null) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
@@ -1259,6 +1254,7 @@ export default function PlayPage() {
             <div className="w-full max-w-sm mx-auto space-y-2">
               <TrueDailyDoubleButton
                 score={myPlayer.score}
+                topValue={topClueValue(game.settings?.gameLength, game.current_round)}
                 onPick={(amount) => setWager(String(amount))}
                 disabled={busy}
               />

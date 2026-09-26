@@ -3,6 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { ClueText } from '@/components/ClueText'
+import { clampDailyDoubleWager, maxDailyDoubleWager, topClueValue } from '@/lib/wager'
 import { useState, useEffect, useCallback } from 'react'
 import {
   hostOpenBuzzers,
@@ -95,6 +96,18 @@ export default function PresentPage() {
   const allAnswered = roundClues.length > 0 && roundClues.every((c) => answeredClueIds.has(c.id))
   const hasRound2 = categories.some((c) => c.round_number === 2)
 
+  // Daily Double caps. In buzzer mode the wager belongs to whoever uncovered
+  // the clue; in manual mode the host hasn't said whose it is yet, so the
+  // all-in offer is the best score on the board.
+  const ddTopValue = topClueValue(game?.settings?.gameLength, currentRound)
+  const ddBestScore = usingBuzzers
+    ? Math.max(0, ...contestants.map((p) => p.score ?? 0))
+    : Math.max(0, ...teams.map((t) => t.score))
+  const ddQuickWagers = [
+    { label: 'Max', amount: maxDailyDoubleWager(ddBestScore, ddTopValue) },
+    { label: 'Board top', amount: ddTopValue },
+  ].filter((w, i, all) => all.findIndex((x) => x.amount === w.amount) === i)
+
   const getCluesForCategory = useCallback(
     (catId: string) => clues.filter((c) => c.category_id === catId).sort((a, b) => a.value - b.value),
     [clues],
@@ -170,7 +183,7 @@ export default function PresentPage() {
   function awardPoints(teamIdx: number, correct: boolean) {
     if (!activeClue) return
     const points = activeClue.is_daily_double && ddWager
-      ? parseInt(ddWager) || activeClue.value
+      ? clampDailyDoubleWager(parseInt(ddWager), teams[teamIdx]?.score ?? 0, ddTopValue)
       : activeClue.value
     setTeams((prev) =>
       prev.map((t, i) => (i === teamIdx ? { ...t, score: t.score + (correct ? points : -points) } : t)),
@@ -179,7 +192,10 @@ export default function PresentPage() {
 
   function judgeBuzzer(playerId: string, correct: boolean) {
     if (!game || !activeClue) return
-    hostJudge(game.id, activeClue.id, playerId, correct).catch(() => {})
+    // The Daily Double wager lives on this screen; without passing it the
+    // server settles the clue at its face value.
+    const wager = activeClue.is_daily_double ? parseInt(ddWager) || undefined : undefined
+    hostJudge(game.id, activeClue.id, playerId, correct, wager).catch(() => {})
     if (!correct) return
     // Correct ends the clue. Hold just long enough for the ✓ to register and
     // the new score to arrive over realtime, then drop back to the board so
@@ -410,6 +426,23 @@ export default function PresentPage() {
                 placeholder="Wager"
                 autoFocus
               />
+              {/* The real cap, spelled out: the greater of the player's score
+                  and the board's top value. A host asked to adjudicate that
+                  from memory gets it wrong. */}
+              <p className="text-sm text-blue-200/70">
+                $5 up to the greater of their score and ${ddTopValue.toLocaleString()}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {ddQuickWagers.map((w) => (
+                  <button
+                    key={w.label}
+                    onClick={() => setDdWager(String(w.amount))}
+                    className="btn-stage btn-stage-ghost btn-stage-sm"
+                  >
+                    {w.label} · ${w.amount.toLocaleString()}
+                  </button>
+                ))}
+              </div>
               <button onClick={() => setPhase('clue')} className="btn-primary mx-auto block px-8 py-3 text-lg">
                 Show Clue
               </button>

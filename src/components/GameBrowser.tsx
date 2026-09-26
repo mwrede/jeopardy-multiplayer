@@ -180,6 +180,13 @@ export function GameBrowser({ compact = false }: Props) {
       }
     }
 
+    // ?type=mashups / games / custom / all — lets the home board link straight
+    // at a tab instead of dumping everyone on the default one.
+    const typeParam = searchParams.get('type')
+    if (typeParam === 'mashups' || typeParam === 'games' || typeParam === 'custom' || typeParam === 'all') {
+      setTypeFilter(typeParam)
+    }
+
     const topicParam = searchParams.get('topic')
     if (topicParam) {
       setTopicQuery(topicParam)

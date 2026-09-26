@@ -7,6 +7,7 @@ import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
+import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import {
   joinGame,
@@ -503,20 +504,14 @@ export default function PlayerPage() {
 
   const handleSubmitWager = () => doAction(async () => {
     if (!game || !myPlayer) return
-    const wagerVals = GAME_LENGTH_CONFIG[game.settings?.gameLength || 'full']
-    const maxRoundVal = (game.current_round === 2 ? wagerVals.values2 : wagerVals.values1).slice(-1)[0] || 1000
-    const maxWager = Math.max(myPlayer.score, maxRoundVal)
-    const w = parseInt(wager) || 5
-    await submitWager(game.id, myPlayer.id, Math.min(Math.max(w, 5), maxWager))
+    const top = topClueValue(game.settings?.gameLength, game.current_round)
+    await submitWager(game.id, myPlayer.id, clampDailyDoubleWager(parseInt(wager), myPlayer.score, top))
     setWager('')
   })
 
   const handleFinalWager = () => doAction(async () => {
     if (!myPlayer) return
-    const maxWager = Math.max(myPlayer.score, 0)
-    const w = parseInt(finalWagerInput) || 0
-    const clamped = Math.min(Math.max(w, 0), maxWager)
-    await submitFinalWager(myPlayer.id, clamped)
+    await submitFinalWager(myPlayer.id, clampFinalWager(parseInt(finalWagerInput), myPlayer.score))
     setFinalWagerLocked(true)
     setFinalWagerInput('')
   })
@@ -681,7 +676,7 @@ export default function PlayerPage() {
 
   // ===== FINAL JEOPARDY: Wager =====
   if (game.phase === 'final_wager') {
-    const maxWager = Math.max(myPlayer.score, 0)
+    const maxWager = maxFinalWager(myPlayer.score)
 
     if (finalWagerLocked || myPlayer.final_wager != null) {
       return (
@@ -1310,6 +1305,7 @@ export default function PlayerPage() {
         <div className="mt-4 w-full max-w-xs">
           <TrueDailyDoubleButton
             score={myPlayer.score}
+            topValue={topClueValue(game.settings?.gameLength, game.current_round)}
             onPick={(amount) => setWager(String(amount))}
             disabled={busy}
           />

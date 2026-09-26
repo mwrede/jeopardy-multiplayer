@@ -65,6 +65,28 @@ body {
   }
 
   /* Board wrapper */
+  /* Home board: clue cells that hold words instead of a dollar value, so
+     they need to stack and wrap where a real cell never does. */
+  .home-board .home-cell {
+    @apply flex flex-col items-center justify-center text-center;
+    min-height: 118px;
+    padding: 14px 12px;
+  }
+  @screen md {
+    .home-board .home-cell { min-height: 132px; }
+  }
+  .home-cell-title {
+    font-family: "Impact", "Arial Black", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.05;
+    font-size: 17px;
+    color: var(--jeopardy-gold-light);
+  }
+  @screen md {
+    .home-cell-title { font-size: 21px; }
+  }
+
   .board-wrapper {
     @apply bg-black p-1 rounded-lg;
     box-shadow:
