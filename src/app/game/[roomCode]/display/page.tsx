@@ -5,6 +5,7 @@ import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { ClueText } from '@/components/ClueText'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
+import { ContestantScores } from '@/components/ContestantScores'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -463,6 +464,10 @@ export default function DisplayPage() {
       </div>
     )
   }
+
+  /** The real episode this board came from, if any. */
+  const sourceGameId = (game.settings as any)?.sourceGameId as number | undefined
+
 
   // LOBBY: Show room code prominently
   if (game.status === 'lobby' || game.phase === 'lobby') {
@@ -1111,8 +1116,17 @@ export default function DisplayPage() {
 
       {/* Game over overlay */}
       {game.phase === 'game_over' && (
-        <div className="fixed inset-0 bg-jeopardy-dark z-50 flex flex-col items-center justify-center p-8">
-          <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-20 md:h-32 w-auto mb-6" />
+        <div className="fixed inset-0 z-50 flex flex-col items-center overflow-y-auto bg-jeopardy-dark p-8">
+          {/* First thing on the results screen, on a board taken from a real
+              episode: what the people who actually played it scored. That's
+              the comparison everyone in the room wants, and it's more
+              interesting before the podium than buried under it. */}
+          {sourceGameId && (
+            <div className="mb-6 w-full max-w-lg">
+              <ContestantScores gameIdSource={sourceGameId} heading={'▸ How the real contestants did'} />
+            </div>
+          )}
+          <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-20 md:h-32 w-auto mb-4" />
           <h1 className="text-5xl md:text-7xl font-bold text-jeopardy-gold mb-2">
             {players.sort((a, b) => b.score - a.score)[0]?.name || 'Winner'}
           </h1>

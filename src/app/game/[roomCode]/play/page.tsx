@@ -13,6 +13,8 @@ import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { Countdown } from '@/components/Countdown'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
+import { GameChat } from '@/components/GameChat'
+import { ContestantScores } from '@/components/ContestantScores'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
 import { GameKeyboard } from '@/components/GameKeyboard'
@@ -805,6 +807,9 @@ export default function PlayPage() {
     )
   }
 
+  /** The real episode this board came from, if any. */
+  const sourceGameId = (game.settings as any)?.sourceGameId as number | undefined
+
   // === JOIN FORM (no player yet — e.g. scanned QR code) ===
   if (!myPlayer) {
     return <JoinForm roomCode={roomCode} onJoined={(playerId) => {
@@ -812,6 +817,18 @@ export default function PlayPage() {
       refreshState()
     }} />
   }
+
+  /**
+   * Chat. It positions itself, so this is only a mount point — declared here,
+   * above every phase branch, because each of those returns early and a const
+   * defined further down can't be reached from the ones above it.
+   *
+   * Alone in a room there's nobody to talk to, so it waits for company.
+   */
+  const Chat = () =>
+    players.length > 1 ? (
+      <GameChat gameId={game.id} myPlayerId={myPlayerId} myName={myPlayer.name || 'Player'} />
+    ) : null
 
   const currentClue = game.current_clue_id ? clues.find((c) => c.id === game.current_clue_id) : null
   const currentPlayer = players.find((p) => p.id === game.current_player_id)
@@ -933,6 +950,7 @@ export default function PlayPage() {
         )}
 
         {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
+        <Chat />
       </div>
     )
   }
@@ -1038,6 +1056,7 @@ export default function PlayPage() {
       <div className="px-2 pb-2 empty:hidden">
         <ScoreToBeat game={game} clues={clues} categories={categories} variant="phone" />
       </div>
+      <Chat />
     </div>
   )
 
@@ -1192,7 +1211,14 @@ export default function PlayPage() {
 
   if (game.phase === 'final_reveal' || game.phase === 'game_over') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6 py-10">
+        {/* Top of the results: what the people who actually played this board
+            scored. It's the comparison worth leading with. */}
+        {sourceGameId && (
+          <div className="mb-5 w-full max-w-sm">
+            <ContestantScores gameIdSource={sourceGameId} heading={'▸ How the real contestants did'} />
+          </div>
+        )}
         <img src="/jeopardy-logo.png" alt="JEOPARDY!" className="h-16 w-auto mb-4" />
         <h1 className="text-3xl font-bold text-jeopardy-gold mb-2">
           {game.phase === 'game_over' ? (players.sort((a, b) => b.score - a.score)[0]?.name || 'Winner') + ' wins!' : 'Final Results...'}

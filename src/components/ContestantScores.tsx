@@ -41,7 +41,16 @@ const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString()
  * route; if it isn't available the panel simply doesn't appear, because a
  * scoreboard is never a reason to block a preview.
  */
-export function ContestantScores({ gameIdSource }: { gameIdSource: number }) {
+export function ContestantScores({
+  gameIdSource,
+  heading = '▸ The night this aired',
+  className = '',
+}: {
+  gameIdSource: number
+  /** The eyebrow. Before a game it's context; after one it's the comparison. */
+  heading?: string
+  className?: string
+}) {
   const [rows, setRows] = useState<Contestant[] | null>(null)
 
   useEffect(() => {
@@ -63,7 +72,7 @@ export function ContestantScores({ gameIdSource }: { gameIdSource: number }) {
   const winning = winner.final ?? 0
 
   return (
-    <div className="mb-5 overflow-hidden rounded-md border border-copper/30 bg-black/40">
+    <div className={`overflow-hidden rounded-md border border-copper/30 bg-black/40 ${className}`}>
       {/* The three people whose night this was, podiums and all.
           No fixed height and no object-cover: any crop tight enough to keep
           this strip a sensible depth cut the podiums off at the rail. The
@@ -75,7 +84,7 @@ export function ContestantScores({ gameIdSource }: { gameIdSource: number }) {
           overlaid, it landed on the left contestant's face as soon as the
           image filled a phone's width. */}
       <p className="bg-black/60 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.24em] text-copper sm:text-[10px]">
-        ▸ The night this aired
+        {heading}
       </p>
       <div className="flex justify-center bg-black">
         <img

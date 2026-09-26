@@ -1108,7 +1108,7 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
                   {/* Who played it, and what they walked away with — the
                       number to chase, shown before you start rather than
                       discovered afterwards. */}
-                  {isGame && <ContestantScores gameIdSource={parseInt(pb.id, 10)} />}
+                  {isGame && <ContestantScores gameIdSource={parseInt(pb.id, 10)} className="mb-5" />}
                   {isGame ? (
                     /* Real games: every round + FJ visible on one page. */
                     <BoardPreview board={pb.board} showAllRounds />

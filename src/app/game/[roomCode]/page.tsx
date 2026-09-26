@@ -9,6 +9,7 @@ import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { Countdown } from '@/components/Countdown'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
+import { ContestantScores } from '@/components/ContestantScores'
 import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
@@ -608,6 +609,10 @@ export default function PlayerPage() {
     )
   }
 
+  /** The real episode this board came from, if any. */
+  const sourceGameId = (game.settings as any)?.sourceGameId as number | undefined
+
+
   // Game exists but this device isn't a player yet — offer to join rather
   // than spinning forever.
   if (!myPlayer) return <JoinForm roomCode={roomCode} />
@@ -842,7 +847,12 @@ export default function PlayerPage() {
     return (
       <div className="min-h-screen flex flex-col bg-jeopardy-dark p-6">
         <PlayerHeader myPlayer={myPlayer} game={game} />
-        <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="flex-1 flex flex-col items-center justify-center py-6">
+          {sourceGameId && (
+            <div className="mb-5 w-full max-w-sm">
+              <ContestantScores gameIdSource={sourceGameId} heading={'▸ How the real contestants did'} />
+            </div>
+          )}
           <h2 className="text-3xl font-bold text-jeopardy-gold mb-4">
             {game.phase === 'game_over' ? 'Game Over!' : 'Final Results...'}
           </h2>
