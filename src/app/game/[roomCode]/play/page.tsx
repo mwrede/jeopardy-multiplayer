@@ -14,6 +14,7 @@ import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } f
 import { Countdown } from '@/components/Countdown'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { GameChat } from '@/components/GameChat'
+import { WagerStandings } from '@/components/WagerStandings'
 import { ContestantScores } from '@/components/ContestantScores'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
@@ -825,7 +826,7 @@ export default function PlayPage() {
    *
    * Alone in a room there's nobody to talk to, so it waits for company.
    */
-  const Chat = () =>
+  const chat =
     players.length > 1 ? (
       <GameChat gameId={game.id} myPlayerId={myPlayerId} myName={myPlayer.name || 'Player'} />
     ) : null
@@ -950,13 +951,19 @@ export default function PlayPage() {
         )}
 
         {error && <p className="text-red-400 text-center text-sm mt-4">{error}</p>}
-        <Chat />
+        {chat}
       </div>
     )
   }
 
   // === SCOREBOARD (shared across phases) ===
-  const Scoreboard = () => (
+  //
+  // A JSX VALUE, not a component defined in here. As `const Scoreboard = () =>
+  // …` it was a brand-new function identity on every render, so React treated
+  // it as a different component type and threw the whole subtree away each
+  // time — which is why the real-contestants panel flickered (remount → refetch
+  // → empty → back) and why the chat panel would have shut itself mid-sentence.
+  const scoreboard = (
     <div className="bg-black/40 flex-shrink-0">
       <div className="flex items-center justify-between gap-2 px-3 py-1">
         <span className="text-[10px] text-gray-500 font-mono">{game.room_code}</span>
@@ -1010,7 +1017,10 @@ export default function PlayPage() {
           )}
         </div>
       </div>
-      <div className="flex gap-2 px-2 pb-2 overflow-x-auto">
+      {/* Player cards and the real contestants share one row, theirs on the
+          right: the whole point is reading the two side by side. */}
+      <div className="flex items-stretch gap-2 px-2 pb-2">
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
         {players.sort((a, b) => b.score - a.score).map((p) => {
           // Faded means the page isn't open on their end. It corrects itself
           // the moment they come back, so it says "away", not "gone".
@@ -1051,12 +1061,11 @@ export default function PlayPage() {
           </div>
           )
         })}
-      </div>
-      {/* Only renders on a board taken from a real episode. */}
-      <div className="px-2 pb-2 empty:hidden">
+        </div>
+        {/* Only renders on a board taken from a real episode. */}
         <ScoreToBeat game={game} clues={clues} categories={categories} variant="phone" />
       </div>
-      <Chat />
+      {chat}
     </div>
   )
 
@@ -1067,7 +1076,7 @@ export default function PlayPage() {
         <h2 className="text-4xl font-bold text-jeopardy-gold mb-4 animate-pulse">
           {game.current_round === 2 ? 'Double Jeopardy!' : 'Final Jeopardy!'}
         </h2>
-        <Scoreboard />
+        {scoreboard}
       </div>
     )
   }
@@ -1083,7 +1092,7 @@ export default function PlayPage() {
 
     return (
       <div className="min-h-screen flex flex-col bg-jeopardy-dark">
-        <Scoreboard />
+        {scoreboard}
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           {/* Buzz order — surfaced first when 2+ people raced for the buzz */}
           <div className="w-full max-w-sm mb-4">
@@ -1152,14 +1161,22 @@ export default function PlayPage() {
         <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
           <h2 className="text-2xl font-bold text-jeopardy-gold mb-4">Wager Locked!</h2>
           <p className="text-3xl font-bold text-white">${(myPlayer.final_wager ?? 0).toLocaleString()}</p>
-          <p className="text-gray-400 mt-4">Waiting for others — the clue comes up shortly either way.</p>
+          <p className="mb-5 mt-4 text-gray-400">Waiting for others — the clue comes up shortly either way.</p>
+          <WagerStandings players={players} myPlayerId={myPlayerId} locked />
         </div>
       )
     }
     return (
       <div className="h-[100dvh] flex flex-col items-center justify-center bg-jeopardy-dark p-6 overflow-hidden">
         <h2 className="text-2xl font-bold text-jeopardy-gold mb-2">Final Jeopardy!</h2>
-        <p className="text-gray-400 mb-2 uppercase">{game.final_category_name}</p>
+        <p className="text-gray-400 mb-3 uppercase">{game.final_category_name}</p>
+
+        {/* Wagering is a question about everyone else's number, not your own.
+            Without these on screen you're betting blind. */}
+        <div className="mb-3">
+          <WagerStandings players={players} myPlayerId={myPlayerId} />
+        </div>
+
         <p className="text-gray-500 mb-2">Wager $0 - ${maxWager.toLocaleString()}</p>
         {/* Nobody should be able to hold up Final Jeopardy by walking away. */}
         <p className={`mb-4 text-sm font-bold tabular-nums ${
@@ -1288,7 +1305,7 @@ export default function PlayPage() {
     const clueCategory = categories.find((c) => c.id === currentClue.category_id)
     return (
       <div className="h-[100dvh] flex flex-col bg-jeopardy-dark overflow-hidden">
-        <Scoreboard />
+        {scoreboard}
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2">
           <h2 className="text-3xl font-bold text-jeopardy-gold mb-2 animate-pulse">Daily Double!</h2>
           {clueCategory && (
@@ -1327,7 +1344,7 @@ export default function PlayPage() {
 
   return (
     <div className="h-[100dvh] flex flex-col bg-jeopardy-dark overflow-hidden">
-      <Scoreboard />
+      {scoreboard}
 
       {showClue && currentClue ? (
         <>

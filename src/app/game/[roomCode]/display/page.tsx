@@ -6,6 +6,7 @@ import { GameBoard } from '@/components/GameBoard'
 import { ClueText } from '@/components/ClueText'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { ContestantScores } from '@/components/ContestantScores'
+import { WagerStandings } from '@/components/WagerStandings'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -585,24 +586,10 @@ export default function DisplayPage() {
         </div>
         <p className="text-xl text-gray-400 mb-8">Place your wagers on your phones...</p>
 
-        <div className="flex gap-4">
-          {players.map((p) => (
-            <div key={p.id} className={`px-6 py-4 rounded-xl text-center min-w-[120px] ${
-              p.final_wager != null
-                ? 'bg-green-600/20 border border-green-500'
-                : 'bg-white/5 border border-white/10'
-            }`}>
-              <p className="text-sm text-gray-400">{p.name}</p>
-              <p className="text-lg font-bold mt-1">
-                {p.final_wager != null ? (
-                  <span className="text-green-400">Locked In</span>
-                ) : (
-                  <span className="text-gray-500">Wagering...</span>
-                )}
-              </p>
-            </div>
-          ))}
-        </div>
+        {/* The scores belong on the shared screen too: this is the moment the
+            room is working out who can catch whom, and the TV showed only
+            "Locked In" — the one thing nobody needed to decide anything. */}
+        <WagerStandings players={players} locked variant="tv" />
 
         <p className="mt-6 text-gray-500">
           {wagered.length}/{players.length} wagers placed
@@ -888,8 +875,10 @@ export default function DisplayPage() {
     // content. That's why the board sat in the top two-thirds of a TV with a
     // band of empty navy underneath.
     <div className="h-[100dvh] overflow-hidden flex flex-col bg-jeopardy-dark">
-      {/* Connection indicator + debug skip buttons */}
-      <div className="fixed top-3 right-3 z-50 flex items-center gap-2">
+      {/* Connection indicator + debug skip buttons. Bottom right, not top:
+          the top right is where the real-contestants panel sits beside the
+          podiums, and these were landing on top of it. */}
+      <div className="fixed bottom-3 right-3 z-50 flex items-center gap-2">
         {game.phase === 'board_selection' && game.current_round === 1 && (
           <button
             onClick={() => skipToRound(game.id, 2)}
@@ -909,8 +898,10 @@ export default function DisplayPage() {
         <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
       </div>
 
-      {/* Scoreboard bar - podium style */}
-      <div className="flex gap-3 px-4 py-3 bg-black/50">
+      {/* Scoreboard bar - podium style, with the real contestants alongside
+          on the right where the two can be read together. */}
+      <div className="flex items-stretch gap-3 px-4 py-3 bg-black/50">
+        <div className="flex min-w-0 flex-1 gap-3 overflow-x-auto">
         {players
           .sort((a, b) => b.score - a.score)
           .map((p) => (
@@ -931,14 +922,8 @@ export default function DisplayPage() {
               </p>
             </div>
           ))}
-      </div>
-
-      {/* On a board taken from a real episode, the people who actually played
-          it get their own strip under the podiums — plainly apart from them,
-          because they aren't in the room. Its own row rather than beside the
-          scoreboard: the debug skip controls are fixed to the top right and
-          anything put there collides with them. */}
-      <div className="px-4 pb-2 empty:hidden">
+        </div>
+        {/* Only renders on a board taken from a real episode. */}
         <ScoreToBeat game={game} clues={clues} categories={categories} variant="tv" />
       </div>
 

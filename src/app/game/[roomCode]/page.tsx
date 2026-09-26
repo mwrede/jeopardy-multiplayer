@@ -10,6 +10,7 @@ import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { Countdown } from '@/components/Countdown'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { ContestantScores } from '@/components/ContestantScores'
+import { WagerStandings } from '@/components/WagerStandings'
 import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
@@ -747,7 +748,8 @@ export default function PlayerPage() {
             <p className="text-3xl font-bold text-white">
               ${(myPlayer.final_wager ?? 0).toLocaleString()}
             </p>
-            <p className="text-gray-400 mt-4">Waiting for other players...</p>
+            <p className="mb-5 mt-4 text-gray-400">Waiting for other players...</p>
+            <WagerStandings players={players} myPlayerId={myPlayerId} locked />
           </div>
         </div>
       )
@@ -758,7 +760,13 @@ export default function PlayerPage() {
         <PlayerHeader myPlayer={myPlayer} game={game} />
         <div className="flex-1 flex flex-col items-center justify-center">
           <h2 className="text-2xl font-bold text-jeopardy-gold mb-2">Final Jeopardy!</h2>
-          <p className="text-gray-400 text-lg mb-1 uppercase">{game.final_category_name}</p>
+          <p className="text-gray-400 text-lg mb-3 uppercase">{game.final_category_name}</p>
+
+          {/* You're betting against their numbers, so their numbers are here. */}
+          <div className="mb-3">
+            <WagerStandings players={players} myPlayerId={myPlayerId} />
+          </div>
+
           <p className="text-gray-500 mb-1">Wager $0 - ${maxWager.toLocaleString()}</p>
           {/* Nobody should be able to hold up Final Jeopardy by walking away. */}
           <Countdown seconds={finalWagerCountdown} label="to lock in" className="mb-5" />

@@ -83,18 +83,39 @@ export type EpisodeScores = {
   airedOn: string | null
 }
 
+/**
+ * One in-flight request and one answer per episode, for the life of the tab.
+ *
+ * An episode that aired in 2003 is not going to change during a game, and the
+ * panel showing this sits inside a scoreboard that can remount — without a
+ * cache each remount refetched and blanked the panel on the way, which read as
+ * flickering.
+ */
+const cache = new Map<number, Promise<EpisodeScores>>()
+
 /** Fetch a game's contestants. Never throws — a scoreboard is not a reason to
  *  break a game in progress. */
-export async function fetchContestants(sourceGameId: number): Promise<EpisodeScores> {
-  try {
-    const res = await fetch(`/api/game-scores/${sourceGameId}`)
-    if (!res.ok) return { contestants: [], airedOn: null }
-    const data = await res.json()
-    return {
-      contestants: (data?.contestants ?? []) as Contestant[],
-      airedOn: (data?.airedOn ?? null) as string | null,
+export function fetchContestants(sourceGameId: number): Promise<EpisodeScores> {
+  const hit = cache.get(sourceGameId)
+  if (hit) return hit
+
+  const pending = (async (): Promise<EpisodeScores> => {
+    try {
+      const res = await fetch(`/api/game-scores/${sourceGameId}`)
+      if (!res.ok) return { contestants: [], airedOn: null }
+      const data = await res.json()
+      return {
+        contestants: (data?.contestants ?? []) as Contestant[],
+        airedOn: (data?.airedOn ?? null) as string | null,
+      }
+    } catch {
+      // Not cached as a failure — a flaky moment shouldn't blank the panel
+      // for the rest of the game.
+      cache.delete(sourceGameId)
+      return { contestants: [], airedOn: null }
     }
-  } catch {
-    return { contestants: [], airedOn: null }
-  }
+  })()
+
+  cache.set(sourceGameId, pending)
+  return pending
 }

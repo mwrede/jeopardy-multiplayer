@@ -81,41 +81,37 @@ export function ScoreToBeat({
 
   return (
     <div
-      className={`rounded-lg border-2 border-copper/60 bg-black/55 ${isTv ? 'px-4 py-2.5' : 'px-3 py-2'}`}
+      className={`flex flex-col justify-center rounded-lg border-2 border-copper/70 bg-copper/15 ${
+        isTv ? 'min-w-[230px] px-4 py-2' : 'min-w-[150px] px-2.5 py-1.5'
+      }`}
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <span
-          className={`font-bold uppercase tracking-[0.2em] text-copper ${isTv ? 'text-xs' : 'text-[9px]'}`}
-        >
-          ★ Real contestants
-        </span>
-        <span className={`shrink-0 truncate text-ink-stage-2 ${isTv ? 'text-xs' : 'text-[9px]'}`}>
-          {airedOn || 'this episode'}
-        </span>
-      </div>
+      {/* Copper on copper, beside the blue player cards: these three are on a
+          different footing from everyone else in the room, so they're on a
+          different colour. */}
+      <p
+        className={`font-bold uppercase tracking-[0.18em] text-copper ${
+          isTv ? 'text-[11px]' : 'text-[8px]'
+        }`}
+      >
+        ★ Real contestants
+      </p>
 
-      {/* Whoever led at this point, called out. */}
-      <div className="mt-1.5 flex items-baseline justify-between gap-3">
-        <span className={`truncate font-bold text-white ${isTv ? 'text-2xl' : 'text-sm'}`}>
+      <div className={`flex items-baseline justify-between gap-2 ${isTv ? 'mt-0.5' : ''}`}>
+        <span className={`truncate font-bold text-white ${isTv ? 'text-lg' : 'text-[11px]'}`}>
           {leader.c.nickname}
         </span>
         <span
           className={`shrink-0 font-bold tabular-nums text-jeopardy-gold-light ${
-            isTv ? 'text-3xl' : 'text-lg'
+            isTv ? 'text-2xl' : 'text-sm'
           }`}
         >
           {money(leader.pace)}
         </span>
       </div>
-      <p className={`text-ink-stage-2 ${isTv ? 'text-sm' : 'text-[10px]'}`}>
-        Score to beat <span className="font-bold text-white">{money(target)}</span>
-        {size !== 'full' && <span className="opacity-70"> · scaled to this board</span>}
-      </p>
 
-      {/* The other two, smaller — they're context, not the target. */}
       <div
-        className={`mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-white/10 pt-1.5 text-ink-stage-2 ${
-          isTv ? 'text-sm' : 'text-[10px]'
+        className={`flex flex-wrap gap-x-2 leading-tight text-blue-100/70 ${
+          isTv ? 'text-xs' : 'text-[9px]'
         }`}
       >
         {standing.slice(1).map(({ c, pace }) => (
@@ -124,6 +120,12 @@ export function ScoreToBeat({
           </span>
         ))}
       </div>
+
+      <p className={`leading-tight text-blue-100/60 ${isTv ? 'mt-1 text-xs' : 'mt-0.5 text-[8px]'}`}>
+        Beat {money(target)}
+        {size !== 'full' && ' (scaled)'}
+        {airedOn && isTv && <span className="opacity-70"> · {airedOn}</span>}
+      </p>
     </div>
   )
 }

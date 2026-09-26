@@ -33,4 +33,11 @@ CREATE POLICY "Allow all on chat_messages" ON chat_messages
     FOR ALL USING (true) WITH CHECK (true);
 
 -- Server-push, so a message lands without waiting for the next poll.
-ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+-- Wrapped because ADD TABLE errors if it's already published — this file
+-- should be safe to paste twice.
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
