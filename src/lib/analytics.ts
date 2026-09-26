@@ -1,12 +1,16 @@
 /**
- * Google Analytics 4, thinly wrapped.
+ * Custom events, sent to whichever analytics are switched on.
  *
- * Everything here is a no-op unless NEXT_PUBLIC_GA_ID is set, so local dev and
- * previews stay out of the numbers. Nothing identifying is ever sent — room
- * codes, player names and answers stay out of event params on purpose; what
- * goes to GA is shape-of-play only (which mode, which board size, correct or
- * not), which is what "how are people using this" actually needs.
+ * Vercel Web Analytics is always on (it's first-party and needs no key).
+ * Google Analytics only joins in when NEXT_PUBLIC_GA_ID is set, so local dev
+ * and previews stay out of that property.
+ *
+ * Nothing identifying is ever sent — room codes, player names and answers stay
+ * out of event params on purpose. What goes out is shape-of-play only (which
+ * mode, which board size), which is what "how are people using this" needs.
  */
+
+import { track as vercelTrack } from '@vercel/analytics'
 
 export const GA_ID = process.env.NEXT_PUBLIC_GA_ID || ''
 
@@ -19,8 +23,13 @@ declare global {
 
 /** Record a custom event. Safe to call anywhere, including during SSR. */
 export function track(event: string, params: Record<string, string | number | boolean> = {}) {
-  if (!GA_ID || typeof window === 'undefined' || !window.gtag) return
-  window.gtag('event', event, params)
+  if (typeof window === 'undefined') return
+  try {
+    vercelTrack(event, params)
+  } catch {
+    // Analytics must never be able to break a game.
+  }
+  if (GA_ID && window.gtag) window.gtag('event', event, params)
 }
 
 /** Fire a page_view by hand — the App Router doesn't reload between routes. */

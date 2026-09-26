@@ -23,9 +23,13 @@ function PageViews() {
 
 /**
  * Google Analytics 4. Renders nothing at all unless NEXT_PUBLIC_GA_ID is set,
- * so dev and preview builds never pollute the property.
+ * so dev and preview builds never pollute the property — and so this sits
+ * dormant alongside Vercel Analytics unless you actually want it.
+ *
+ * Named GoogleAnalytics, not Analytics, because @vercel/analytics exports a
+ * component by that name and layout.tsx renders both.
  */
-export function Analytics() {
+export function GoogleAnalytics() {
   if (!GA_ID) return null
   return (
     <>
