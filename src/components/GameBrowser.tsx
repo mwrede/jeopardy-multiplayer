@@ -14,6 +14,7 @@ import { BoardPreview } from './BoardPreview'
 import { PlayModePicker, type PlayMode } from './PlayModePicker'
 import { trackGameStart } from '@/lib/analytics'
 import { DIFFICULTIES, seasonToYear, yearOptions } from '@/lib/difficulty'
+import { ContestantScores } from './ContestantScores'
 import { rememberBoard, forgetBoard, isRemembered } from '@/lib/board-library'
 import type { CustomBoard } from '@/types/game'
 
@@ -1104,6 +1105,10 @@ SELECT COUNT(*) AS rows, COUNT(DISTINCT game_id_source) AS games FROM clue_pool;
 
                 {/* Board(s) */}
                 <div className="mb-5">
+                  {/* Who played it, and what they walked away with — the
+                      number to chase, shown before you start rather than
+                      discovered afterwards. */}
+                  {isGame && <ContestantScores gameIdSource={parseInt(pb.id, 10)} />}
                   {isGame ? (
                     /* Real games: every round + FJ visible on one page. */
                     <BoardPreview board={pb.board} showAllRounds />
