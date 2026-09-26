@@ -21,16 +21,31 @@ const clock = (iso: string) =>
  * box people can't type into.
  */
 export function RoomChat({ room, prompt }: { room: string; prompt: string }) {
-  const { user } = useUser()
+  const { user, profile } = useUser()
   const [name, setName] = useState('')
+  // Whether the name field is showing. Its own flag, not `!name`: keyed on
+  // the value, the field unmounted on the first keystroke and took the
+  // cursor with it — you could type exactly one letter.
+  const [askName, setAskName] = useState(false)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const draftRef = useRef<HTMLInputElement>(null)
 
   // The name you play under, if this browser has one; otherwise ask once.
   useEffect(() => {
-    try { setName(localStorage.getItem('playerName') || '') } catch {}
+    let stored = ''
+    try { stored = localStorage.getItem('playerName') || '' } catch {}
+    setName(stored)
+    setAskName(!stored)
   }, [])
+
+  // Signed in and never named yourself here: your account name will do.
+  useEffect(() => {
+    if (!askName || name || !profile?.display_name) return
+    setName(profile.display_name)
+    setAskName(false)
+  }, [askName, name, profile?.display_name])
 
   const { messages, available, send } = useChat({ room }, user?.id ?? null, name || 'Guest', false)
 
@@ -49,6 +64,7 @@ export function RoomChat({ room, prompt }: { room: string; prompt: string }) {
     const body = draft.trim()
     if (!body || sending || !name.trim()) return
     try { localStorage.setItem('playerName', name.trim()) } catch {}
+    setAskName(false)
     setSending(true)
     setDraft('')
     const ok = await send(body)
@@ -83,16 +99,18 @@ export function RoomChat({ room, prompt }: { room: string; prompt: string }) {
       </div>
 
       <div className="flex gap-1.5 border-t border-white/10 p-2">
-        {!name && (
+        {askName && (
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); draftRef.current?.focus() } }}
             placeholder="Your name"
             maxLength={40}
             className="field-stage h-9 w-[110px] shrink-0 px-2 text-sm"
           />
         )}
         <input
+          ref={draftRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submit() } }}

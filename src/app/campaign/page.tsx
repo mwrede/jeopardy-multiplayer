@@ -461,14 +461,35 @@ export default function CampaignPage() {
         <Eyebrow>Where does your run begin?</Eyebrow>
         <h2 className="display-chrome mt-2 text-3xl">Pick a night</h2>
         <p className="mt-2 text-sm text-ink-stage">
-          Start on the night a famous streak began and try to match it — or any episode, any year.
-          Either way you play forward through that season, one night at a time.
+          Any episode, any year — you play forward through that season, one night at a time.
+          Or start on the night a famous streak began and try to match it.
         </p>
 
+        <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Any night</p>
+        <div className="mx-auto mt-2 flex max-w-lg items-center justify-center gap-3">
+          <select value={year} onChange={(e) => loadYear(parseInt(e.target.value, 10))} className="field-stage h-[42px] cursor-pointer py-0">
+            {YEARS.map((y) => <option key={y} value={y} className="bg-gray-900">{y}</option>)}
+          </select>
+          {episodes === null && <button onClick={() => loadYear(year)} className="btn-stage btn-copper">Show that year</button>}
+        </div>
+        {episodes && (
+          <div className="mx-auto mt-4 max-h-[50vh] max-w-lg space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/40 p-2 text-left">
+            {episodes.length === 0 && <p className="p-4 text-center text-sm text-ink-stage-2">Nothing from that year.</p>}
+            {episodes.map((e) => (
+              <button key={e.gameId} onClick={() => { setPicked(e); setChasing(null) }}
+                className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm transition-colors ${
+                  picked?.gameId === e.gameId ? 'bg-copper/25 text-white' : 'text-white/80 hover:bg-white/5'
+                }`}>
+                <span className="truncate">{e.title}</span>
+                <span className="ml-3 shrink-0 text-[11px] uppercase tracking-wider text-ink-stage-2">S{e.season}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {/* The longest streaks in the show's history, each a starting line:
             you begin on the same night they did, against the same three. */}
-        <div className="mx-auto mt-5 max-w-2xl text-left">
-          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Chase a record</p>
+        <div className="mx-auto mt-7 max-w-2xl text-left">
+          <p className="text-center text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Or chase a record</p>
           <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
             {REAL_STREAKS.map((r) => {
               const on = chasing?.name === r.name
@@ -500,27 +521,6 @@ export default function CampaignPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Or any night</p>
-        <div className="mx-auto mt-5 flex max-w-lg items-center justify-center gap-3">
-          <select value={year} onChange={(e) => loadYear(parseInt(e.target.value, 10))} className="field-stage h-[42px] cursor-pointer py-0">
-            {YEARS.map((y) => <option key={y} value={y} className="bg-gray-900">{y}</option>)}
-          </select>
-          {episodes === null && <button onClick={() => loadYear(year)} className="btn-stage btn-copper">Show that year</button>}
-        </div>
-        {episodes && (
-          <div className="mx-auto mt-4 max-h-[50vh] max-w-lg space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/40 p-2 text-left">
-            {episodes.length === 0 && <p className="p-4 text-center text-sm text-ink-stage-2">Nothing from that year.</p>}
-            {episodes.map((e) => (
-              <button key={e.gameId} onClick={() => { setPicked(e); setChasing(null) }}
-                className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm transition-colors ${
-                  picked?.gameId === e.gameId ? 'bg-copper/25 text-white' : 'text-white/80 hover:bg-white/5'
-                }`}>
-                <span className="truncate">{e.title}</span>
-                <span className="ml-3 shrink-0 text-[11px] uppercase tracking-wider text-ink-stage-2">S{e.season}</span>
-              </button>
-            ))}
-          </div>
-        )}
         {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
         <div className="mt-5 flex justify-center gap-2">
           <button onClick={() => setPhase('welcome')} className="btn-stage btn-stage-ghost btn-stage-sm">Back</button>
