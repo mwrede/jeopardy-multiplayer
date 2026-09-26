@@ -1697,13 +1697,30 @@ export async function skipClue(gameId: string, clueId: string) {
  * After answering, checks if the round is complete and auto-advances.
  */
 export async function submitAnswer(gameId: string, clueId: string, playerId: string, answer: string) {
-  const [{ data: clue }, { data: game }, { data: playerData }] = await Promise.all([
-    supabase.from('clues').select('answer, value, is_daily_double').eq('id', clueId).single(),
+  const [{ data: clue }, { data: game }, { data: playerData }, { data: buzz }] = await Promise.all([
+    supabase.from('clues').select('answer, value, is_daily_double, is_answered').eq('id', clueId).single(),
     supabase.from('games').select('current_round, phase, settings').eq('id', gameId).single(),
     supabase.from('players').select('final_wager').eq('id', playerId).single(),
+    supabase
+      .from('buzzes')
+      .select('is_correct')
+      .eq('game_id', gameId)
+      .eq('clue_id', clueId)
+      .eq('player_id', playerId)
+      .maybeSingle(),
   ])
 
   if (!clue) throw new Error('Clue not found')
+
+  // One verdict per player per clue. Without this a double tap, or the answer
+  // clock firing on the same beat as the submit, ran the whole body twice and
+  // charged the value twice — the "my score went down by $800 on a $400 clue"
+  // case. submitOpenAnswer has always guarded this way; this path didn't.
+  // A missing buzz row is not treated as resolved: some flows answer without
+  // one, and refusing those would break them.
+  if (clue.is_answered || (buzz && buzz.is_correct !== null)) {
+    return { correct: false, scoreChange: 0 }
+  }
 
   const correct = checkAnswer(answer, clue.answer)
   const isDailyDouble = clue.is_daily_double && (game?.phase === 'daily_double_answering')
@@ -2082,11 +2099,22 @@ export async function hostJudge(
    */
   dailyDoubleWager?: number,
 ) {
-  const [{ data: clue }, { data: player }, { data: game }] = await Promise.all([
-    supabase.from('clues').select('value, is_daily_double').eq('id', clueId).single(),
+  const [{ data: clue }, { data: player }, { data: game }, { data: buzz }] = await Promise.all([
+    supabase.from('clues').select('value, is_daily_double, is_answered').eq('id', clueId).single(),
     supabase.from('players').select('score').eq('id', playerId).single(),
     supabase.from('games').select('current_round, settings').eq('id', gameId).single(),
+    supabase
+      .from('buzzes')
+      .select('is_correct')
+      .eq('game_id', gameId)
+      .eq('clue_id', clueId)
+      .eq('player_id', playerId)
+      .maybeSingle(),
   ])
+
+  // Same one-verdict-per-player rule as submitAnswer. A host tapping ✓ twice
+  // on a laggy connection used to pay out twice.
+  if (clue?.is_answered || (buzz && buzz.is_correct !== null)) return
 
   let value = clue?.value ?? 0
   if (clue?.is_daily_double && dailyDoubleWager != null && player) {
