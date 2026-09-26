@@ -13,6 +13,15 @@ import { supabase } from '@/lib/supabase'
  * Works for every game, whatever board it was built from, because it reads the
  * buzzes rather than anything the board had to record for it.
  */
+/**
+ * Below this, a recorded reaction is a drifted clock rather than a thumb.
+ * Simple visual reaction bottoms out around 100ms even for the very quick, so
+ * a 30ms buzz is an artefact — and left in, it crowned the wrong player
+ * "⚡ quickest" and dragged their average down with it. The buzz still counts;
+ * only its timing is ignored.
+ */
+const PLAUSIBLE_MS = 120
+
 export type PlayerBuzzStats = {
   player_id: string
   /** Clues this player rang in on (passes don't count). */
@@ -75,7 +84,9 @@ export async function getGameBuzzStats(gameId: string): Promise<PlayerBuzzStats[
     if (row.is_winner) s.won++
     if (row.is_correct === true) s.correct++
     if (row.is_correct === false) s.wrong++
-    if (typeof row.reaction_ms === 'number') s._times.push(row.reaction_ms)
+    if (typeof row.reaction_ms === 'number' && row.reaction_ms >= PLAUSIBLE_MS) {
+      s._times.push(row.reaction_ms)
+    }
   }
 
   const stats = [...byPlayer.values()].map(({ _times, ...s }) => ({

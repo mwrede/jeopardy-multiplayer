@@ -33,6 +33,19 @@ export function BuzzReport({
 
   const isTv = variant === 'tv'
   const timed = stats.some((s) => s.avgReactionMs !== null)
+
+  // Whole-game totals. The per-player rows had these all along but split
+  // across two columns as "5/2", which reads as a score rather than as right
+  // and wrong — so the game's own numbers are spelled out here first.
+  const totals = stats.reduce(
+    (t, s) => ({
+      buzzes: t.buzzes + s.buzzes,
+      correct: t.correct + s.correct,
+      wrong: t.wrong + s.wrong,
+    }),
+    { buzzes: 0, correct: 0, wrong: 0 },
+  )
+  const judged = totals.correct + totals.wrong
   const fastest = stats.reduce<number | null>(
     (best, s) => (s.bestReactionMs !== null && (best === null || s.bestReactionMs < best) ? s.bestReactionMs : best),
     null,
@@ -42,10 +55,28 @@ export function BuzzReport({
     <div className={isTv ? 'w-full max-w-2xl' : 'w-full max-w-sm'}>
       <p
         className={`text-gray-500 uppercase tracking-[0.2em] font-bold text-center ${
-          isTv ? 'text-sm mb-3' : 'text-[10px] mb-2'
+          isTv ? 'text-sm mb-2' : 'text-[10px] mb-1.5'
         }`}
       >
         On the buzzer
+      </p>
+
+      {/* The game in one line. Never colour alone — each figure is worded. */}
+      <p className={`text-center ${isTv ? 'text-lg mb-4' : 'text-[11px] mb-2.5'}`}>
+        <span className="font-bold tabular-nums text-white">{totals.buzzes}</span>
+        <span className="text-gray-500"> {totals.buzzes === 1 ? 'buzz' : 'buzzes'} · </span>
+        <span className="font-bold tabular-nums text-green-400">{totals.correct}</span>
+        <span className="text-gray-500"> right · </span>
+        <span className="font-bold tabular-nums text-red-400">{totals.wrong}</span>
+        <span className="text-gray-500"> wrong</span>
+        {judged > 0 && (
+          <span className="text-gray-500">
+            {' '}· <span className="font-bold text-white tabular-nums">
+              {Math.round((totals.correct / judged) * 100)}%
+            </span>{' '}
+            converted
+          </span>
+        )}
       </p>
 
       <div className={isTv ? 'space-y-2' : 'space-y-1.5'}>
@@ -56,10 +87,11 @@ export function BuzzReport({
           }`}
         >
           <span className="flex-1">Player</span>
-          <span className={isTv ? 'w-20 text-right' : 'w-14 text-right'}>Avg</span>
-          <span className={isTv ? 'w-20 text-right' : 'w-14 text-right'}>Fastest</span>
-          <span className={isTv ? 'w-16 text-right' : 'w-12 text-right'}>Buzzes</span>
-          <span className={isTv ? 'w-20 text-right' : 'w-14 text-right'}>Right</span>
+          <span className={isTv ? 'w-20 text-right' : 'w-12 text-right'}>Avg</span>
+          <span className={isTv ? 'w-20 text-right' : 'w-12 text-right'}>Fastest</span>
+          <span className={isTv ? 'w-16 text-right' : 'w-10 text-right'}>Buzzes</span>
+          <span className={isTv ? 'w-16 text-right' : 'w-10 text-right'}>Right</span>
+          <span className={isTv ? 'w-16 text-right' : 'w-10 text-right'}>Wrong</span>
         </div>
 
         {stats.map((s) => {
@@ -81,26 +113,27 @@ export function BuzzReport({
                 )}
               </span>
               <span
-                className={`font-mono tabular-nums text-right ${isTv ? 'w-20' : 'w-14'} ${
+                className={`font-mono tabular-nums text-right ${isTv ? 'w-20' : 'w-12'} ${
                   s.avgReactionMs !== null ? 'text-white/80' : 'text-gray-600'
                 }`}
               >
                 {formatReaction(s.avgReactionMs)}
               </span>
               <span
-                className={`font-mono tabular-nums text-right ${isTv ? 'w-20' : 'w-14'} ${
+                className={`font-mono tabular-nums text-right ${isTv ? 'w-20' : 'w-12'} ${
                   isQuickest ? 'text-jeopardy-gold' : 'text-white/60'
                 }`}
               >
                 {formatReaction(s.bestReactionMs)}
               </span>
-              <span className={`tabular-nums text-right text-white/60 ${isTv ? 'w-16' : 'w-12'}`}>
+              <span className={`tabular-nums text-right text-white/60 ${isTv ? 'w-16' : 'w-10'}`}>
                 {s.buzzes}
               </span>
-              <span className={`tabular-nums text-right ${isTv ? 'w-20' : 'w-14'}`}>
-                <span className="text-green-400">{s.correct}</span>
-                <span className="text-gray-600">/</span>
-                <span className="text-red-400">{s.wrong}</span>
+              <span className={`tabular-nums text-right text-green-400 ${isTv ? 'w-16' : 'w-10'}`}>
+                {s.correct}
+              </span>
+              <span className={`tabular-nums text-right text-red-400 ${isTv ? 'w-16' : 'w-10'}`}>
+                {s.wrong}
               </span>
             </div>
           )
