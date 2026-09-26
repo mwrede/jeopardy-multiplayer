@@ -73,23 +73,29 @@ body {
      one. */
   .home-board .home-cell {
     @apply flex flex-col items-center justify-center text-center;
-    min-height: 132px;
-    padding: 14px 8px;
+    min-height: 106px;
+    padding: 10px 6px;
+  }
+  @screen sm {
+    .home-board .home-cell { min-height: 150px; padding: 16px 12px; }
   }
   @screen md {
-    .home-board .home-cell { min-height: 210px; }
+    .home-board .home-cell { min-height: 200px; padding: 18px 12px; }
   }
   .home-cell-title {
     font-family: "Impact", "Arial Black", sans-serif;
     text-transform: uppercase;
     letter-spacing: 0.02em;
-    line-height: 1.05;
-    font-size: 16px;
+    line-height: 1.02;
+    font-size: 13px;
     color: var(--jeopardy-gold-light);
     text-shadow: 1px 2px 3px rgba(0,0,0,0.6);
   }
+  @screen sm {
+    .home-cell-title { font-size: 20px; }
+  }
   @screen md {
-    .home-cell-title { font-size: 30px; }
+    .home-cell-title { font-size: 28px; }
   }
 
   /* ── Banners ───────────────────────────────────────────────────────────

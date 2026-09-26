@@ -64,18 +64,20 @@ export function ContestantScores({ gameIdSource }: { gameIdSource: number }) {
 
   return (
     <div className="mb-5 overflow-hidden rounded-md border border-copper/30 bg-black/40">
-      <div className="relative flex items-end justify-center overflow-hidden" style={{ height: 132 }}>
-        {/* The podium art from the home board — the three people whose night
-            this was. Cropped to the podiums so it reads as a header strip. */}
+      {/* The podium art from the home board — the three people whose night
+          this was. Full-bleed: capped at max-w-md it sat in the middle of a
+          wide panel with dark voids either side and 40% of itself cropped
+          away, which is what made this read as squashed. */}
+      <div className="relative h-[104px] overflow-hidden sm:h-[150px] md:h-[184px]">
         <img
           src="/contestants.png"
           alt=""
           aria-hidden="true"
-          className="h-full w-full max-w-md select-none object-cover opacity-90"
-          style={{ objectPosition: 'center 30%' }}
+          className="absolute inset-0 h-full w-full select-none object-cover opacity-90"
+          style={{ objectPosition: 'center 12%' }}
         />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-        <p className="absolute left-3 top-2.5 text-[10px] font-bold uppercase tracking-[0.24em] text-copper">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />
+        <p className="absolute left-3 top-2.5 text-[9px] font-bold uppercase tracking-[0.24em] text-copper sm:text-[10px]">
           ▸ The night this aired
         </p>
       </div>
@@ -84,19 +86,19 @@ export function ContestantScores({ gameIdSource }: { gameIdSource: number }) {
         {rows.slice(0, 3).map((c) => {
           const isWinner = c.nickname === winner.nickname && c.final != null
           return (
-            <div key={c.nickname} className="px-2 py-2.5 text-center">
-              <p className="truncate text-[11px] font-bold uppercase tracking-wider text-ink-stage-2">
+            <div key={c.nickname} className="px-1.5 py-2 text-center sm:px-2 sm:py-2.5">
+              <p className="truncate text-[9px] font-bold uppercase tracking-wider text-ink-stage-2 sm:text-[11px]">
                 {isWinner && '👑 '}{c.nickname}
               </p>
               <p
-                className={`text-lg font-bold tabular-nums ${
+                className={`text-base font-bold tabular-nums sm:text-lg ${
                   (c.final ?? 0) < 0 ? 'text-red-300' : isWinner ? 'text-jeopardy-gold-light' : 'text-white'
                 }`}
               >
                 {c.final != null ? money(c.final) : '—'}
               </p>
               {c.afterRound2 != null && (
-                <p className="text-[10px] text-ink-stage-2">
+                <p className="text-[9px] leading-tight text-ink-stage-2 sm:text-[10px]">
                   {money(c.afterRound2)} into Final
                 </p>
               )}
@@ -107,7 +109,7 @@ export function ContestantScores({ gameIdSource }: { gameIdSource: number }) {
 
       {/* Shorter boards hold less money, so the night's real total isn't the
           mark to beat there. */}
-      <div className="border-t border-white/10 bg-black/30 px-3 py-2 text-center text-[11px] text-ink-stage-2">
+      <div className="border-t border-white/10 bg-black/30 px-3 py-2 text-center text-[10px] leading-relaxed text-ink-stage-2 sm:text-[11px]">
         Score to beat: <span className="font-bold text-white">{money(winning)}</span> on a Full board
         <span className="opacity-70">
           {' '}· about {money(parFor(winning, 'half'))} on Half

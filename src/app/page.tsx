@@ -32,12 +32,12 @@ function BoardCell({
     <a href={href} className="board-cell home-cell">
       {/* The header row is hidden on a phone, so each cell wears its own
           category there instead. */}
-      <span className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-blue-200/60 md:hidden">
+      <span className="mb-1 text-[8px] font-bold uppercase tracking-[0.16em] text-blue-200/60 sm:mb-1.5 sm:text-[9px] md:hidden">
         {column}
       </span>
       <span className="home-cell-title">{title}</span>
       {sub && (
-        <span className="mt-1.5 text-[10px] font-semibold leading-tight text-blue-100/70 md:mt-2 md:text-xs">
+        <span className="mt-1 text-[9px] font-semibold leading-tight text-blue-100/75 sm:mt-1.5 sm:text-[11px] md:mt-2 md:text-xs">
           {sub}
         </span>
       )}
@@ -190,13 +190,13 @@ export default function Home() {
     {
       column: 'Friends',
       title: 'Browse the archive',
-      sub: 'Every game, 1984 to last night',
+      sub: '9,400 real games',
       href: '/find',
     },
     {
       column: 'Strangers',
       title: 'Play the room',
-      sub: 'Public tables, real people',
+      sub: 'vs. real people',
       href: '/community',
     },
     {
