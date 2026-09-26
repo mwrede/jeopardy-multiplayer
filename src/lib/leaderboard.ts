@@ -150,3 +150,74 @@ export async function getCommunityLeaderboard(limit = 25): Promise<LeaderboardRo
     .sort((a, b) => b.rating - a.rating || b.wins - a.wins)
     .slice(0, limit)
 }
+
+export type WinsRow = {
+  name: string
+  wins: number
+  games: number
+  best: number
+}
+
+/**
+ * Most games won across everything that counts as a real game — private games
+ * with friends and Community Play with strangers, together.
+ *
+ * Custom boards are left out on purpose: a board somebody wrote themselves can
+ * be as easy as they like, so wins on one don't compare to wins on an archive
+ * board. Everything else is in.
+ *
+ * Grouped by account when there is one and by name when there isn't. Private
+ * games are mostly played signed out, so account-only grouping would leave
+ * this near-empty — and between friends the same crew reuses the same names,
+ * which is honest enough for a leaderboard on a party game.
+ */
+export async function getPlayLeaderboard(limit = 8): Promise<WinsRow[]> {
+  const { data: games, error } = await supabase
+    .from('games')
+    .select('id, settings')
+    .eq('status', 'finished')
+    .order('created_at', { ascending: false })
+    .limit(1000)
+  if (error) throw error
+
+  const eligible = (games ?? [])
+    .filter((g: any) => {
+      const s = (g.settings ?? {}) as any
+      return !s.customBoardId && !s.customBoard
+    })
+    .map((g: any) => g.id)
+  if (eligible.length === 0) return []
+
+  const { data: players } = await supabase
+    .from('players')
+    .select('game_id, name, score, user_id')
+    .in('game_id', eligible.slice(0, 500))
+  if (!players?.length) return []
+
+  // Top score in a game takes it. A game nobody scored in has no winner —
+  // otherwise three players on $0 would each be credited with a win.
+  const best = new Map<string, number>()
+  for (const p of players as any[]) {
+    const cur = best.get(p.game_id)
+    if (cur === undefined || p.score > cur) best.set(p.game_id, p.score)
+  }
+
+  const agg = new Map<string, WinsRow>()
+  for (const p of players as any[]) {
+    const name = (p.name ?? '').trim()
+    if (!name || name === 'Presenter') continue
+    const key = p.user_id ? `user:${p.user_id}` : `name:${name.toLowerCase()}`
+    const row = agg.get(key) ?? { name, wins: 0, games: 0, best: 0 }
+    row.name = name
+    row.games += 1
+    row.best = Math.max(row.best, p.score ?? 0)
+    // A tie at the top counts for everyone tied — nobody lost it.
+    if ((p.score ?? 0) > 0 && p.score === best.get(p.game_id)) row.wins += 1
+    agg.set(key, row)
+  }
+
+  return [...agg.values()]
+    .filter((r) => r.wins > 0)
+    .sort((a, b) => b.wins - a.wins || b.best - a.best)
+    .slice(0, limit)
+}

@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { ClueText } from '@/components/ClueText'
 import { clampDailyDoubleWager, maxDailyDoubleWager, topClueValue } from '@/lib/wager'
+import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { useState, useEffect, useCallback } from 'react'
 import {
   hostOpenBuzzers,
@@ -553,6 +554,19 @@ export default function PresentPage() {
           <button onClick={() => setCurrentRound(2)} className="btn-primary ml-2 px-4 py-2 text-sm">
             Double Jeopardy! →
           </button>
+        )}
+        {/* Only renders on a board taken from a real episode. The host's own
+            round tracker drives it, not games.current_round, since a hosted
+            game moves rounds on this screen. */}
+        {game && (
+          <div className="w-[260px] shrink-0 empty:hidden">
+            <ScoreToBeat
+              game={{ settings: game.settings, current_round: currentRound, phase: game.phase }}
+              clues={clues}
+              categories={categories}
+              variant="phone"
+            />
+          </div>
         )}
       </div>
 

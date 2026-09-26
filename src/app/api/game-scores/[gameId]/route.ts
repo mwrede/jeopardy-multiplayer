@@ -93,6 +93,10 @@ export async function GET(
     return i >= 0 ? (t.scores[i] ?? null) : null
   }
 
+  // "Show #9624 - Thursday, September 24, 2026" → the date half.
+  const heading = $('#game_title h1').text().trim()
+  const airedOn = heading.split(' - ').slice(1).join(' - ').trim() || null
+
   const contestants: Contestant[] = order.map((nickname) => ({
     nickname,
     afterRound1: at(r1, nickname),
@@ -100,5 +104,10 @@ export async function GET(
     final: at(fin, nickname),
   }))
 
-  return NextResponse.json({ contestants, unavailable: contestants.length === 0 })
+  return NextResponse.json({
+    contestants,
+    airedOn,
+    title: heading || null,
+    unavailable: contestants.length === 0,
+  })
 }

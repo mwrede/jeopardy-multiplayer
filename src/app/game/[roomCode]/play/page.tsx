@@ -12,6 +12,7 @@ import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { Countdown } from '@/components/Countdown'
+import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
 import { GameKeyboard } from '@/components/GameKeyboard'
@@ -1032,6 +1033,10 @@ export default function PlayPage() {
           </div>
           )
         })}
+      </div>
+      {/* Only renders on a board taken from a real episode. */}
+      <div className="px-2 pb-2 empty:hidden">
+        <ScoreToBeat game={game} clues={clues} categories={categories} variant="phone" />
       </div>
     </div>
   )

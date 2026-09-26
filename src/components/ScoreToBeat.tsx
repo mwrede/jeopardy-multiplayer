@@ -1,0 +1,129 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import type { Category, Clue, GameSettings } from '@/types/game'
+import {
+  fetchContestants, money, paceAt, targetFor, winnerOf, type Contestant,
+} from '@/lib/contestants'
+
+/**
+ * The real contestants' scores, live, beside your own.
+ *
+ * Deliberately NOT styled like the player cards. These three aren't in the
+ * room and never were — they played this board years ago and their numbers
+ * don't move because of anything you do. So: copper and outlined, headed REAL
+ * CONTESTANTS, sitting apart from the blue scoreboard rather than in it.
+ *
+ * Only appears on a board taken from a real episode. Mashups, custom boards
+ * and random boards never aired, so there is nobody to beat.
+ */
+export function ScoreToBeat({
+  game,
+  clues,
+  categories,
+  variant,
+}: {
+  /** Only the three fields this needs, so the presenter can pass its own
+   *  round tracker — a hosted game changes rounds on that screen, not on the
+   *  game row. */
+  game: { settings: GameSettings | null; current_round: number; phase?: string }
+  clues: Clue[]
+  categories: Category[]
+  /** 'tv' is read from across a room; 'phone' sits under a thumb. */
+  variant: 'tv' | 'phone'
+}) {
+  const sourceGameId = (game.settings as any)?.sourceGameId as number | undefined
+  const [rows, setRows] = useState<Contestant[] | null>(null)
+  const [airedOn, setAiredOn] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!sourceGameId) { setRows([]); return }
+    let cancelled = false
+    fetchContestants(sourceGameId).then((r) => {
+      if (cancelled) return
+      setRows(r.contestants)
+      setAiredOn(r.airedOn)
+    })
+    return () => { cancelled = true }
+  }, [sourceGameId])
+
+  if (!sourceGameId || !rows || rows.length === 0) return null
+
+  const winner = winnerOf(rows)
+  if (!winner) return null
+
+  const size = game.settings?.gameLength || 'full'
+  const round = game.current_round ?? 1
+
+  // How far through the current round the board is. Final Jeopardy has no
+  // board of its own, so it counts as done the moment it starts.
+  const roundCatIds = new Set(
+    categories.filter((c) => Number(c.round_number) === round).map((c) => c.id),
+  )
+  const roundClues = clues.filter((c) => roundCatIds.has(c.category_id))
+  const answered = roundClues.filter((c) => c.is_answered).length
+  const isFinal = round >= 3 || String(game.phase).startsWith('final')
+  const progress = isFinal ? 1 : roundClues.length ? answered / roundClues.length : 0
+  const stage = isFinal ? 3 : round
+
+  // Everyone's position at this point in the night, biggest first.
+  const standing = rows
+    .map((c) => ({ c, pace: paceAt(c, stage, progress, size) }))
+    .sort((a, b) => b.pace - a.pace)
+
+  // The headline is whoever was AHEAD at this point, not whoever eventually
+  // won. On the board above, the night's winner was third after round one —
+  // billing him as the score to beat while showing him on $0 read as broken.
+  // The number to chase is the winning total, and it's on the line below.
+  const leader = standing[0]
+  const target = targetFor(winner, size)
+  const isTv = variant === 'tv'
+
+  return (
+    <div
+      className={`rounded-lg border-2 border-copper/60 bg-black/55 ${isTv ? 'px-4 py-2.5' : 'px-3 py-2'}`}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span
+          className={`font-bold uppercase tracking-[0.2em] text-copper ${isTv ? 'text-xs' : 'text-[9px]'}`}
+        >
+          ★ Real contestants
+        </span>
+        <span className={`shrink-0 truncate text-ink-stage-2 ${isTv ? 'text-xs' : 'text-[9px]'}`}>
+          {airedOn || 'this episode'}
+        </span>
+      </div>
+
+      {/* Whoever led at this point, called out. */}
+      <div className="mt-1.5 flex items-baseline justify-between gap-3">
+        <span className={`truncate font-bold text-white ${isTv ? 'text-2xl' : 'text-sm'}`}>
+          {leader.c.nickname}
+        </span>
+        <span
+          className={`shrink-0 font-bold tabular-nums text-jeopardy-gold-light ${
+            isTv ? 'text-3xl' : 'text-lg'
+          }`}
+        >
+          {money(leader.pace)}
+        </span>
+      </div>
+      <p className={`text-ink-stage-2 ${isTv ? 'text-sm' : 'text-[10px]'}`}>
+        Score to beat <span className="font-bold text-white">{money(target)}</span>
+        {size !== 'full' && <span className="opacity-70"> · scaled to this board</span>}
+      </p>
+
+      {/* The other two, smaller — they're context, not the target. */}
+      <div
+        className={`mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-white/10 pt-1.5 text-ink-stage-2 ${
+          isTv ? 'text-sm' : 'text-[10px]'
+        }`}
+      >
+        {standing.slice(1).map(({ c, pace }) => (
+          <span key={c.nickname}>
+            {c.nickname} <span className="tabular-nums text-white/80">{money(pace)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}

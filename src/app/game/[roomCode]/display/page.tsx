@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { GameBoard } from '@/components/GameBoard'
 import { ClueText } from '@/components/ClueText'
+import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { useState, useEffect, useRef, useMemo } from 'react'
@@ -904,7 +905,7 @@ export default function DisplayPage() {
       </div>
 
       {/* Scoreboard bar - podium style */}
-      <div className="flex gap-3 px-4 py-3 bg-black/50 overflow-x-auto">
+      <div className="flex gap-3 px-4 py-3 bg-black/50">
         {players
           .sort((a, b) => b.score - a.score)
           .map((p) => (
@@ -925,6 +926,15 @@ export default function DisplayPage() {
               </p>
             </div>
           ))}
+      </div>
+
+      {/* On a board taken from a real episode, the people who actually played
+          it get their own strip under the podiums — plainly apart from them,
+          because they aren't in the room. Its own row rather than beside the
+          scoreboard: the debug skip controls are fixed to the top right and
+          anything put there collides with them. */}
+      <div className="px-4 pb-2 empty:hidden">
+        <ScoreToBeat game={game} clues={clues} categories={categories} variant="tv" />
       </div>
 
       {/* Round header with game info */}

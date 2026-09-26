@@ -5,9 +5,8 @@ import { useRouter } from 'next/navigation'
 import { deleteCustomBoard, createGameFromCustomBoard, createPresentationGame, loadCustomBoard } from '@/lib/game-api'
 import { useUser } from '@/lib/auth'
 import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
-import { getFriendsChampion } from '@/lib/leaderboard'
-import { getChallengeChampion, formatMoney } from '@/lib/challenge'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
+import { HomeLeaderboards } from '@/components/HomeLeaderboards'
 import { ProfileMenu } from '@/components/ProfileMenu'
 
 /**
@@ -100,19 +99,6 @@ export default function Home() {
   const [busyBoard, setBusyBoard] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [rejoinCode, setRejoinCode] = useState('')
-  // The reigning champions — real names, real records.
-  const [friendsChamp, setFriendsChamp] = useState<{ name: string; stat: string } | null>(null)
-  const [soloChamp, setSoloChamp] = useState<{ name: string; stat: string } | null>(null)
-
-  useEffect(() => {
-    getFriendsChampion()
-      .then((c) => c && setFriendsChamp({ name: c.name, stat: `${c.wins} win${c.wins === 1 ? '' : 's'}` }))
-      .catch(() => {})
-    getChallengeChampion()
-      .then((c) => c && setSoloChamp({ name: c.name, stat: formatMoney(c.totalScore) }))
-      .catch(() => {})
-  }, [])
-
   /**
    * Room codes are the only thing you need to get back in — the game
    * remembers you by the player id already in this browser, so rejoining
@@ -284,22 +270,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* The crowns. Real names, real records — and a nudge when nobody
-            holds one yet. */}
-        <div className="mt-2 grid gap-2 sm:gap-2.5 sm:grid-cols-2">
-          <Banner
-            emoji="👑"
-            title={friendsChamp ? friendsChamp.name : 'Top player'}
-            sub={friendsChamp ? `Most wins · ${friendsChamp.stat}` : 'Up for grabs — go win one'}
-            href="/find"
-          />
-          <Banner
-            emoji="🏅"
-            title={soloChamp ? soloChamp.name : 'Best solo run'}
-            sub={soloChamp ? `Best run · ${soloChamp.stat}` : 'Up for grabs — go set it'}
-            href="/challenge"
-          />
-        </div>
+        {/* Standings, not a single crowned name: one name says who's ahead
+            but not by how much, and gives nobody in second anything to aim
+            at. */}
+        <HomeLeaderboards />
 
         {error && <p className="mt-5 text-center text-sm text-copper-glow">{error}</p>}
 

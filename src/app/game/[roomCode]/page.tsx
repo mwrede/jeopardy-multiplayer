@@ -8,6 +8,7 @@ import { BuzzReport } from '@/components/BuzzReport'
 import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { Countdown } from '@/components/Countdown'
+import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
@@ -998,6 +999,11 @@ export default function PlayerPage() {
           <span className="text-jeopardy-gold font-bold text-lg">Your turn — pick a clue!</span>
         </div>
 
+        {/* Only renders on a board taken from a real episode. */}
+        <div className="mx-2 mt-2 empty:hidden">
+          <ScoreToBeat game={game} clues={clues} categories={categories} variant="phone" />
+        </div>
+
         <div className={`flex-1 grid gap-1.5 px-1 pt-2 ${colCount <= 3 ? 'grid-cols-3' : 'grid-cols-6'}`}>
           {roundCats.map((cat) => (
             <div key={cat.id} className="bg-jeopardy-blue rounded p-1.5 flex items-center justify-center min-h-[36px]">
@@ -1061,6 +1067,9 @@ export default function PlayerPage() {
         <p className="text-gray-400 text-xl mt-8">
           {picker?.name || 'Someone'} is picking a clue...
         </p>
+        <div className="mt-5 w-full max-w-sm empty:hidden">
+          <ScoreToBeat game={game} clues={clues} categories={categories} variant="phone" />
+        </div>
         {/* Same dead end as multiplayer had: a picker whose phone is dead
             stops the party for everyone. Anyone can move it along. */}
         {pickerAway && (
