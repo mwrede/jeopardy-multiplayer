@@ -36,7 +36,11 @@ function BoardCell({
         {column}
       </span>
       <span className="home-cell-title">{title}</span>
-      {sub && <span className="mt-2 text-[11px] font-semibold text-blue-100/70 md:text-xs">{sub}</span>}
+      {sub && (
+        <span className="mt-1.5 text-[10px] font-semibold leading-tight text-blue-100/70 md:mt-2 md:text-xs">
+          {sub}
+        </span>
+      )}
     </a>
   )
 }
@@ -213,7 +217,9 @@ export default function Home() {
 
         <header className="text-center">
           <ChromeWordmark className="mx-auto h-auto w-full max-w-[260px] md:max-w-[380px]" />
-          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.24em] text-blue-100/65 md:text-[13px]">
+          {/* Tracking this wide wrapped "no sign-up" onto its own line on a
+              375px phone; it tightens there and opens up from sm. */}
+          <p className="mt-2.5 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-100/65 sm:mt-3 sm:text-xs sm:tracking-[0.24em] md:text-[13px]">
             9,400 real games · Free · No sign-up
           </p>
         </header>
@@ -221,7 +227,7 @@ export default function Home() {
         {/* The board: three categories, three clue cells, nothing else. Same
             walnut panel, black gutters and bevelled cells the game itself
             uses — the front door and the game are the same object. */}
-        <div className="board-panel mt-6 md:mt-9">
+        <div className="board-panel mt-5 md:mt-9">
           <div className="board-wrapper">
             <div className="home-board grid grid-cols-3 gap-[3px] md:gap-1">
               {GAMES.map((g) => (
@@ -240,7 +246,7 @@ export default function Home() {
 
         {/* Banners. The two doors first, in copper so nobody mistakes them
             for a clue, then whoever currently holds each crown. */}
-        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+        <div className="mt-3 grid gap-2 sm:mt-4 sm:gap-2.5 sm:grid-cols-2">
           <Banner
             emoji="✏️"
             title="Create a board"
@@ -249,26 +255,29 @@ export default function Home() {
             variant="copper"
           />
 
-          <div className="banner banner-walnut !py-2.5">
+          {/* The label shrinks away on a narrow phone rather than wrapping to
+              two lines and doubling this banner's height — the field and Go
+              are the part you came for. */}
+          <div className="banner banner-walnut">
             <span className="banner-emoji">🎟️</span>
-            <span className="min-w-0 flex-1">
+            <span className="hidden min-w-0 flex-1 sm:block">
               <span className="banner-title">Join a game</span>
               <span className="banner-sub">Rejoin your seat and score</span>
             </span>
-            <span className="flex shrink-0 items-center gap-1.5">
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
               <input
                 type="text"
                 value={rejoinCode}
                 onChange={(e) => setRejoinCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleRejoin() }}
-                placeholder="CODE"
+                placeholder="ROOM CODE"
                 maxLength={6}
                 autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
-                className="field-stage h-9 w-[104px] px-2 text-center font-mono text-sm tracking-[0.14em]"
+                className="field-stage h-8 min-w-0 flex-1 px-2 text-center font-mono text-xs tracking-[0.12em] sm:h-9 sm:w-[104px] sm:flex-none sm:text-sm"
               />
-              <button onClick={handleRejoin} className="btn-stage btn-copper btn-stage-sm px-3">
+              <button onClick={handleRejoin} className="btn-stage btn-copper btn-stage-sm shrink-0 px-3">
                 Go
               </button>
             </span>
@@ -277,7 +286,7 @@ export default function Home() {
 
         {/* The crowns. Real names, real records — and a nudge when nobody
             holds one yet. */}
-        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
+        <div className="mt-2 grid gap-2 sm:gap-2.5 sm:grid-cols-2">
           <Banner
             emoji="👑"
             title={friendsChamp ? friendsChamp.name : 'Top player'}
@@ -317,7 +326,7 @@ export default function Home() {
                     <button
                       onClick={() => setPickerBoard({ id: b.id, title: b.title })}
                       disabled={busyBoard === b.id}
-                      className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-green-300 hover:bg-white/20 disabled:opacity-50"
+                      className="rounded-md bg-white/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-green-300 hover:bg-white/20 disabled:opacity-50 sm:text-[10px]"
                     >
                       {busyBoard === b.id ? '…' : '▶ Play'}
                     </button>
@@ -325,14 +334,14 @@ export default function Home() {
                     {b.mine && (
                       <a
                         href={`/create?boardId=${b.id}`}
-                        className="rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
+                        className="rounded-md px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white sm:text-[10px]"
                       >
                         Edit
                       </a>
                     )}
                     <button
                       onClick={() => handleShareBoard(b.id)}
-                      className="rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white"
+                      className="rounded-md px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-blue-100/70 hover:bg-white/10 hover:text-white sm:text-[10px]"
                     >
                       {copiedId === b.id ? 'Copied' : 'Share'}
                     </button>
@@ -340,7 +349,7 @@ export default function Home() {
                         someone else's just takes it off your list. */}
                     <button
                       onClick={() => (b.mine ? handleDeleteBoard(b.id, b.title) : handleRemoveBoard(b.id))}
-                      className="rounded-lg px-1.5 py-1.5 text-[11px] font-bold text-blue-100/50 hover:bg-white/10 hover:text-red-300"
+                      className="rounded-md px-1.5 py-1 text-[10px] font-bold text-blue-100/50 hover:bg-white/10 hover:text-red-300"
                       title={b.mine ? 'Delete this board' : 'Remove from your list'}
                     >
                       ✕

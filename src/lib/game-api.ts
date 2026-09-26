@@ -1026,13 +1026,18 @@ export async function startFinalReveal(gameId: string) {
   // Claim the reveal before judging anything.
   //
   // Every screen races to call this — whichever clock runs out first wins, and
-  // when a player leaves several of them fire seconds apart. Judging applies
-  // each wager to the score, so a second pass would apply it twice. The claim
-  // is atomic on the row: exactly one caller flips final_answering shut, and
-  // the rest get no row back and stop here.
+  // a single screen can fire twice (the "everyone is in" branch and the
+  // backstop timer). Judging applies each wager to the score, so a second pass
+  // applies it twice: a correct $600 wager landed as +$1,200.
+  //
+  // The claim has to change the COLUMN IT FILTERS ON. It used to set status
+  // while filtering on phase, so phase stayed 'final_answering' for the whole
+  // body and every concurrent caller matched and got a row back — the claim
+  // claimed nothing. Moving the phase in the same statement makes it a real
+  // compare-and-set: exactly one caller sees a row, the rest stop here.
   const { data: claimed } = await supabase
     .from('games')
-    .update({ status: 'finished', updated_at: new Date().toISOString() })
+    .update({ phase: 'final_reveal', status: 'finished', updated_at: new Date().toISOString() })
     .eq('id', gameId)
     .eq('phase', 'final_answering')
     .select('id')
@@ -1085,13 +1090,11 @@ export async function startFinalReveal(gameId: string) {
     }
   }
 
+  // Phase and status were set by the claim above; this only re-stamps the row
+  // so every screen gets a realtime nudge once the judging is written.
   await supabase
     .from('games')
-    .update({
-      phase: 'final_reveal',
-      status: 'finished',
-      updated_at: new Date().toISOString(),
-    })
+    .update({ updated_at: new Date().toISOString() })
     .eq('id', gameId)
 }
 

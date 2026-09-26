@@ -11,6 +11,9 @@ import { BuzzReport } from '@/components/BuzzReport'
 import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
 import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
+import { Countdown } from '@/components/Countdown'
+import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
+import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { CommunityVote } from '@/components/CommunityVote'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
@@ -30,9 +33,7 @@ import {
   advanceFromRoundEnd,
   advanceFromClueResult,
   advanceToFinalWager,
-  advanceToFinalClue,
   advanceToFinalAnswering,
-  startFinalReveal,
   advanceToGameOver,
   passOnClue,
   passAfterBuzz,
@@ -526,25 +527,45 @@ export default function PlayPage() {
   // The deadline is anchored on when the phase began rather than on when this
   // tab noticed, so every client agrees on it and a reload doesn't buy anyone
   // a fresh fifteen seconds.
-  useEffect(() => {
-    if (!game || game.phase !== 'final_wager') return
-    if (players.length > 0 && players.every((p) => p.final_wager != null)) {
-      advanceToFinalClue(game.id)
-      return
-    }
-    const startedAt = Date.parse(game.updated_at ?? '')
-    const totalMs = game.settings?.final_wager_ms ?? 15000
-    // A moment past the players' own clocks, so their auto-submitted wagers
-    // land before the phase turns over.
-    const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs + 1500
-    const t = setTimeout(() => advanceToFinalClue(game.id), Math.max(0, deadline - Date.now()))
-    return () => clearTimeout(t)
-  }, [game?.phase, game?.id, game?.updated_at, game?.settings?.final_wager_ms, players])
+  // Both Final phases, one hook: advance when everyone still in the room has
+  // locked in, give anyone who has gone a short grace, and back the whole
+  // thing with the phase clock. The answering phase used to advance ONLY when
+  // every player row had answered — and a closed tab's row never does.
+  useFinalAutoAdvance({ game, players, onlineIds, myPlayerId })
 
-  useEffect(() => {
-    if (!game || game.phase !== 'final_answering') return
-    if (players.length > 0 && players.every((p) => p.final_answer != null)) startFinalReveal(game.id)
-  }, [game?.phase, game?.id, players])
+  /**
+   * Daily Double clocks — see the note on the same pair in the party screen.
+   * Neither phase had one, so a phone that died mid-wager stopped the board
+   * for the whole room.
+   */
+  const ddAnchor = game?.updated_at ? Date.parse(game.updated_at) : undefined
+  const ddWagerRef = useRef<string>('')
+  useEffect(() => { ddWagerRef.current = wager }, [wager])
+
+  const ddWagerCountdown = usePhaseCountdown({
+    active: game?.phase === 'daily_double_wager' && isMyTurn && !!myPlayer,
+    anchorAt: ddAnchor,
+    totalMs: game?.settings?.daily_double_wager_ms ?? 20000,
+    key: game?.current_clue_id ?? null,
+    onExpire: async () => {
+      if (!game || !myPlayer) return
+      const top = topClueValue(game.settings?.gameLength, game.current_round)
+      await submitWager(game.id, myPlayer.id, clampDailyDoubleWager(parseInt(ddWagerRef.current), myPlayer.score, top))
+      setWager('')
+    },
+  })
+
+  const ddAnswerCountdown = usePhaseCountdown({
+    active: game?.phase === 'daily_double_answering' && isMyTurn && !!myPlayerId,
+    anchorAt: ddAnchor,
+    totalMs: game?.settings?.daily_double_answer_ms ?? 20000,
+    key: game?.current_clue_id ?? null,
+    onExpire: async () => {
+      if (!game?.current_clue_id || !myPlayerId) return
+      setHasTriedAnswer(true)
+      await passAfterBuzz(game.id, game.current_clue_id, myPlayerId)
+    },
+  })
 
   // Final Jeopardy wager clock. Mirrors the answer clock below: at zero it
   // locks in whatever is typed, and $0 if nothing is.
@@ -1248,6 +1269,7 @@ export default function PlayPage() {
           ) : (
             <p className="text-gray-400 text-base">{currentPlayer?.name} is making their wager...</p>
           )}
+          <Countdown seconds={ddWagerCountdown} label="to wager" className="mt-2" />
         </div>
         <div className="flex-shrink-0 bg-jeopardy-dark/95 border-t border-white/10 p-2 pb-[env(safe-area-inset-bottom,8px)]">
           {isMyTurn ? (
@@ -1368,6 +1390,7 @@ export default function PlayPage() {
               </div>
             ) : game.phase === 'daily_double_answering' && isMyTurn ? (
               <div className="w-full max-w-sm mx-auto">
+                <Countdown seconds={ddAnswerCountdown} label="to answer" className="mb-1.5 text-center" />
                 <GameKeyboard value={answer} onChange={setAnswer} onSubmit={handleSubmitAnswer}
                   mode="letters" placeholder="Type or 🎤 speak your answer..." submitLabel="Submit Answer"
                   submitDisabled={!answer.trim()} maxLength={200} />

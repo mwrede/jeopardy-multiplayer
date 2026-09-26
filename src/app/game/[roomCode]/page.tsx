@@ -7,7 +7,10 @@ import { BuzzOrder } from '@/components/BuzzOrder'
 import { BuzzReport } from '@/components/BuzzReport'
 import { BuzzModeToggle } from '@/components/BuzzModeToggle'
 import { TrueDailyDoubleButton } from '@/components/TrueDailyDoubleButton'
+import { Countdown } from '@/components/Countdown'
 import { clampDailyDoubleWager, clampFinalWager, maxFinalWager, topClueValue } from '@/lib/wager'
+import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
+import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import {
   joinGame,
@@ -22,9 +25,7 @@ import {
   submitBuzz,
   submitFinalWager,
   submitFinalAnswer,
-  advanceToFinalClue,
   advanceToFinalAnswering,
-  startFinalReveal,
   passOnClue,
   passAfterBuzz,
   openBuzzWindow,
@@ -523,23 +524,76 @@ export default function PlayerPage() {
     setFinalAnswerInput('')
   })
 
-  // Auto-advance: when all wagers are in, move to showing the clue
-  useEffect(() => {
-    if (!game || game.phase !== 'final_wager') return
-    const allWagered = players.length > 0 && players.every((p) => p.final_wager != null)
-    if (allWagered) {
-      advanceToFinalClue(game.id)
-    }
-  }, [game?.phase, game?.id, players])
+  // Both Final Jeopardy phases used to move on only when EVERY player row had
+  // locked in. A closed tab keeps its row — scores have to survive one — and
+  // that row never wagers and never answers, so "everyone is in" was never
+  // true again and the round sat there with nothing left to wait for. The
+  // hook adds the clock and a grace period for anyone who has gone.
+  useFinalAutoAdvance({ game, players, onlineIds, myPlayerId })
 
-  // Auto-advance: when all answers are in, start reveal
-  useEffect(() => {
-    if (!game || game.phase !== 'final_answering') return
-    const allAnswered = players.length > 0 && players.every((p) => p.final_answer != null)
-    if (allAnswered) {
-      startFinalReveal(game.id)
-    }
-  }, [game?.phase, game?.id, players])
+  /**
+   * Daily Double clocks.
+   *
+   * Neither phase had one. A Daily Double waits on exactly one player, and
+   * nothing but that player's own typing could move it — so a phone that died
+   * mid-wager stopped the board for the whole room with no way round it.
+   *
+   * At zero the wager locks in whatever is typed (the $5 minimum if nothing
+   * is), and the answer clock runs the same timeout path the "I don't know"
+   * button uses, which docks the wager and closes the clue exactly as the show
+   * does.
+   */
+  const ddAnchor = game?.updated_at ? Date.parse(game.updated_at) : undefined
+  const wagerRef = useRef<string>('')
+  useEffect(() => { wagerRef.current = wager }, [wager])
+
+  const ddWagerCountdown = usePhaseCountdown({
+    active: game?.phase === 'daily_double_wager' && isMyTurn && !!myPlayer,
+    anchorAt: ddAnchor,
+    totalMs: game?.settings?.daily_double_wager_ms ?? 20000,
+    key: game?.current_clue_id ?? null,
+    onExpire: async () => {
+      if (!game || !myPlayer) return
+      const top = topClueValue(game.settings?.gameLength, game.current_round)
+      await submitWager(game.id, myPlayer.id, clampDailyDoubleWager(parseInt(wagerRef.current), myPlayer.score, top))
+      setWager('')
+    },
+  })
+
+  /**
+   * Final Jeopardy wager clock. This screen had one for answering but not for
+   * wagering, so a player who never typed a number held Final open until the
+   * auto-advance's backstop fired, with nothing on screen saying why.
+   */
+  const finalWagerInputRef = useRef<string>('')
+  useEffect(() => { finalWagerInputRef.current = finalWagerInput }, [finalWagerInput])
+
+  const finalWagerCountdown = usePhaseCountdown({
+    active:
+      game?.phase === 'final_wager' &&
+      !!myPlayer &&
+      !finalWagerLocked &&
+      myPlayer?.final_wager == null,
+    anchorAt: game?.updated_at ? Date.parse(game.updated_at) : undefined,
+    totalMs: game?.settings?.final_wager_ms ?? 30000,
+    onExpire: async () => {
+      if (!myPlayer) return
+      await submitFinalWager(myPlayer.id, clampFinalWager(parseInt(finalWagerInputRef.current), myPlayer.score))
+      setFinalWagerLocked(true)
+      setFinalWagerInput('')
+    },
+  })
+
+  const ddAnswerCountdown = usePhaseCountdown({
+    active: game?.phase === 'daily_double_answering' && isMyTurn && !!myPlayerId,
+    anchorAt: ddAnchor,
+    totalMs: game?.settings?.daily_double_answer_ms ?? 20000,
+    key: game?.current_clue_id ?? null,
+    onExpire: async () => {
+      if (!game?.current_clue_id || !myPlayerId) return
+      await passAfterBuzz(game.id, game.current_clue_id, myPlayerId)
+    },
+  })
 
   // No game loaded yet
   if (!game) {
@@ -699,7 +753,9 @@ export default function PlayerPage() {
         <div className="flex-1 flex flex-col items-center justify-center">
           <h2 className="text-2xl font-bold text-jeopardy-gold mb-2">Final Jeopardy!</h2>
           <p className="text-gray-400 text-lg mb-1 uppercase">{game.final_category_name}</p>
-          <p className="text-gray-500 mb-6">Wager $0 - ${maxWager.toLocaleString()}</p>
+          <p className="text-gray-500 mb-1">Wager $0 - ${maxWager.toLocaleString()}</p>
+          {/* Nobody should be able to hold up Final Jeopardy by walking away. */}
+          <Countdown seconds={finalWagerCountdown} label="to lock in" className="mb-5" />
 
           <input
             type="number"
@@ -1284,8 +1340,9 @@ export default function PlayerPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-jeopardy-dark p-6">
         <PlayerHeader myPlayer={myPlayer} game={game} />
-        <h2 className="text-3xl font-bold text-jeopardy-gold mb-6 mt-8">Daily Double!</h2>
-        <p className="text-gray-400 mb-4">Wager $5 - ${maxWager.toLocaleString()}</p>
+        <h2 className="text-3xl font-bold text-jeopardy-gold mb-2 mt-8">Daily Double!</h2>
+        <p className="text-gray-400 mb-1">Wager $5 - ${maxWager.toLocaleString()}</p>
+        <Countdown seconds={ddWagerCountdown} label="to wager" className="mb-3" />
         <input
           type="number"
           value={wager}
@@ -1331,6 +1388,11 @@ export default function PlayerPage() {
         <p className="text-gray-400">
           {game.phase === 'daily_double_wager' ? 'is making their wager...' : 'is answering...'}
         </p>
+        <Countdown
+          seconds={game.phase === 'daily_double_wager' ? ddWagerCountdown : ddAnswerCountdown}
+          label="left"
+          className="mt-3"
+        />
       </div>
     )
   }

@@ -65,8 +65,15 @@ export interface GameSettings {
   buzz_window_ms: number
   answer_time_ms: number
   daily_double_answer_ms: number
+  /**
+   * How long the player who uncovered a Daily Double has to name a wager.
+   * Without one the board simply stopped: nothing but that player's own
+   * typing could move the game on, so a phone that died on a Daily Double
+   * ended the game for the room.
+   */
+  daily_double_wager_ms?: number
   final_answer_ms: number
-  /** Seconds to lock in a Final Jeopardy wager before the round moves on. */
+  /** How long to lock in a Final Jeopardy wager before the round moves on. */
   final_wager_ms?: number
   /**
    * UNLIMITED BUZZER. Off = the show's rule: fastest buzz wins the clue and
@@ -110,9 +117,10 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   reading_period_ms: 0,
   buzz_window_ms: 10000,
   answer_time_ms: 20000,
-  daily_double_answer_ms: 25000,
+  daily_double_answer_ms: 20000,
+  daily_double_wager_ms: 20000,
   final_answer_ms: 30000,
-  final_wager_ms: 15000,
+  final_wager_ms: 30000,
   unlimitedBuzzer: false,
   buzz_collect_ms: 1200,
 }
@@ -149,8 +157,9 @@ export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   buzz_window_ms: 10000,
   answer_time_ms: 20000,
   daily_double_answer_ms: 20000,
+  daily_double_wager_ms: 20000,
   final_answer_ms: 30000,
-  final_wager_ms: 15000,
+  final_wager_ms: 30000,
   unlimitedBuzzer: false,
   buzz_collect_ms: 1200,
 }
