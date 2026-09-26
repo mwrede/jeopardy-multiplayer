@@ -156,6 +156,8 @@ export type WinsRow = {
   wins: number
   games: number
   best: number
+  /** Every dollar they've finished a game holding, across all their games. */
+  total: number
 }
 
 /**
@@ -207,10 +209,11 @@ export async function getPlayLeaderboard(limit = 8): Promise<WinsRow[]> {
     const name = (p.name ?? '').trim()
     if (!name || name === 'Presenter') continue
     const key = p.user_id ? `user:${p.user_id}` : `name:${name.toLowerCase()}`
-    const row = agg.get(key) ?? { name, wins: 0, games: 0, best: 0 }
+    const row = agg.get(key) ?? { name, wins: 0, games: 0, best: 0, total: 0 }
     row.name = name
     row.games += 1
     row.best = Math.max(row.best, p.score ?? 0)
+    row.total += p.score ?? 0
     // A tie at the top counts for everyone tied — nobody lost it.
     if ((p.score ?? 0) > 0 && p.score === best.get(p.game_id)) row.wins += 1
     agg.set(key, row)

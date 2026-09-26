@@ -16,7 +16,10 @@ import type { Player } from '@/types/game'
  * sat wedged in game_voting for good. After this window the vote closes with
  * whatever ballots are in (missing votes fall back to sensible defaults).
  */
-const VOTE_WINDOW_MS = 75_000
+// Twenty seconds: three choices with sensible defaults don't need longer, and
+// every second here is three strangers staring at a countdown instead of
+// playing. Missing ballots fall back to the defaults exactly as before.
+const VOTE_WINDOW_MS = 20_000
 
 /**
  * Three strangers agreeing on what to play.

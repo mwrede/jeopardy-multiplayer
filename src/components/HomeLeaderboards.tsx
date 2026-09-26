@@ -81,8 +81,8 @@ export function HomeLeaderboards() {
         href="/find"
         rows={(play ?? []).map((r) => ({
           name: r.name,
-          value: String(r.wins),
-          sub: r.wins === 1 ? 'win' : 'wins',
+          value: formatMoney(r.total),
+          sub: `${r.wins} ${r.wins === 1 ? 'win' : 'wins'} · ${r.games} played`,
         }))}
         empty={play === null ? 'Counting…' : 'Nobody has won a game yet.'}
       />
