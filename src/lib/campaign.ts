@@ -38,6 +38,8 @@ export type NightResult = {
 export type Run = {
   /** Client-minted, so nights can be grouped without an account. */
   id?: string
+  /** Set when the run started on the first night of a famous streak. */
+  chasing?: { name: string; games: number }
   startGameId: number
   currentGameId: number
   season: string
@@ -110,6 +112,26 @@ export async function nextEpisode(gameId: number): Promise<EpisodeInfo | null> {
     .eq('season', cur.season)
     .gt('air_date', cur.airDate)
     .order('air_date', { ascending: true })
+    .limit(1)
+  const row = data?.[0]
+  if (!row) return null
+  return { gameId: row.game_id_source, title: row.game_title || '', airDate: row.air_date, season: row.season || '' }
+}
+
+/**
+ * The first episode a contestant appears in — for a champion, the night their
+ * streak began. Looked up by name in the games index rather than hardcoded,
+ * so it stays right if the index is rebuilt. Later appearances (tournaments,
+ * the GOAT series) sort after by date and don't interfere.
+ */
+export async function firstGameOf(name: string): Promise<EpisodeInfo | null> {
+  const n = name.replace(/[,()*]/g, ' ').trim()
+  if (!n) return null
+  const { data } = await supabase
+    .from('games_index')
+    .select('game_id_source, game_title, air_date, season')
+    .or(`player1.ilike.*${n}*,player2.ilike.*${n}*,player3.ilike.*${n}*`)
+    .order('air_date', { ascending: true, nullsFirst: false })
     .limit(1)
   const row = data?.[0]
   if (!row) return null

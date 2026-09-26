@@ -9,7 +9,7 @@ import { checkAnswer } from '@/lib/answer-check'
 import { clampDailyDoubleWager, clampFinalWager, maxDailyDoubleWager, maxFinalWager } from '@/lib/wager'
 import { fetchEpisode, money, type Episode, type EpisodeContestant } from '@/lib/episode'
 import {
-  boardFor, cellKey, clearRun, clueAt, contestantFinal, contestantScore, episodeInfo, episodesInYear,
+  boardFor, cellKey, clearRun, clueAt, contestantFinal, contestantScore, episodeInfo, episodesInYear, firstGameOf,
   loadBest, loadProfile, loadRun, newRunId, nextEpisode, noteBest, recordNight, saveProfile, saveRun, whoAnswered,
   type BestRun, type EpisodeInfo, type NightResult, type Profile, type Run,
 } from '@/lib/campaign'
@@ -57,6 +57,19 @@ export default function CampaignPage() {
   const [year, setYear] = useState(thisYear)
   const [episodes, setEpisodes] = useState<EpisodeInfo[] | null>(null)
   const [picked, setPicked] = useState<EpisodeInfo | null>(null)
+  const [chasing, setChasing] = useState<{ name: string; games: number } | null>(null)
+  const [chaseBusy, setChaseBusy] = useState<string | null>(null)
+
+  /** Start where a champion started: their first night becomes yours. */
+  async function chase(r: { name: string; games: number }) {
+    setChaseBusy(r.name)
+    setError('')
+    const info = await firstGameOf(r.name)
+    setChaseBusy(null)
+    if (!info) { setError(`Couldn't find ${r.name}'s first game in the archive.`); return }
+    setPicked(info)
+    setChasing({ name: r.name, games: r.games })
+  }
 
   // The night in progress.
   const [episode, setEpisode] = useState<Episode | null>(null)
@@ -231,6 +244,7 @@ export default function CampaignPage() {
     if (!run && picked) {
       const fresh: Run = {
         id: newRunId(),
+        chasing: chasing ?? undefined,
         startGameId: picked.gameId,
         currentGameId: picked.gameId,
         season: picked.season,
@@ -374,7 +388,7 @@ export default function CampaignPage() {
             <p className="mt-1 text-white">
               <span className="font-bold">{profile.name}</span> from {profile.hometown} ·{' '}
               <span className="font-bold text-jeopardy-gold-light">{run!.streak}</span> night{run!.streak === 1 ? '' : 's'} won ·{' '}
-              {money(run!.totalWinnings)}
+              {money(run!.totalWinnings)}{run!.chasing ? <> · chasing {run!.chasing.name}&apos;s {run!.chasing.games}</> : null}
             </p>
             <button onClick={resumeRun} className="btn-stage btn-copper btn-stage-lg mt-3 w-full">
               Come back tomorrow →
@@ -447,8 +461,46 @@ export default function CampaignPage() {
         <Eyebrow>Where does your run begin?</Eyebrow>
         <h2 className="display-chrome mt-2 text-3xl">Pick a night</h2>
         <p className="mt-2 text-sm text-ink-stage">
-          Any episode, any year. From there you play forward through that season, one night at a time.
+          Start on the night a famous streak began and try to match it — or any episode, any year.
+          Either way you play forward through that season, one night at a time.
         </p>
+
+        {/* The longest streaks in the show's history, each a starting line:
+            you begin on the same night they did, against the same three. */}
+        <div className="mx-auto mt-5 max-w-2xl text-left">
+          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Chase a record</p>
+          <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+            {REAL_STREAKS.map((r) => {
+              const on = chasing?.name === r.name
+              return (
+                <button
+                  key={r.name}
+                  onClick={() => chase(r)}
+                  disabled={chaseBusy !== null}
+                  className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+                    on ? 'border-jeopardy-gold bg-jeopardy-gold/15' : 'border-white/10 bg-black/40 hover:border-copper/60'
+                  } disabled:opacity-60`}
+                >
+                  <span className={`w-5 shrink-0 text-center text-[11px] font-black tabular-nums ${r.rank <= 3 ? 'text-jeopardy-gold-light' : 'text-white/40'}`}>
+                    {r.rank}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-white">{r.name}</span>
+                    <span className="block text-[10px] text-ink-stage-2">
+                      {chaseBusy === r.name ? 'Finding their first night…' : on && picked?.airDate ? `Starts ${longDate(picked.airDate)}` : `${r.when} · ${money(r.winnings)}`}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-base font-bold tabular-nums text-jeopardy-gold-light">{r.games}</span>
+                    <span className="block text-[9px] uppercase leading-none text-ink-stage-2">to match</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Or any night</p>
         <div className="mx-auto mt-5 flex max-w-lg items-center justify-center gap-3">
           <select value={year} onChange={(e) => loadYear(parseInt(e.target.value, 10))} className="field-stage h-[42px] cursor-pointer py-0">
             {YEARS.map((y) => <option key={y} value={y} className="bg-gray-900">{y}</option>)}
@@ -459,7 +511,7 @@ export default function CampaignPage() {
           <div className="mx-auto mt-4 max-h-[50vh] max-w-lg space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/40 p-2 text-left">
             {episodes.length === 0 && <p className="p-4 text-center text-sm text-ink-stage-2">Nothing from that year.</p>}
             {episodes.map((e) => (
-              <button key={e.gameId} onClick={() => setPicked(e)}
+              <button key={e.gameId} onClick={() => { setPicked(e); setChasing(null) }}
                 className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm transition-colors ${
                   picked?.gameId === e.gameId ? 'bg-copper/25 text-white' : 'text-white/80 hover:bg-white/5'
                 }`}>
@@ -813,9 +865,14 @@ export default function CampaignPage() {
         </div>
         <p className="mt-5 text-sm text-ink-stage">
           {night.won
-            ? <>Night <b className="text-white">{run.streak}</b> of your run. Winnings so far: <b className="text-white">{money(run.totalWinnings)}</b>.</>
-            : <>Your run ends at <b className="text-white">{run.streak}</b> night{run.streak === 1 ? '' : 's'} won and <b className="text-white">{money(run.totalWinnings)}</b>.</>}
+            ? <>Night <b className="text-white">{run.streak}</b>{run.chasing ? <> of <b className="text-white">{run.chasing.games}</b> — {run.chasing.name}&apos;s streak</> : ' of your run'}. Winnings so far: <b className="text-white">{money(run.totalWinnings)}</b>.</>
+            : <>Your run ends at <b className="text-white">{run.streak}</b> night{run.streak === 1 ? '' : 's'} won and <b className="text-white">{money(run.totalWinnings)}</b>{run.chasing ? <>. {run.chasing.name} won {run.chasing.games}.</> : '.'}</>}
         </p>
+        {night.won && run.chasing && run.streak >= run.chasing.games && (
+          <p className="mt-3 text-lg font-bold text-jeopardy-gold-light">
+            You&apos;ve matched {run.chasing.name}. Everything from here is yours alone.
+          </p>
+        )}
         {night.won && nextInfo && nextInfo !== 'none' && (
           <button onClick={comeBackTomorrow} className="btn-stage btn-copper btn-stage-lg mt-6">
             Come back tomorrow → {nextInfo.airDate ?? nextInfo.title}
@@ -837,6 +894,11 @@ export default function CampaignPage() {
       <Shell wide>
         <Eyebrow>Your campaign</Eyebrow>
         <h2 className="display-chrome mt-2 text-3xl">{run.streak} night{run.streak === 1 ? '' : 's'} · {money(run.totalWinnings)}</h2>
+        {run.chasing && (
+          <p className="mt-1 text-sm text-ink-stage-2">
+            Chasing {run.chasing.name}&apos;s {run.chasing.games} — {run.streak >= run.chasing.games ? 'matched.' : `${run.chasing.games - run.streak} short.`}
+          </p>
+        )}
         <div className="mx-auto mt-5 max-w-lg space-y-1.5 text-left">
           {run.history.map((h, i) => (
             <div key={h.gameId} className="flex items-center justify-between rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm">

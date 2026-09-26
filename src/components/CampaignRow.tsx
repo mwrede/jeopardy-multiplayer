@@ -58,7 +58,7 @@ function List({
 }: {
   title: string
   note: string
-  rows: { key: string; name: string; sub: string; value: string; tone: 'gold' | 'green' | 'red' }[]
+  rows: { key: string; name: string; sub: string; value: string; tone: 'gold' | 'green' | 'red'; real?: boolean }[]
   empty: string
 }) {
   return (
@@ -77,12 +77,19 @@ function List({
                 {i + 1}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-white">{r.name}</span>
+                <span className={`flex items-center gap-1.5 text-[13px] font-semibold ${r.real ? 'text-copper' : 'text-white'}`}>
+                  <span className="truncate">{r.name}</span>
+                  {r.real && (
+                    <span className="shrink-0 rounded-full border border-copper/60 px-1.5 py-px text-[8px] font-bold uppercase tracking-wider text-copper">
+                      Real
+                    </span>
+                  )}
+                </span>
                 <span className="block truncate text-[9px] leading-tight text-blue-100/50">{r.sub}</span>
               </span>
               <span
                 className={`shrink-0 text-[13px] font-bold tabular-nums ${
-                  r.tone === 'green' ? 'text-green-300' : r.tone === 'red' ? 'text-red-300' : 'text-jeopardy-gold-light'
+                  r.real ? 'text-copper' : r.tone === 'green' ? 'text-green-300' : r.tone === 'red' ? 'text-red-300' : 'text-jeopardy-gold-light'
                 }`}
               >
                 {r.value}
@@ -115,15 +122,30 @@ export function CampaignStandings() {
       <div className="grid gap-2 sm:grid-cols-3 sm:gap-2.5">
         <List
           title="🔥 Longest streaks"
-          note="nights won in a row"
-          rows={(st?.streaks ?? []).map((s, i) => ({
-            key: `${s.name}-${i}`,
-            name: s.name,
-            sub: `${s.hometown ? `${s.hometown} · ` : ''}${money(s.winnings)}`,
-            value: `${s.streak} ${s.streak === 1 ? 'night' : 'nights'}`,
-            tone: 'gold' as const,
-          }))}
-          empty={st === null ? 'Counting…' : 'Nobody has won a night yet. Be the first.'}
+          note="players vs the real record"
+          rows={[
+            // The real record sits in the same list, in copper and tagged, so
+            // a player's run is always read against it.
+            ...top3.map((r) => ({
+              key: `real-${r.name}`,
+              name: r.name,
+              sub: `${r.when} · ${money(r.winnings)} · regular play`,
+              value: `${r.games} nights`,
+              tone: 'gold' as const,
+              real: true,
+              n: r.games,
+            })),
+            ...(st?.streaks ?? []).map((s, i) => ({
+              key: `${s.name}-${i}`,
+              name: s.name,
+              sub: `${s.hometown ? `${s.hometown} · ` : ''}${money(s.winnings)}`,
+              value: `${s.streak} ${s.streak === 1 ? 'night' : 'nights'}`,
+              tone: 'gold' as const,
+              real: false,
+              n: s.streak,
+            })),
+          ].sort((a, b) => b.n - a.n)}
+          empty="Counting…"
         />
         <List
           title="✓ Beat them"
@@ -157,12 +179,7 @@ export function CampaignStandings() {
         />
       </div>
       <p className="mt-2 px-1 text-center text-[10px] text-blue-100/55">
-        The real record: {top3.map((r, i) => (
-          <span key={r.name}>
-            {i > 0 && ' · '}
-            <span className="font-semibold text-blue-100/80">{r.name}</span> {r.games}
-          </span>
-        ))} — regular play, since 2003.
+        Start on the night any of them started and try to match it — it&apos;s an option when you pick your first night.
       </p>
     </div>
   )
