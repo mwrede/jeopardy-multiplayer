@@ -25,6 +25,7 @@ import {
   type ClueOutcome,
   type SubmitOutcome,
 } from '@/lib/challenge'
+import { FeedbackPrompt } from '@/components/FeedbackPrompt'
 
 /**
  * ONE CHALLENGE BOARD — a full miniature Jeopardy! game, solo.
@@ -553,6 +554,11 @@ export default function ChallengeGamePage() {
             <button onClick={startReplay} className="btn-stage btn-chrome btn-stage-sm mt-4">
               Play this board again
             </button>
+          )}
+          {!submitting && (
+            <div className="mt-5 flex justify-center">
+              <FeedbackPrompt mode="challenge" playerName={name} />
+            </div>
           )}
           {!submitting && (
             <div className="mt-4">

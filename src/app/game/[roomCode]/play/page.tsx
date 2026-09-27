@@ -17,6 +17,7 @@ import { GameChat } from '@/components/GameChat'
 import { WagerStandings } from '@/components/WagerStandings'
 import { ContestantScores } from '@/components/ContestantScores'
 import { FinalStandings } from '@/components/FinalStandings'
+import { FeedbackPrompt } from '@/components/FeedbackPrompt'
 import { usePhaseCountdown } from '@/hooks/usePhaseCountdown'
 import { useFinalAutoAdvance } from '@/hooks/useFinalAutoAdvance'
 import { GameKeyboard } from '@/components/GameKeyboard'
@@ -1257,6 +1258,15 @@ export default function PlayPage() {
         {game.phase === 'game_over' && (
           <div className="mt-8 flex w-full justify-center">
             <BuzzReport gameId={game.id} players={players} variant="phone" />
+          </div>
+        )}
+        {/* The ask, while the game is fresh. */}
+        {game.phase === 'game_over' && (
+          <div className="mt-6 flex w-full justify-center">
+            <FeedbackPrompt
+              mode={isCommunityGame ? 'community' : (game.settings as any)?.gameMode === 'party' ? 'party' : 'multiplayer'}
+              playerName={myPlayer.name}
+            />
           </div>
         )}
 

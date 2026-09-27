@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
+import { FeedbackPrompt } from '@/components/FeedbackPrompt'
 import { GameKeyboard } from '@/components/GameKeyboard'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
 import { CLUE_INTRO_MS, computeReadingMs } from '@/lib/clue-timing'
@@ -1041,6 +1042,9 @@ export default function CampaignPage() {
         {(!night.won || nextInfo === 'none') && (
           <button onClick={() => setPhase('over')} className="btn-stage btn-stage-ghost mt-4">See the whole run</button>
         )}
+        <div className="mt-6 flex justify-center">
+          <FeedbackPrompt mode="campaign" playerName={profile.name} />
+        </div>
       </Shell>
     )
   }

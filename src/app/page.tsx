@@ -8,6 +8,7 @@ import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { HomeLeaderboards } from '@/components/HomeLeaderboards'
 import { RoomChat } from '@/components/RoomChat'
+import { HomeCellArt, type HomeArt } from '@/components/HomeCellArt'
 import { CampaignRow, CampaignStandings } from '@/components/CampaignRow'
 import { ProfileMenu } from '@/components/ProfileMenu'
 
@@ -23,25 +24,33 @@ function BoardCell({
   title,
   sub,
   href,
+  art,
 }: {
   column: string
   title: string
   sub?: string
   href: string
+  art: HomeArt
 }) {
   return (
     <a href={href} className="board-cell home-cell">
-      {/* The header row is hidden on a phone, so each cell wears its own
-          category there instead. */}
-      <span className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-blue-200/70 sm:hidden">
-        {column}
-      </span>
-      <span className="home-cell-title">{title}</span>
-      {sub && (
-        <span className="mt-1.5 text-[12px] font-semibold leading-tight text-blue-100/75 sm:mt-1.5 sm:text-[11px] md:mt-2 md:text-xs">
-          {sub}
+      {/* The picture: beside the words on a phone, above them on a wider screen. */}
+      <div className="home-cell-art">
+        <HomeCellArt kind={art} />
+      </div>
+      <div className="home-cell-text">
+        {/* The header row is hidden on a phone, so each cell wears its own
+            category there instead. */}
+        <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.22em] text-blue-200/70 sm:hidden">
+          {column}
         </span>
-      )}
+        <span className="home-cell-title !text-[22px] sm:!text-[24px] md:!text-[28px]">{title}</span>
+        {sub && (
+          <span className="mt-1 text-[11px] font-semibold leading-tight text-blue-100/75 sm:mt-1.5 md:text-xs">
+            {sub}
+          </span>
+        )}
+      </div>
     </a>
   )
 }
@@ -177,21 +186,24 @@ export default function Home() {
   const GAMES = [
     {
       column: 'Friends',
-      title: 'Browse the archive',
-      sub: '9,400 real games',
+      title: 'Game night',
+      sub: 'Any of 9,400 real games · phones are the buzzers',
       href: '/find',
+      art: 'friends' as const,
     },
     {
       column: 'Strangers',
-      title: 'Play the room',
-      sub: 'vs. real people',
+      title: 'Grab a seat',
+      sub: '3 seats · real people · starts when full',
       href: '/community',
+      art: 'strangers' as const,
     },
     {
       column: 'Solo',
-      title: 'Daily Challenge',
-      sub: 'One board, one shot',
+      title: "Today's board",
+      sub: 'One 3×3 · one shot · ranked',
       href: '/challenge',
+      art: 'solo' as const,
     },
   ]
 
