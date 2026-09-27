@@ -6,6 +6,10 @@ import { GameKeyboard } from '@/components/GameKeyboard'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
 import { CLUE_INTRO_MS, computeReadingMs } from '@/lib/clue-timing'
 import { checkAnswer } from '@/lib/answer-check'
+import {
+  playBuzzSound, playCorrectSound, playDailyDoubleSound, playSelectSound,
+  playTickSound, playTimeUpSound, playWrongSound,
+} from '@/lib/sounds'
 import { clampDailyDoubleWager, clampFinalWager, maxDailyDoubleWager, maxFinalWager } from '@/lib/wager'
 import { fetchEpisode, money, type Episode, type EpisodeContestant } from '@/lib/episode'
 import {
@@ -178,6 +182,17 @@ export default function CampaignPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clueLive, finalLive, active?.rd, active?.c, active?.r])
 
+  // The same tick the multiplayer clocks make — one per second, sharper
+  // under five. Not on the reset to full, only as it counts down.
+  const prevSeconds = useRef<number | null>(null)
+  useEffect(() => {
+    const total = clueLive ? CLUE_SECONDS : finalLive ? FINAL_SECONDS : null
+    if (total !== null && secondsLeft > 0 && secondsLeft < total && prevSeconds.current !== secondsLeft) {
+      playTickSound(secondsLeft <= 5)
+    }
+    prevSeconds.current = secondsLeft
+  }, [secondsLeft, clueLive, finalLive])
+
   // Enter or Escape on a screen that's only waiting to be read. autoFocus on
   // the button was meant to do this and doesn't survive the overlay
   // re-rendering; a listener on the window does.
@@ -269,8 +284,10 @@ export default function CampaignPage() {
     setWagerText('')
     setLast(null)
     if (cl.ddWager != null) {
+      playDailyDoubleSound()
       setStage('wager')
     } else {
+      playSelectSound()
       setStake(cl.value)
       setStage('clue')
     }
@@ -280,6 +297,7 @@ export default function CampaignPage() {
     if (!active || !board) return
     const top = board.rounds[active.rd - 1].values.slice(-1)[0]
     setStake(clampDailyDoubleWager(parseInt(wagerRef.current, 10), myScore, top))
+    playSelectSound()
     setStage('clue')
   }
 
@@ -294,6 +312,12 @@ export default function CampaignPage() {
     else outcome = cl.ddWager != null ? 'wrong' : 'pass'
     const delta = outcome === 'correct' ? stake : outcome === 'wrong' ? -stake : 0
     const res: Resolved = { outcome, delta, typed: kind === 'answer' ? text : '' }
+    if (kind === 'answer') {
+      playBuzzSound()
+      setTimeout(outcome === 'correct' ? playCorrectSound : playWrongSound, 220)
+    } else {
+      playTimeUpSound()
+    }
     setLast(res)
     setResolved((prev) => ({ ...prev, [cellKey(active.rd, active.c, active.r)]: res }))
     setStage('result')
@@ -310,6 +334,7 @@ export default function CampaignPage() {
   function confirmFjWager() {
     setStake(clampFinalWager(parseInt(wagerRef.current, 10), myScore))
     setTyped('')
+    playSelectSound()
     setFjStage('clue')
   }
 
@@ -317,6 +342,9 @@ export default function CampaignPage() {
     if (!episode?.final) return
     const text = typedRef.current
     const right = text.trim().length > 0 && checkAnswer(text, episode.final.answer)
+    if (right) playCorrectSound()
+    else if (text.trim()) playWrongSound()
+    else playTimeUpSound()
     setFjResult({ right, delta: right ? stake : -stake, typed: text })
     setFjStage('result')
   }
