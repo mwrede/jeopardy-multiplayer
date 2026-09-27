@@ -27,7 +27,7 @@ export function CampaignRow() {
             ★ Campaign · against real contestants
           </p>
           <p className="home-cell-title mt-1.5 !text-[22px] leading-none text-jeopardy-gold-light sm:!text-[28px]">
-            Can you beat real contestants &amp; go on a streak?
+            Can you beat real contestants &amp; go on a run?
           </p>
           <p className="mt-2 max-w-md text-[11px] leading-snug text-blue-100/75 sm:text-xs">
             Take the fourth podium on a real night. The three who played it score exactly as they did.
@@ -64,8 +64,8 @@ function List({
   return (
     <div className="banner !block !px-0 !py-0 overflow-hidden">
       <div className="flex items-baseline justify-between gap-2 border-b border-white/10 px-3 py-2">
-        <span className="banner-title text-jeopardy-gold-light">{title}</span>
-        <span className="banner-sub shrink-0 text-blue-100/60">{note}</span>
+        <span className="banner-title shrink-0 whitespace-nowrap text-jeopardy-gold-light">{title}</span>
+        <span className="banner-sub min-w-0 truncate text-blue-100/60">{note}</span>
       </div>
       {rows.length === 0 ? (
         <p className="px-3 py-3 text-[11px] text-blue-100/60">{empty}</p>
@@ -121,8 +121,8 @@ export function CampaignStandings() {
     <div className="mt-2">
       <div className="grid gap-2 sm:grid-cols-3 sm:gap-2.5">
         <List
-          title="🔥 Longest streaks"
-          note="players vs the real record"
+          title="🔥 Longest runs"
+          note="vs the real record"
           rows={[
             // The real record sits in the same list, in copper and tagged, so
             // a player's run is always read against it.

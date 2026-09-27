@@ -490,7 +490,7 @@ export default function CampaignPage() {
         <h2 className="display-chrome mt-2 text-3xl">Pick a night</h2>
         <p className="mt-2 text-sm text-ink-stage">
           Any episode, any year — you play forward through that season, one night at a time.
-          Or start on the night a famous streak began and try to match it.
+          Or start on the night a famous run began and try to match it.
         </p>
 
         <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Any night</p>
@@ -514,7 +514,7 @@ export default function CampaignPage() {
             ))}
           </div>
         )}
-        {/* The longest streaks in the show's history, each a starting line:
+        {/* The longest runs in the show's history, each a starting line:
             you begin on the same night they did, against the same three. */}
         <div className="mx-auto mt-7 max-w-2xl text-left">
           <p className="text-center text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Or chase a record</p>
@@ -893,7 +893,7 @@ export default function CampaignPage() {
         </div>
         <p className="mt-5 text-sm text-ink-stage">
           {night.won
-            ? <>Night <b className="text-white">{run.streak}</b>{run.chasing ? <> of <b className="text-white">{run.chasing.games}</b> — {run.chasing.name}&apos;s streak</> : ' of your run'}. Winnings so far: <b className="text-white">{money(run.totalWinnings)}</b>.</>
+            ? <>Night <b className="text-white">{run.streak}</b>{run.chasing ? <> of <b className="text-white">{run.chasing.games}</b> — {run.chasing.name}&apos;s run</> : ' of your run'}. Winnings so far: <b className="text-white">{money(run.totalWinnings)}</b>.</>
             : <>Your run ends at <b className="text-white">{run.streak}</b> night{run.streak === 1 ? '' : 's'} won and <b className="text-white">{money(run.totalWinnings)}</b>{run.chasing ? <>. {run.chasing.name} won {run.chasing.games}.</> : '.'}</>}
         </p>
         {night.won && run.chasing && run.streak >= run.chasing.games && (
@@ -1034,7 +1034,7 @@ function StreakTable({ best }: { best: BestRun | null }) {
   return (
     <div className="mx-auto mt-10 max-w-md text-left">
       <p className="text-center text-[10px] font-bold uppercase tracking-[0.28em] text-copper">
-        Longest streaks in Jeopardy! history
+        Longest runs in Jeopardy! history
       </p>
       <p className="mt-1 text-center text-[11px] text-ink-stage-2">
         Regular play, since the five-game limit came off in 2003.
