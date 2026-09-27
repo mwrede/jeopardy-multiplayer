@@ -17,10 +17,13 @@
  *
  * Two collections:
  *   · The Lineup — Kids (a real Kids Week game), Teen (1994 Teen Tournament),
- *     College (2022 National College Championship), and five Standard Games,
- *     each from a famous episode: Show #1 (the 1984 premiere), a 1996
- *     classic, Ken Jennings' debut, James Holzhauer's record night, and Amy
- *     Schneider's debut.
+ *     College (2022 National College Championship), and fifteen Standard
+ *     Games, each from a famous episode: Show #1 (the 1984 premiere), a 1996
+ *     classic, Ken Jennings' debut, James Holzhauer's record night, Amy
+ *     Schneider's debut, then (added 2026-09-27) Ken's 75th, Roger Craig's
+ *     record day, the nights Holzhauer, Amodio and Schneider lost, Alex
+ *     Trebek's final show and Ken's first as host, Arthur Chu's and Mattea
+ *     Roach's debuts, and the day the clue values doubled (Nov 26, 2001).
  *   · Michael's Jeopardy Challenge — ten all-geography boards whose
  *     categories are drawn from real games across four decades: capitals,
  *     rivers, islands, states, deserts, the lot.
