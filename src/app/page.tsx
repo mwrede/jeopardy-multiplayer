@@ -13,13 +13,12 @@ import { CampaignRow, CampaignStandings } from '@/components/CampaignRow'
 import { ProfileMenu } from '@/components/ProfileMenu'
 
 /**
- * One cell of the home board — a game you can go and play.
- *
- * Only games get cells. Create, Join and the champions used to sit in a
- * second row of cells, which quietly made a clue cell mean two different
- * things; they're banners under the board now.
+ * One of the three games, dressed like the campaign row below it: copper
+ * frame, stage-dark ground, a copper eyebrow naming who you play, the title
+ * in board gold, and the picture fading into the card — on the right on a
+ * phone, up top when the three sit side by side.
  */
-function BoardCell({
+function GameCard({
   column,
   title,
   sub,
@@ -33,23 +32,25 @@ function BoardCell({
   art: HomeArt
 }) {
   return (
-    <a href={href} className="board-cell home-cell">
-      {/* The picture: beside the words on a phone, above them on a wider screen. */}
-      <div className="home-cell-art">
-        <HomeCellArt kind={art} />
-      </div>
-      <div className="home-cell-text">
-        {/* The header row is hidden on a phone, so each cell wears its own
-            category there instead. */}
-        <span className="mb-1 text-[10px] font-bold uppercase tracking-[0.22em] text-blue-200/70 sm:hidden">
-          {column}
-        </span>
-        <span className="home-cell-title !text-[22px] sm:!text-[24px] md:!text-[28px]">{title}</span>
-        {sub && (
-          <span className="mt-1 text-[11px] font-semibold leading-tight text-blue-100/75 sm:mt-1.5 md:text-xs">
-            {sub}
-          </span>
-        )}
+    <a
+      href={href}
+      className="banner relative !block overflow-hidden !px-0 !py-0 border-copper/60 transition-transform hover:translate-y-0 hover:scale-[1.006]"
+    >
+      <div className="flex items-stretch sm:flex-col">
+        <div className="relative min-w-0 flex-1 px-4 py-4 sm:order-2 sm:px-4 sm:pb-4 sm:pt-3">
+          <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-copper sm:text-[10px]">★ {column}</p>
+          <p className="home-cell-title mt-1.5 !text-[22px] leading-none text-jeopardy-gold-light sm:!text-[24px] md:!text-[27px]">
+            {title}
+          </p>
+          {sub && <p className="mt-2 text-[11px] leading-snug text-blue-100/75 sm:text-xs">{sub}</p>}
+        </div>
+        <div className="relative w-[40%] shrink-0 bg-black sm:order-1 sm:h-[150px] sm:w-full md:h-[170px]">
+          <div className="absolute inset-0">
+            <HomeCellArt kind={art} />
+          </div>
+          {/* The fade the campaign row uses, from whichever side the words are on. */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0b1a5c] via-transparent to-transparent sm:bg-gradient-to-t sm:from-[#0b1a5c] sm:via-transparent sm:to-transparent" />
+        </div>
       </div>
     </a>
   )
@@ -224,24 +225,12 @@ export default function Home() {
           </p>
         </header>
 
-        {/* The board: three categories, three clue cells, nothing else. Same
-            walnut panel, black gutters and bevelled cells the game itself
-            uses — the front door and the game are the same object. */}
-        <div className="board-panel mt-5 md:mt-9">
-          <div className="board-wrapper">
-            <div className="home-board grid grid-cols-1 gap-[3px] sm:grid-cols-3 md:gap-1">
-              {GAMES.map((g) => (
-                <div key={g.column} className="board-category hidden min-h-[48px] px-2 sm:flex">
-                  <span className="text-[13px] font-black uppercase tracking-[0.1em] text-white lg:text-base">
-                    {g.column}
-                  </span>
-                </div>
-              ))}
-              {GAMES.map((g) => (
-                <BoardCell key={g.title} {...g} />
-              ))}
-            </div>
-          </div>
+        {/* The three games, side by side, each in the campaign row's clothes;
+            the campaign itself sits under them as the wide fourth. */}
+        <div className="mt-5 grid gap-2 sm:grid-cols-3 sm:gap-2.5 md:mt-9">
+          {GAMES.map((g) => (
+            <GameCard key={g.title} {...g} />
+          ))}
         </div>
 
         {/* The campaign: a wide row under the board, with the three podiums.
