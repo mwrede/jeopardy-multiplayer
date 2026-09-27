@@ -19,6 +19,10 @@ import {
 } from '@/lib/campaign'
 import type { GameLength } from '@/types/game'
 import { REAL_STREAKS, rankAmongReal } from '@/lib/streaks'
+import {
+  clearNightSave, contestantDdWager, loadNightSave, saveNightSave, tournamentsOf, TOURNAMENT_KINDS,
+  type NightSave, type Outcome, type Resolved, type Tournament,
+} from '@/lib/campaign'
 import { useUser } from '@/lib/auth'
 import { getChallengeIdentity } from '@/lib/challenge'
 
@@ -36,8 +40,6 @@ import { getChallengeIdentity } from '@/lib/challenge'
  */
 
 type Phase = 'welcome' | 'profile' | 'pick' | 'journey' | 'meet' | 'playing' | 'curtain' | 'final' | 'night' | 'over'
-type Outcome = 'correct' | 'wrong' | 'pass'
-type Resolved = { outcome: Outcome; delta: number; typed: string }
 
 const CLUE_SECONDS = 20
 const FINAL_SECONDS = 30
@@ -63,6 +65,12 @@ export default function CampaignPage() {
   const [picked, setPicked] = useState<EpisodeInfo | null>(null)
   const [chasing, setChasing] = useState<{ name: string; games: number } | null>(null)
   const [chaseBusy, setChaseBusy] = useState<string | null>(null)
+  // A tournament to start in, and the kind's listing while it's being chosen.
+  const [series, setSeries] = useState<string | null>(null)
+  const [tKind, setTKind] = useState<string | null>(null)
+  const [tournaments, setTournaments] = useState<Tournament[] | null>(null)
+  // The paused night in this browser, if any.
+  const [saved, setSaved] = useState<NightSave | null>(null)
 
   /** Start where a champion started: their first night becomes yours. */
   async function chase(r: { name: string; games: number }) {
@@ -119,7 +127,23 @@ export default function CampaignPage() {
     if (p) setProfile(p)
     setRun(loadRun())
     setBest(loadBest())
+    setSaved(loadNightSave())
   }, [])
+
+  // The night on disk, after every clue. Leaving — the button, the tab, the
+  // battery — costs at most the clue that was open.
+  useEffect(() => {
+    if (!episode || !run) return
+    if (phase !== 'playing' && phase !== 'curtain' && phase !== 'final') return
+    const snap: NightSave = {
+      gameId: episode.gameId, size, resolved, round, at: phase,
+      final: fjStage === 'result' && fjResult ? { result: fjResult, stake } : null,
+      savedAt: new Date().toISOString(),
+    }
+    saveNightSave(snap)
+    setSaved(snap)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, episode?.gameId, size, resolved, round, fjStage, fjResult, stake, !!run])
 
   /* ── Derived ─────────────────────────────────────────────────────────── */
   const board = useMemo(() => (episode ? boardFor(episode, size) : null), [episode, size])
@@ -131,10 +155,10 @@ export default function CampaignPage() {
   const theirScores = useMemo(() => {
     if (!episode || !board) return []
     return episode.contestants.map((c) => {
-      const base = contestantScore(board, c, resolvedKeys)
+      const base = contestantScore(episode, board, c, resolvedKeys, size === 'full')
       // Once Final is settled, their Final rides on it too.
       if (fjResult) {
-        const f = contestantFinal(episode, c, base)
+        const f = contestantFinal(episode, c, base, size === 'full')
         if (f) return base + (f.right ? f.wager : -f.wager)
       }
       return base
@@ -214,7 +238,10 @@ export default function CampaignPage() {
 
   function beginNew() {
     clearRun()
+    clearNightSave()
+    setSaved(null)
     setRun(null)
+    setSeries(null)
     setPhase(profile.name ? 'pick' : 'profile')
   }
 
@@ -223,7 +250,38 @@ export default function CampaignPage() {
     const info = await episodeInfo(run.currentGameId)
     if (!info) { setError("Couldn't find the next episode."); return }
     setPicked(info)
-    await loadNight(info)
+    const snap = saved && saved.gameId === run.currentGameId ? saved : null
+    if (!snap) { await loadNight(info); return }
+    // Tonight was paused: straight back to the board, no green room.
+    setError('')
+    setEpisode(null)
+    setActive(null)
+    setLast(null)
+    setNight(null)
+    setNextInfo(null)
+    const ep = await fetchEpisode(info.gameId)
+    if (!ep) { setError("The archive doesn't have a full record of that night."); return }
+    setSize(snap.size)
+    setResolved(snap.resolved)
+    setRound(snap.round)
+    setEpisode(ep)
+    if (snap.at === 'final') {
+      setFjResult(snap.final?.result ?? null)
+      setStake(snap.final?.stake ?? 0)
+      setFjStage(snap.final ? 'result' : 'category')
+    } else {
+      setFjStage(null)
+      setFjResult(null)
+    }
+    setPhase(snap.at)
+  }
+
+  /** Put the night down. It's already on disk; the open clue, if any, goes back unplayed. */
+  function pause() {
+    if (timerRef.current) clearInterval(timerRef.current)
+    setActive(null)
+    setLast(null)
+    setPhase('welcome')
   }
 
   async function loadYear(y: number) {
@@ -260,6 +318,7 @@ export default function CampaignPage() {
       const fresh: Run = {
         id: newRunId(),
         chasing: chasing ?? undefined,
+        series: series ?? picked.series ?? undefined,
         startGameId: picked.gameId,
         currentGameId: picked.gameId,
         season: picked.season,
@@ -351,6 +410,9 @@ export default function CampaignPage() {
 
   async function settleNight() {
     if (!episode || !run || !picked) return
+    // Decided: nothing left to come back to.
+    clearNightSave()
+    setSaved(null)
     const theirs = episode.contestants.map((c, i) => ({ name: c.first, score: theirScores[i] ?? 0 }))
     const best = Math.max(...theirs.map((t) => t.score))
     const won = myScore >= best
@@ -366,7 +428,7 @@ export default function CampaignPage() {
     }
     setNight(result)
     if (won) {
-      const nxt = await nextEpisode(episode.gameId)
+      const nxt = await nextEpisode(episode.gameId, run.series)
       if (nxt) { updated.currentGameId = nxt.gameId; setNextInfo(nxt) }
       else { updated.endedAt = new Date().toISOString(); setNextInfo('none') }
     }
@@ -389,6 +451,9 @@ export default function CampaignPage() {
     ? theirScores.reduce((b, s, i) => (s > theirScores[b] ? i : b), 0)
     : -1
 
+  // "2012 Tournament of Champions · quarterfinal game 1", or nothing for regular play.
+  const nightTag = picked?.series ? `${picked.series}${picked.stage ? ` · ${picked.stage}` : ''}` : null
+
   const Rail = () => episode ? (
     <div className="mx-auto mt-4 flex max-w-3xl flex-wrap items-stretch justify-center gap-2">
       <Podium name={profile.name || 'You'} score={myScore} you />
@@ -403,7 +468,7 @@ export default function CampaignPage() {
     const live = run && !run.endedAt
     return (
       <Shell>
-        <Eyebrow>Campaign · Unlisted</Eyebrow>
+        <Eyebrow>Campaign · Against real contestants</Eyebrow>
         <h1 className="display-chrome mt-2 text-4xl md:text-5xl">Against Real Contestants</h1>
         <p className="mx-auto mt-4 max-w-md text-sm text-ink-stage">
           Take the fourth podium on a real night of Jeopardy!. The three people who played it score exactly as
@@ -418,9 +483,21 @@ export default function CampaignPage() {
               <span className="font-bold text-jeopardy-gold-light">{run!.streak}</span> night{run!.streak === 1 ? '' : 's'} won ·{' '}
               {money(run!.totalWinnings)}{run!.chasing ? <> · chasing {run!.chasing.name}&apos;s {run!.chasing.games}</> : null}
             </p>
-            <button onClick={resumeRun} className="btn-stage btn-copper btn-stage-lg mt-3 w-full">
-              Come back tomorrow →
-            </button>
+            {saved && saved.gameId === run!.currentGameId ? (
+              <>
+                <p className="mt-2 text-[11px] text-ink-stage-2">
+                  Tonight&apos;s game is paused — {Object.keys(saved.resolved).length} clue{Object.keys(saved.resolved).length === 1 ? '' : 's'} played
+                  {saved.at === 'final' ? ', at Final Jeopardy' : saved.at === 'curtain' ? ', Double Jeopardy next' : ''}.
+                </p>
+                <button onClick={resumeRun} className="btn-stage btn-copper btn-stage-lg mt-3 w-full">
+                  Pick it back up →
+                </button>
+              </>
+            ) : (
+              <button onClick={resumeRun} className="btn-stage btn-copper btn-stage-lg mt-3 w-full">
+                Come back tomorrow →
+              </button>
+            )}
           </div>
         )}
         {run?.endedAt && (
@@ -441,7 +518,7 @@ export default function CampaignPage() {
   // ── Profile ────────────────────────────────────────────────────────────
   if (phase === 'profile') {
     return (
-      <Shell>
+      <Shell leave={{ label: 'Exit', onClick: () => setPhase('welcome') }}>
         <Eyebrow>Contestant registration</Eyebrow>
         <h2 className="display-chrome mt-2 text-3xl">Who&apos;s playing?</h2>
         <p className="mt-2 text-sm text-ink-stage">The way it&apos;s read out at the top of every show.</p>
@@ -485,7 +562,7 @@ export default function CampaignPage() {
   // ── Pick a starting night ──────────────────────────────────────────────
   if (phase === 'pick') {
     return (
-      <Shell wide>
+      <Shell wide leave={{ label: 'Exit', onClick: () => setPhase('welcome') }}>
         <Eyebrow>Where does your run begin?</Eyebrow>
         <h2 className="display-chrome mt-2 text-3xl">Pick a night</h2>
         <p className="mt-2 text-sm text-ink-stage">
@@ -504,16 +581,62 @@ export default function CampaignPage() {
           <div className="mx-auto mt-4 max-h-[50vh] max-w-lg space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/40 p-2 text-left">
             {episodes.length === 0 && <p className="p-4 text-center text-sm text-ink-stage-2">Nothing from that year.</p>}
             {episodes.map((e) => (
-              <button key={e.gameId} onClick={() => { setPicked(e); setChasing(null) }}
+              <button key={e.gameId} onClick={() => { setPicked(e); setChasing(null); setSeries(e.series) }}
                 className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm transition-colors ${
                   picked?.gameId === e.gameId ? 'bg-copper/25 text-white' : 'text-white/80 hover:bg-white/5'
                 }`}>
                 <span className="truncate">{e.title}</span>
-                <span className="ml-3 shrink-0 text-[11px] uppercase tracking-wider text-ink-stage-2">S{e.season}</span>
+                <span className={`ml-3 shrink-0 truncate text-[10px] uppercase tracking-wider ${e.series ? 'max-w-[45%] text-copper' : 'text-ink-stage-2'}`}>
+                  {e.series ? `${e.series}${e.stage ? ` · ${e.stage}` : ''}` : `S${e.season}`}
+                </span>
               </button>
             ))}
           </div>
         )}
+        {/* The tournaments: the champions, the college kids, the teens, the
+            teachers. Start at game one and play the event through. */}
+        <div className="mx-auto mt-7 max-w-2xl">
+          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-copper">Or a tournament</p>
+          <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {TOURNAMENT_KINDS.map((k) => (
+              <button
+                key={k.id}
+                onClick={async () => {
+                  if (tKind === k.id) { setTKind(null); setTournaments(null); return }
+                  setTKind(k.id)
+                  setTournaments(null)
+                  setTournaments(await tournamentsOf(k.match))
+                }}
+                className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+                  tKind === k.id ? 'border-jeopardy-gold bg-jeopardy-gold/15 text-white' : 'border-white/10 bg-black/40 text-white/80 hover:border-copper/60'
+                }`}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+          {tKind && (
+            <div className="mt-2 max-h-[40vh] space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/40 p-2 text-left">
+              {tournaments === null && <p className="p-4 text-center text-sm text-ink-stage-2">Looking them up…</p>}
+              {tournaments?.length === 0 && <p className="p-4 text-center text-sm text-ink-stage-2">None in the archive.</p>}
+              {tournaments?.map((t) => (
+                <button
+                  key={t.series}
+                  onClick={() => { setPicked(t.games[0]); setSeries(t.series); setChasing(null) }}
+                  className={`flex w-full items-center justify-between rounded px-3 py-2 text-sm transition-colors ${
+                    series === t.series && picked?.gameId === t.games[0]?.gameId ? 'bg-copper/25 text-white' : 'text-white/80 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="truncate">{t.series}</span>
+                  <span className="ml-3 shrink-0 text-[11px] uppercase tracking-wider text-ink-stage-2">
+                    {t.games.length} game{t.games.length === 1 ? '' : 's'}{t.games[0]?.stage ? ` · from ${t.games[0].stage}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* The longest runs in the show's history, each a starting line:
             you begin on the same night they did, against the same three. */}
         <div className="mx-auto mt-7 max-w-2xl text-left">
@@ -524,7 +647,7 @@ export default function CampaignPage() {
               return (
                 <button
                   key={r.name}
-                  onClick={() => chase(r)}
+                  onClick={() => { setSeries(null); chase(r) }}
                   disabled={chaseBusy !== null}
                   className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
                     on ? 'border-jeopardy-gold bg-jeopardy-gold/15' : 'border-white/10 bg-black/40 hover:border-copper/60'
@@ -578,8 +701,8 @@ export default function CampaignPage() {
       return <Shell><p className="py-20 text-ink-stage-2">Walking out to the podiums…</p></Shell>
     }
     return (
-      <Shell wide>
-        <Eyebrow>{episode.airedOn ?? episode.title}{run && run.streak > 0 ? ` · Night ${run.streak + 1} of your run` : ''}</Eyebrow>
+      <Shell wide leave={{ label: 'Exit', onClick: () => setPhase('welcome') }}>
+        <Eyebrow>{nightTag ? `${nightTag} · ` : ''}{episode.airedOn ?? episode.title}{run && run.streak > 0 ? ` · Night ${run.streak + 1} of your run` : ''}</Eyebrow>
         <h2 className="display-chrome mt-2 text-3xl md:text-4xl">Tonight&apos;s contestants</h2>
         <p className="mt-2 text-sm text-ink-stage">The three people who really played this board — and you.</p>
 
@@ -639,7 +762,7 @@ export default function CampaignPage() {
   // ── The curtain between rounds ─────────────────────────────────────────
   if (phase === 'curtain' && episode) {
     return (
-      <Shell>
+      <Shell leave={{ label: 'Pause & leave', onClick: pause }}>
         <Rail />
         <div className="mt-8 rounded-xl border-2 border-jeopardy-gold bg-jeopardy-gold/10 p-8">
           <Eyebrow>That&apos;s the Jeopardy round</Eyebrow>
@@ -662,8 +785,8 @@ export default function CampaignPage() {
     const left = roundClues(rd).filter((cl) => !resolvedKeys.has(cellKey(rd, cl.c, cl.r))).length
     const activeClue = active ? clueAt(board, active.rd, active.c, active.r) : undefined
     return (
-      <Shell wide>
-        <Eyebrow>{episode.airedOn ?? episode.title} · {rd === 1 ? 'Jeopardy round' : 'Double Jeopardy'}</Eyebrow>
+      <Shell wide leave={{ label: 'Pause & leave', onClick: pause }}>
+        <Eyebrow>{nightTag ? `${nightTag} · ` : ''}{episode.airedOn ?? episode.title} · {rd === 1 ? 'Jeopardy round' : 'Double Jeopardy'}</Eyebrow>
         <Rail />
         <div className="board-wrapper mx-auto mt-4 max-w-5xl">
           <div className="grid gap-1 p-1" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
@@ -702,7 +825,7 @@ export default function CampaignPage() {
         </p>
 
         {active && activeClue && (
-          <Overlay>
+          <Overlay onPause={pause}>
             {stage === 'wager' && (
               <>
                 <Big>Daily Double!</Big>
@@ -761,7 +884,13 @@ export default function CampaignPage() {
                   ) : (
                     <div className="mt-2 space-y-1.5">
                       {whoAnswered(activeClue, episode.contestants).map(({ who, right }, i) => {
-                        const amt = activeClue.ddWager != null ? activeClue.ddWager : activeClue.value
+                        const amt = activeClue.ddWager != null
+                          ? contestantDdWager(
+                              episode, board, who, activeClue, active!.rd,
+                              contestantScore(episode, board, who, resolvedKeys, size === 'full', cellKey(active!.rd, active!.c, active!.r)),
+                              size === 'full',
+                            )
+                          : activeClue.value
                         return (
                           <div key={i} className="flex items-center gap-2 text-sm">
                             <img src={`/avatars/${who.seat + 1}.png`} alt="" className="h-8 w-8 rounded-full bg-black object-cover" />
@@ -791,7 +920,7 @@ export default function CampaignPage() {
     if (!fj) {
       // The archive has no Final for this night — settle on the board.
       return (
-        <Shell>
+        <Shell leave={{ label: 'Pause & leave', onClick: pause }}>
           <Rail />
           <p className="mt-6 text-sm text-ink-stage-2">The archive has no Final Jeopardy recorded for this night, so the board decides it.</p>
           <button onClick={settleNight} className="btn-stage btn-copper btn-stage-lg mt-4">See the result</button>
@@ -801,7 +930,7 @@ export default function CampaignPage() {
     return (
       <Shell wide>
         <Rail />
-        <Overlay>
+        <Overlay onPause={pause}>
           {fjStage === 'category' && (
             <>
               <Big>Final Jeopardy!</Big>
@@ -858,8 +987,8 @@ export default function CampaignPage() {
               <div className="mx-auto mt-5 max-w-md space-y-2 text-left">
                 <FinalRow name={`${profile.name} (you)`} written={fjResult.typed || '—'} right={fjResult.right} wager={stake} total={myScore} you />
                 {episode.contestants.map((c, i) => {
-                  const before = contestantScore(board, c, resolvedKeys)
-                  const f = contestantFinal(episode, c, before)
+                  const before = contestantScore(episode, board, c, resolvedKeys, size === 'full')
+                  const f = contestantFinal(episode, c, before, size === 'full')
                   return f
                     ? <FinalRow key={c.seat} name={c.first} seat={c.seat} written={f.written} right={f.right} wager={f.wager} total={theirScores[i] ?? 0} />
                     : <FinalRow key={c.seat} name={c.first} seat={c.seat} written="(no Final recorded)" right={false} wager={0} total={theirScores[i] ?? 0} />
@@ -878,8 +1007,8 @@ export default function CampaignPage() {
     const rows = [{ name: `${profile.name} (you)`, score: night.myScore, you: true }, ...night.theirs.map((t) => ({ ...t, you: false }))]
       .sort((a, b) => b.score - a.score)
     return (
-      <Shell>
-        <Eyebrow>{night.airedOn ?? night.title}</Eyebrow>
+      <Shell leave={{ label: 'Leave', onClick: () => setPhase('welcome') }}>
+        <Eyebrow>{run.series ? `${run.series} · ` : ''}{night.airedOn ?? night.title}</Eyebrow>
         <h2 className={`display-chrome mt-2 text-4xl ${night.won ? 'text-jeopardy-gold-light' : ''}`}>
           {night.won ? "You're our new champion!" : 'The champion holds'}
         </h2>
@@ -903,11 +1032,11 @@ export default function CampaignPage() {
         )}
         {night.won && nextInfo && nextInfo !== 'none' && (
           <button onClick={comeBackTomorrow} className="btn-stage btn-copper btn-stage-lg mt-6">
-            Come back tomorrow → {nextInfo.airDate ?? nextInfo.title}
+            {run.series ? 'Next game' : 'Come back tomorrow'} → {nextInfo.stage ?? nextInfo.airDate ?? nextInfo.title}
           </button>
         )}
         {night.won && nextInfo === 'none' && (
-          <p className="mt-6 text-lg font-bold text-jeopardy-gold-light">That was the last night of the season. You ran it.</p>
+          <p className="mt-6 text-lg font-bold text-jeopardy-gold-light">{run.series ? `That was the last game of the ${run.series}. You ran the table.` : "That's every night in the archive. You ran it."}</p>
         )}
         {(!night.won || nextInfo === 'none') && (
           <button onClick={() => setPhase('over')} className="btn-stage btn-stage-ghost mt-4">See the whole run</button>
@@ -947,13 +1076,26 @@ export default function CampaignPage() {
 
 /* ── Building blocks ──────────────────────────────────────────────────── */
 
-function Shell({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
+function Shell({ children, wide, leave }: {
+  children: React.ReactNode
+  wide?: boolean
+  /** A way out, top right: "Exit" before the game, "Pause & leave" during it. */
+  leave?: { label: string; onClick: () => void }
+}) {
   return (
     <main className="stage-page-deep p-4 pb-24 md:p-8">
       <div className={`mx-auto ${wide ? 'max-w-6xl' : 'max-w-2xl'}`}>
         <div className="frame">
           <span className="led-strip led-strip-left" /><span className="led-strip led-strip-right" />
-          <div className="frame-inner p-5 text-center md:p-9">
+          <div className="frame-inner relative p-5 text-center md:p-9">
+            {leave && (
+              <button
+                onClick={leave.onClick}
+                className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/60 transition-colors hover:border-copper/60 hover:text-white md:right-4 md:top-4"
+              >
+                {leave.label}
+              </button>
+            )}
             <ChromeWordmark className="mx-auto mb-4 h-auto w-full max-w-[160px]" />
             {children}
           </div>
@@ -970,9 +1112,17 @@ const Big = ({ children }: { children: React.ReactNode }) => (
 )
 const BackHome = () => <p className="mt-8"><a href="/" className="text-[10px] uppercase tracking-[0.22em] text-ink-stage-2 hover:text-copper">← Home</a></p>
 
-function Overlay({ children }: { children: React.ReactNode }) {
+function Overlay({ children, onPause }: { children: React.ReactNode; onPause?: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#030845] px-5 py-8">
+      {onPause && (
+        <button
+          onClick={onPause}
+          className="fixed right-4 top-4 z-[60] rounded-full border border-white/15 bg-black/40 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/60 transition-colors hover:border-copper/60 hover:text-white"
+        >
+          Pause
+        </button>
+      )}
       <div className="w-full max-w-2xl text-center">{children}</div>
     </div>
   )
