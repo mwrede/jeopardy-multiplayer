@@ -217,7 +217,7 @@ export default function Home() {
         </div>
 
         <header className="text-center">
-          <ChromeWordmark className="mx-auto h-auto w-full max-w-[260px] md:max-w-[380px]" />
+          <ChromeWordmark text="JPLAY" className="mx-auto h-auto w-full max-w-[200px] md:max-w-[300px]" />
           {/* Tracking this wide wrapped "no sign-up" onto its own line on a
               375px phone; it tightens there and opens up from sm. */}
           <p className="mt-2.5 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-100/65 sm:mt-3 sm:text-xs sm:tracking-[0.24em] md:text-[13px]">
