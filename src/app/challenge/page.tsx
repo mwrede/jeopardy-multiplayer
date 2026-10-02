@@ -65,10 +65,10 @@ export default function ChallengePage() {
 
         <h1 className="display-chrome text-3xl leading-none md:text-4xl">Jeopardy Challenge</h1>
         <p className="mt-3 max-w-2xl text-sm text-ink-stage">
-          The board of the day is nine clues from one famous night, and it changes at
-          midnight. Everything under it is a full solo board: a 3×3 Jeopardy round, a 3×3
-          Double Jeopardy round with a hidden Daily Double in each, then a Final Jeopardy
-          wager. Every clue is a real clue from a real episode — the screen shows the
+          The board of the day is one famous night played end to end, and it changes at
+          midnight. Everything under it is a full solo board too: a 3×3 Jeopardy round, a
+          3×3 Double Jeopardy round with a hidden Daily Double in each — the one thing the
+          daily leaves out — then a Final Jeopardy wager. Every clue is a real clue from a real episode — the screen shows the
           date it aired. Play a board as many times as you like — the leaderboard
           keeps your <strong className="text-white">best run</strong> on each, so
           going again can only improve it — and you race the real people who

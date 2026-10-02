@@ -11,7 +11,7 @@ import {
   shortDate,
   secondsUntilTomorrow,
   untilTomorrowLabel,
-  DAILY_VALUES,
+  ROUND_VALUES,
   DAILY_CLUES,
   DAILY_MAX,
   DAILY_DAYS,
@@ -43,19 +43,27 @@ import {
  * THE BOARD OF THE DAY — the front page's first thing, and the only thing on
  * it you can actually play without going anywhere.
  *
- * Nine real clues from one real night in the show's history, $200 to $600, the
- * same board for everyone, changing at local midnight. No name gate and no
- * intro screen: the board is live the moment the page is, because anything in
- * front of it is a reason to leave. ONE SHOT — a day you've played shows you
- * your own board back, marked.
+ * A whole game from one real night in the show's history: a 3×3 Jeopardy
+ * round, a 3×3 Double Jeopardy round at doubled values, then Final Jeopardy
+ * with a wager. Same board for everyone, changing at local midnight. No name
+ * gate and no intro screen — the board is live the moment the page is, because
+ * anything in front of it is a reason to leave. ONE SHOT: a day you've played
+ * shows you your own board back, marked.
  *
- * Standings sit to the right of it, three of them: today, all time, and the
- * streaks. Your own line is read out of this browser first so it's instant and
- * survives a missing table; everyone else's comes from Supabase.
+ * The clue opens INSIDE the board, in the space the grid was using, the way
+ * the real board turns over to show a clue. It is deliberately not a takeover:
+ * the standings stay beside it, the page doesn't move under you, and closing a
+ * clue puts you back exactly where you were.
+ *
+ * Standings sit to the right, three of them: today, all time, and the streaks.
+ * Your own line is read out of this browser first so it's instant and survives
+ * a missing table; everyone else's comes from Supabase.
  */
 const CLUE_SECONDS = 30
+const FINAL_SECONDS = 45
 
 type Stage = 'answering' | 'reveal'
+type FinalStage = 'wager' | 'answering' | 'reveal'
 
 export function DailyBoard({
   forDate,
@@ -84,11 +92,20 @@ export function DailyBoard({
   const [rows, setRows] = useState<DailyResult[] | null>(null)
   const [tableMissing, setTableMissing] = useState(false)
 
-  const [active, setActive] = useState<{ c: number; r: number } | null>(null)
+  const [active, setActive] = useState<{ rd: number; c: number; r: number } | null>(null)
   const [stage, setStage] = useState<Stage>('answering')
   const [typed, setTyped] = useState('')
   const [secondsLeft, setSecondsLeft] = useState(CLUE_SECONDS)
   const [lastOutcome, setLastOutcome] = useState<ClueOutcome>('pass')
+
+  /** The between-rounds card, until it's been dismissed. */
+  const [curtainSeen, setCurtainSeen] = useState(false)
+  const [finalStage, setFinalStage] = useState<FinalStage | null>(null)
+  const [wagerText, setWagerText] = useState('')
+  /** What's on the line for Final — locked when the wager is. */
+  const [stake, setStake] = useState(0)
+  /** Which round a FINISHED board is showing back. */
+  const [viewRound, setViewRound] = useState(1)
 
   const [identity, setIdentity] = useState<string | null>(null)
   /** Guards the automatic post so one finished day is sent once, not on every render. */
@@ -112,7 +129,11 @@ export function DailyBoard({
     setDaysPlayed(Object.keys(readLocalPlays()).length)
 
     const saved = readRun(day)
-    if (saved && !plays[day]) setResolved(saved.clueResults)
+    if (saved && !plays[day]) {
+      setResolved(saved.clueResults)
+      // Back into a run that had already turned the corner: no second curtain.
+      if (saved.clueResults.some((x) => x.rd === 2)) setCurtainSeen(true)
+    }
 
     setName(localStorage.getItem('playerName') || '')
   }, [forDate, ranked])
@@ -142,6 +163,15 @@ export function DailyBoard({
 
   useEffect(() => { loadRows() }, [loadRows])
 
+  /* Progress. One clue per cell per round; Final is rd 3. */
+  const r1Count = resolved.filter((x) => x.rd === 1).length
+  const r2Count = resolved.filter((x) => x.rd === 2).length
+  const finalResult = resolved.find((x) => x.rd === 3)
+  const round: 1 | 2 = r1Count < 9 ? 1 : 2
+  const boardDone = r1Count >= 9 && r2Count >= 9
+  const myScore = scoreOf(resolved)
+  const showCurtain = r1Count >= 9 && r2Count === 0 && !curtainSeen && !active && !mine
+
   // ── The clue clock ───────────────────────────────────────────────────
   useEffect(() => {
     if (!active || stage !== 'answering') return
@@ -156,6 +186,27 @@ export function DailyBoard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, stage])
 
+  // ── The Final Jeopardy clock ─────────────────────────────────────────
+  useEffect(() => {
+    if (finalStage !== 'answering') return
+    setSecondsLeft(FINAL_SECONDS)
+    const started = Date.now()
+    const t = setInterval(() => {
+      const s = FINAL_SECONDS - Math.floor((Date.now() - started) / 1000)
+      setSecondsLeft(Math.max(0, s))
+      if (s <= 0) { clearInterval(t); resolveFinal('') }
+    }, 250)
+    return () => clearInterval(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalStage])
+
+  // Both rounds cleared → Final Jeopardy.
+  useEffect(() => {
+    if (mine || !boardDone || finalResult || finalStage !== null || active) return
+    setWagerText('')
+    setFinalStage('wager')
+  }, [mine, boardDone, finalResult, finalStage, active])
+
   // ── How long today's board has left ──────────────────────────────────
   useEffect(() => {
     if (!mine || !ranked) { setLeft(null); return }
@@ -164,37 +215,64 @@ export function DailyBoard({
     return () => clearInterval(t)
   }, [mine, ranked])
 
-  const myScore = scoreOf(resolved)
-  const done = resolved.length >= DAILY_CLUES
-
-  function openClue(c: number, r: number) {
+  function openClue(rd: number, c: number, r: number) {
     if (!board || mine) return
-    if (resolved.some((x) => x.c === c && x.r === r)) return
+    if (resolved.some((x) => x.rd === rd && x.c === c && x.r === r)) return
     setTyped('')
     setStage('answering')
     setSecondsLeft(CLUE_SECONDS)
-    setActive({ c, r })
+    setActive({ rd, c, r })
   }
 
   function resolve(kind: 'answer' | 'pass' | 'timeout', text: string) {
     if (!active || !board || !date) return
-    const { c, r } = active
-    const clue = board.categories[c].clues[r]
+    const { rd, c, r } = active
+    const clue = board.rounds[rd - 1][c].clues[r]
     const outcome: ClueOutcome =
       kind === 'answer' && text.trim()
         ? checkAnswerDetailed(text, clue.a).correct ? 'correct' : 'wrong'
         : 'pass'
-    const next = [...resolved, { c, r, outcome, value: DAILY_VALUES[r], answer: text.trim() || undefined }]
+    const next = [
+      ...resolved,
+      { rd, c, r, outcome, value: ROUND_VALUES[rd - 1][r], answer: text.trim() || undefined },
+    ]
     setResolved(next)
     setLastOutcome(outcome)
     setStage('reveal')
     saveRun(date, next)
   }
 
-  /** Closing the ninth clue ends the day. */
   function closeClue() {
     setActive(null)
-    if (resolved.length >= DAILY_CLUES) finish(resolved)
+  }
+
+  /** The wager rides on Final; you can't bet more than you have. */
+  function confirmWager() {
+    const max = Math.max(0, myScore)
+    const w = Math.min(max, Math.max(0, Math.round(Number(wagerText) || 0)))
+    setStake(w)
+    setTyped('')
+    setFinalStage('answering')
+  }
+
+  function resolveFinal(text: string) {
+    if (!board || !date) return
+    // Not answering Final is a miss, and the wager goes with it — as on the show.
+    const outcome: ClueOutcome =
+      text.trim() && checkAnswerDetailed(text, board.final.a).correct ? 'correct' : 'wrong'
+    const next = [
+      ...resolved,
+      { rd: 3, c: 0, r: 0, outcome, value: stake, answer: text.trim() || undefined },
+    ]
+    setResolved(next)
+    setLastOutcome(outcome)
+    setFinalStage('reveal')
+    saveRun(date, next)
+  }
+
+  function closeFinal() {
+    setFinalStage(null)
+    finish(resolved)
   }
 
   /**
@@ -205,15 +283,16 @@ export function DailyBoard({
     if (!board || !date) return
     const play: LocalPlay = {
       date,
-      boardKey: `${board.day.boardKey}:${board.day.round}`,
+      boardKey: board.day.boardKey,
       score: scoreOf(res),
       correct: res.filter((x) => x.outcome === 'correct').length,
-      // Category by category, cheapest row first: index = c * 3 + r.
-      outcomes: boardOrder(res).map((x) => x.outcome),
+      outcomes: outcomeList(res),
+      finalValue: res.find((x) => x.rd === 3)?.value ?? 0,
     }
     if (ranked) noteLocalPlay(play)
     else noteCatchUp(play)
     setMine(play)
+    setViewRound(1)
     if (ranked) {
       setMyStreak(localStreak(date))
       setDaysPlayed(Object.keys(readLocalPlays()).length)
@@ -298,8 +377,12 @@ export function DailyBoard({
   // The board can't be built (every scheduled board re-keyed away): say nothing.
   if (!board || !date) return <Skeleton />
 
-  const { day, categories } = board
-  const marks = boardOrder(mine ? restoreFromLocal(mine) : resolved)
+  const { day } = board
+  /* A finished day is read back out of this browser's record; a day in progress
+     is whatever has been resolved so far. */
+  const marks = mine ? restoreFromLocal(mine) : resolved
+  const shown: 1 | 2 = mine ? (viewRound as 1 | 2) : round
+  const finalMark = marks.find((x) => x.rd === 3)
 
   return (
     <section className="mt-4 md:mt-6">
@@ -327,62 +410,137 @@ export function DailyBoard({
           ranked ? 'md:grid-cols-[minmax(0,1fr)_296px]' : ''
         }`}
       >
-        {/* ── The board ─────────────────────────────────────────────── */}
+        {/* ── The board, and whatever it is currently showing ────────── */}
         <div className="min-w-0">
+          {/* Which round, and — once the day is done — a way back to the other
+              one. During play the round is wherever you've got to. */}
+          <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
+            {mine ? (
+              <span className="flex gap-1">
+                {([1, 2] as const).map((rd) => (
+                  <button
+                    key={rd}
+                    onClick={() => setViewRound(rd)}
+                    className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] transition-colors ${
+                      shown === rd
+                        ? 'bg-jeopardy-gold text-black'
+                        : 'text-blue-100/55 hover:text-white'
+                    }`}
+                  >
+                    {rd === 1 ? 'Jeopardy' : 'Double Jeopardy'}
+                  </button>
+                ))}
+              </span>
+            ) : (
+              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-jeopardy-gold-light sm:text-[10px]">
+                {round === 1 ? 'Jeopardy round' : 'Double Jeopardy'}
+              </span>
+            )}
+            <span className="text-[9px] uppercase tracking-[0.14em] text-blue-100/45">
+              {mine
+                ? `${mine.correct} of ${DAILY_CLUES} right`
+                : `${formatMoney(myScore)} · ${9 - (round === 1 ? r1Count : r2Count)} left this round`}
+            </span>
+          </div>
+
           <div className="board-wrapper">
-            <div className="grid grid-cols-3 gap-1 p-1">
-              {categories.map((cat, c) => (
-                <div
-                  key={c}
-                  className="board-category min-h-[46px] px-1.5 py-1.5 text-[9px] font-bold uppercase leading-tight text-white sm:min-h-[56px] sm:text-[11px] md:text-xs"
-                >
-                  {cat.name}
-                </div>
-              ))}
-              {[0, 1, 2].map((r) =>
-                categories.map((_, c) => {
-                  const res = marks.find((x) => x.c === c && x.r === r)
-                  return (
-                    <button
-                      key={`${c}:${r}`}
-                      onClick={() => openClue(c, r)}
-                      disabled={!!res || !!mine}
-                      aria-label={
-                        res
-                          ? `$${DAILY_VALUES[r]} — ${res.outcome}`
-                          : `${categories[c].name}, $${DAILY_VALUES[r]}`
-                      }
-                      className={`min-h-[58px] text-xl sm:min-h-[70px] sm:text-2xl md:min-h-[82px] md:text-3xl ${
-                        res
+            {/* The clue takes the board's own space rather than the screen —
+                the way the board itself turns over to show one. */}
+            {active ? (
+              <CluePanel
+                category={board.rounds[active.rd - 1][active.c].name}
+                clue={board.rounds[active.rd - 1][active.c].clues[active.r]}
+                show={board.rounds[active.rd - 1][active.c].show}
+                airDate={board.rounds[active.rd - 1][active.c].airDate}
+                value={ROUND_VALUES[active.rd - 1][active.r]}
+                stage={stage}
+                typed={typed}
+                setTyped={setTyped}
+                secondsLeft={secondsLeft}
+                outcome={lastOutcome}
+                myScore={myScore}
+                left={18 - resolved.filter((x) => x.rd !== 3).length}
+                onAnswer={() => resolve('answer', typed)}
+                onPass={() => resolve('pass', '')}
+                onClose={closeClue}
+              />
+            ) : showCurtain ? (
+              <Curtain score={myScore} onGo={() => setCurtainSeen(true)} />
+            ) : finalStage ? (
+              <FinalPanel
+                final={board.final}
+                stage={finalStage}
+                typed={typed}
+                setTyped={setTyped}
+                wagerText={wagerText}
+                setWagerText={setWagerText}
+                stake={stake}
+                maxWager={Math.max(0, scoreOf(resolved.filter((x) => x.rd !== 3)))}
+                secondsLeft={secondsLeft}
+                outcome={lastOutcome}
+                myScore={myScore}
+                onWager={confirmWager}
+                onAnswer={() => resolveFinal(typed)}
+                onClose={closeFinal}
+              />
+            ) : (
+              <div className="grid grid-cols-3 gap-1 p-1">
+                {board.rounds[shown - 1].map((cat, c) => (
+                  <div
+                    key={c}
+                    className="board-category min-h-[46px] px-1.5 py-1.5 text-[9px] font-bold uppercase leading-tight text-white sm:min-h-[56px] sm:text-[11px] md:text-xs"
+                  >
+                    {cat.name}
+                  </div>
+                ))}
+                {[0, 1, 2].map((r) =>
+                  board.rounds[shown - 1].map((_, c) => {
+                    const res = marks.find((x) => x.rd === shown && x.c === c && x.r === r)
+                    return (
+                      <button
+                        key={`${c}:${r}`}
+                        onClick={() => openClue(shown, c, r)}
+                        disabled={!!res || !!mine}
+                        aria-label={
+                          res
+                            ? `$${ROUND_VALUES[shown - 1][r]} — ${res.outcome}`
+                            : `${board.rounds[shown - 1][c].name}, $${ROUND_VALUES[shown - 1][r]}`
+                        }
+                        className={`min-h-[58px] text-xl sm:min-h-[70px] sm:text-2xl md:min-h-[82px] md:text-3xl ${
+                          res
+                            ? res.outcome === 'correct'
+                              ? 'board-cell board-cell-correct'
+                              : res.outcome === 'wrong'
+                                ? 'board-cell board-cell-wrong'
+                                /* The shared answered style paints its text
+                                   away; a clue you passed on has to still
+                                   read as one. */
+                                : 'board-cell board-cell-answered !text-white/40'
+                            : 'board-cell'
+                        }`}
+                        style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
+                      >
+                        {res
                           ? res.outcome === 'correct'
-                            ? 'board-cell board-cell-correct'
+                            ? '✓'
                             : res.outcome === 'wrong'
-                              ? 'board-cell board-cell-wrong'
-                              /* The shared answered style paints its text away;
-                                 a day you passed on has to still read as one. */
-                              : 'board-cell board-cell-answered !text-white/40'
-                          : 'board-cell'
-                      }`}
-                      style={{ fontFamily: 'Impact, "Arial Black", sans-serif' }}
-                    >
-                      {res
-                        ? res.outcome === 'correct'
-                          ? '✓'
-                          : res.outcome === 'wrong'
-                            ? '✗'
-                            : '–'
-                        : `$${DAILY_VALUES[r]}`}
-                    </button>
-                  )
-                }),
-              )}
-            </div>
+                              ? '✗'
+                              : '–'
+                          : `$${ROUND_VALUES[shown - 1][r]}`}
+                      </button>
+                    )
+                  }),
+                )}
+              </div>
+            )}
           </div>
 
           {/* Under the board: where you are, or where you finished. */}
           {mine ? (
             <Result
               play={mine}
+              finalMark={finalMark}
+              finalCategory={board.final.category}
               rank={myRank}
               field={todayRows.length}
               streak={streak}
@@ -405,12 +563,12 @@ export function DailyBoard({
               <p className="text-[11px] text-blue-100/70">
                 {resolved.length === 0
                   ? ranked
-                    ? 'Nine clues, 30 seconds each. One shot — today only.'
-                    : 'Nine clues, 30 seconds each. A day you missed — played for the record, not the leaderboard.'
-                  : `${DAILY_CLUES - resolved.length} to go · ${formatMoney(myScore)} so far`}
+                    ? 'Two rounds and a Final. 30 seconds a clue, one shot — today only.'
+                    : 'Two rounds and a Final — a day you missed, played for the record, not the leaderboard.'
+                  : `${DAILY_CLUES - resolved.length} clue${DAILY_CLUES - resolved.length === 1 ? '' : 's'} to go · ${formatMoney(myScore)} so far`}
               </p>
               <p className="text-[10px] uppercase tracking-[0.14em] text-blue-100/45">
-                Perfect board {formatMoney(DAILY_MAX)}
+                Perfect board {formatMoney(DAILY_MAX)} + Final
               </p>
             </div>
           )}
@@ -489,52 +647,49 @@ export function DailyBoard({
           </aside>
         )}
       </div>
-
-      {/* The clue, full screen, the way the game shows one. */}
-      {active && (
-        <ClueOverlay
-          category={categories[active.c].name}
-          clue={categories[active.c].clues[active.r]}
-          show={categories[active.c].show}
-          airDate={categories[active.c].airDate}
-          value={DAILY_VALUES[active.r]}
-          stage={stage}
-          typed={typed}
-          setTyped={setTyped}
-          secondsLeft={secondsLeft}
-          outcome={lastOutcome}
-          myScore={myScore}
-          left={DAILY_CLUES - resolved.length}
-          onAnswer={() => resolve('answer', typed)}
-          onPass={() => resolve('pass', '')}
-          onClose={closeClue}
-        />
-      )}
     </section>
   )
 }
 
 /* ─────────────────────────── small parts ─────────────────────────── */
 
-/** Board order — category by category, cheapest row first. */
-function boardOrder(res: DailyClueResult[]): DailyClueResult[] {
-  return [...res].sort((a, b) => a.c - b.c || a.r - b.r)
+/** The board's own footprint, so a clue or a curtain doesn't move the page. */
+const PANEL = 'flex min-h-[236px] flex-col items-center justify-center bg-[#060CE9] px-4 py-5 text-center sm:min-h-[276px] md:min-h-[312px]'
+
+/**
+ * The nineteen outcomes in board order: Jeopardy round category by category
+ * (index = c * 3 + r), then Double Jeopardy, then Final last.
+ */
+function outcomeList(res: DailyClueResult[]): ClueOutcome[] {
+  const out: ClueOutcome[] = []
+  for (const rd of [1, 2]) {
+    for (let c = 0; c < 3; c++) {
+      for (let r = 0; r < 3; r++) {
+        out.push(res.find((x) => x.rd === rd && x.c === c && x.r === r)?.outcome ?? 'pass')
+      }
+    }
+  }
+  out.push(res.find((x) => x.rd === 3)?.outcome ?? 'pass')
+  return out
 }
 
 /**
- * A finished day, rebuilt from the nine outcomes kept in this browser. Enough
- * to mark the board and to put the score back on the leaderboard after a
- * refresh; the typed answers aren't kept, and aren't needed.
+ * A finished day, rebuilt from what this browser kept. Enough to mark the board
+ * and to put the score back on the leaderboard after a refresh; the typed
+ * answers aren't kept, and aren't needed. A day played before the board became
+ * a full game has only nine outcomes — the rest read as passes.
  */
 function restoreFromLocal(play: LocalPlay): DailyClueResult[] {
   const out: DailyClueResult[] = []
   let i = 0
-  for (let c = 0; c < 3; c++) {
-    for (let r = 0; r < 3; r++) {
-      const outcome = play.outcomes[i++] ?? 'pass'
-      out.push({ c, r, outcome, value: DAILY_VALUES[r] })
+  for (const rd of [1, 2]) {
+    for (let c = 0; c < 3; c++) {
+      for (let r = 0; r < 3; r++) {
+        out.push({ rd, c, r, outcome: play.outcomes[i++] ?? 'pass', value: ROUND_VALUES[rd - 1][r] })
+      }
     }
   }
+  out.push({ rd: 3, c: 0, r: 0, outcome: play.outcomes[i] ?? 'pass', value: play.finalValue ?? 0 })
   return out
 }
 
@@ -549,6 +704,330 @@ function Skeleton() {
         </div>
       </div>
     </section>
+  )
+}
+
+/** Between the rounds, in the board's own space. */
+function Curtain({ score, onGo }: { score: number; onGo: () => void }) {
+  return (
+    <div className={PANEL}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-jeopardy-gold-light">
+        That&apos;s the Jeopardy round
+      </p>
+      <p className="mt-2 text-3xl font-bold text-white md:text-4xl">{formatMoney(score)}</p>
+      <h3
+        className="mt-5 text-2xl uppercase tracking-wide text-jeopardy-gold-light md:text-3xl"
+        style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '2px 2px 5px rgba(0,0,0,0.6)' }}
+      >
+        Double Jeopardy
+      </h3>
+      <p className="mt-1.5 text-xs text-white/80">Every value doubles. Nine more clues.</p>
+      <button onClick={onGo} className="btn-stage btn-copper btn-stage-sm mt-4">
+        Bring on the board
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The clue, in the board's own space rather than over the page.
+ *
+ * Enter answers, and on the reveal Enter takes you back to the board — it
+ * returns to the BOARD rather than jumping to the next clue, because choosing
+ * the clue is the game.
+ */
+function CluePanel({
+  category,
+  clue,
+  show,
+  airDate,
+  value,
+  stage,
+  typed,
+  setTyped,
+  secondsLeft,
+  outcome,
+  myScore,
+  left,
+  onAnswer,
+  onPass,
+  onClose,
+}: {
+  category: string
+  clue: { q: string; a: string }
+  show: string | null
+  airDate: string | null
+  value: number
+  stage: Stage
+  typed: string
+  setTyped: (s: string) => void
+  secondsLeft: number
+  outcome: ClueOutcome
+  myScore: number
+  left: number
+  onAnswer: () => void
+  onPass: () => void
+  onClose: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { inputRef.current?.focus() }, [stage, clue.q])
+
+  useEffect(() => {
+    if (stage !== 'reveal') return
+    /* The Enter that answered the clue is STILL BUBBLING when this listener is
+       added — React handles the key at its root, flushes, and the event then
+       carries on up to window — so without this it dismissed the very reveal it
+       had just opened and nobody ever saw the correct response. An event
+       dispatched before the listener existed carries the earlier timestamp. */
+    const since = performance.now()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.timeStamp < since) return
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [stage, onClose])
+
+  return (
+    <div className={PANEL}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/80">
+        {category} · <span className="text-jeopardy-gold-light">${value}</span>
+      </p>
+
+      <p
+        className="clue-type mx-auto mt-3 max-w-xl text-base uppercase leading-snug text-white sm:text-lg md:text-xl"
+        style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}
+      >
+        {clue.q}
+      </p>
+
+      {stage === 'answering' ? (
+        <>
+          <div className="mx-auto mt-4 h-1 w-full max-w-sm overflow-hidden rounded-full bg-black/40">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                secondsLeft <= 5 ? 'bg-red-500' : 'bg-jeopardy-gold-light'
+              }`}
+              style={{ width: `${(secondsLeft / CLUE_SECONDS) * 100}%` }}
+            />
+          </div>
+          <p className={`mt-1 text-[10px] tabular-nums ${secondsLeft <= 5 ? 'text-red-300' : 'text-white/60'}`}>
+            {secondsLeft}s
+          </p>
+          <div className="mx-auto mt-3 flex w-full max-w-md flex-wrap items-center justify-center gap-1.5">
+            <input
+              ref={inputRef}
+              type="text"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim()) onAnswer() }}
+              placeholder="What is…?"
+              className="field-stage h-10 min-w-0 flex-1 text-center text-sm"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <button onClick={onAnswer} disabled={!typed.trim()} className="btn-stage btn-copper btn-stage-sm shrink-0">
+              Answer
+            </button>
+            <button onClick={onPass} className="btn-stage btn-stage-ghost btn-stage-sm shrink-0">
+              Pass
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="mt-4">
+          <p
+            className={`text-lg font-bold md:text-xl ${
+              outcome === 'correct' ? 'text-green-400' : outcome === 'wrong' ? 'text-red-400' : 'text-white/70'
+            }`}
+          >
+            {outcome === 'correct'
+              ? `Right! +${formatMoney(value)}`
+              : outcome === 'wrong'
+                ? `No — that's -${formatMoney(value)}`
+                : 'Time / passed'}
+          </p>
+          <p className="mt-1.5 text-sm text-white/85">
+            Correct response:{' '}
+            <span className="font-bold text-jeopardy-gold-light">{clue.a}</span>
+          </p>
+          <p className="mt-2 text-[11px] text-white/60">
+            Your total:{' '}
+            <span className="font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(myScore)}</span>
+          </p>
+          <button onClick={onClose} className="btn-stage btn-copper btn-stage-sm mt-3">
+            {left <= 0 ? 'On to Final Jeopardy' : `Back to the board · ${left} left`}
+          </button>
+          {left > 0 && (
+            <p className="mt-1.5 text-[9px] uppercase tracking-[0.16em] text-white/40">
+              Press Enter — you pick the next one
+            </p>
+          )}
+        </div>
+      )}
+
+      {(show || airDate) && (
+        <p className="mt-4 text-[9px] uppercase tracking-[0.16em] text-white/40">
+          {show}
+          {show && airDate ? ' · ' : ''}
+          {airDate ? `aired ${formatAirDate(airDate)}` : ''}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** Final Jeopardy: the category, your wager, the clue, the damage. */
+function FinalPanel({
+  final,
+  stage,
+  typed,
+  setTyped,
+  wagerText,
+  setWagerText,
+  stake,
+  maxWager,
+  secondsLeft,
+  outcome,
+  myScore,
+  onWager,
+  onAnswer,
+  onClose,
+}: {
+  final: Board['final']
+  stage: FinalStage
+  typed: string
+  setTyped: (s: string) => void
+  wagerText: string
+  setWagerText: (s: string) => void
+  stake: number
+  maxWager: number
+  secondsLeft: number
+  outcome: ClueOutcome
+  myScore: number
+  onWager: () => void
+  onAnswer: () => void
+  onClose: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { inputRef.current?.focus() }, [stage])
+
+  return (
+    <div className={PANEL}>
+      <p
+        className="text-xl uppercase tracking-wide text-jeopardy-gold-light md:text-2xl"
+        style={{ fontFamily: 'Impact, "Arial Black", sans-serif', textShadow: '2px 2px 5px rgba(0,0,0,0.6)' }}
+      >
+        Final Jeopardy
+      </p>
+      <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.24em] text-white/85">
+        {final.category}
+      </p>
+
+      {stage === 'wager' ? (
+        <>
+          <p className="mx-auto mt-3 max-w-md text-xs text-white/80">
+            You have{' '}
+            <span className="font-bold text-jeopardy-gold-light">{formatMoney(myScore)}</span>.
+            Wager anything up to{' '}
+            <span className="font-bold text-jeopardy-gold-light">{formatMoney(maxWager)}</span> —
+            then the clue appears and the money rides on it.
+          </p>
+          <div className="mx-auto mt-3 flex w-full max-w-sm flex-wrap items-center justify-center gap-1.5">
+            <input
+              ref={inputRef}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={maxWager}
+              value={wagerText}
+              onChange={(e) => setWagerText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && wagerText.trim()) onWager() }}
+              placeholder="Your wager"
+              className="field-stage h-10 min-w-0 flex-1 text-center text-sm"
+            />
+            <button
+              onClick={() => setWagerText(String(maxWager))}
+              className="btn-stage btn-stage-ghost btn-stage-sm shrink-0"
+            >
+              All of it
+            </button>
+            <button
+              onClick={onWager}
+              disabled={!wagerText.trim()}
+              className="btn-stage btn-copper btn-stage-sm shrink-0"
+            >
+              Lock it in
+            </button>
+          </div>
+          {maxWager === 0 && (
+            <p className="mt-2 text-[10px] text-white/55">
+              Nothing to wager with — lock in $0 and answer for the record.
+            </p>
+          )}
+        </>
+      ) : stage === 'answering' ? (
+        <>
+          <p
+            className="clue-type mx-auto mt-3 max-w-xl text-base uppercase leading-snug text-white sm:text-lg md:text-xl"
+            style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}
+          >
+            {final.q}
+          </p>
+          <div className="mx-auto mt-4 h-1 w-full max-w-sm overflow-hidden rounded-full bg-black/40">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                secondsLeft <= 8 ? 'bg-red-500' : 'bg-jeopardy-gold-light'
+              }`}
+              style={{ width: `${(secondsLeft / FINAL_SECONDS) * 100}%` }}
+            />
+          </div>
+          <p className={`mt-1 text-[10px] tabular-nums ${secondsLeft <= 8 ? 'text-red-300' : 'text-white/60'}`}>
+            {secondsLeft}s · {formatMoney(stake)} on the line
+          </p>
+          <div className="mx-auto mt-3 flex w-full max-w-md flex-wrap items-center justify-center gap-1.5">
+            <input
+              ref={inputRef}
+              type="text"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim()) onAnswer() }}
+              placeholder="What is…?"
+              className="field-stage h-10 min-w-0 flex-1 text-center text-sm"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <button onClick={onAnswer} disabled={!typed.trim()} className="btn-stage btn-copper btn-stage-sm shrink-0">
+              Lock in answer
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="mt-3">
+          <p
+            className={`text-lg font-bold md:text-xl ${
+              outcome === 'correct' ? 'text-green-400' : 'text-red-400'
+            }`}
+          >
+            {outcome === 'correct' ? `Right! +${formatMoney(stake)}` : `No — that's -${formatMoney(stake)}`}
+          </p>
+          <p className="mt-1.5 text-sm text-white/85">
+            Correct response: <span className="font-bold text-jeopardy-gold-light">{final.a}</span>
+          </p>
+          <p className="mt-2 text-xs text-white/70">
+            Final total:{' '}
+            <span className="text-base font-bold tabular-nums text-jeopardy-gold-light">
+              {formatMoney(myScore)}
+            </span>
+          </p>
+          <button onClick={onClose} className="btn-stage btn-copper btn-stage-sm mt-3">
+            See how you did
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -652,6 +1131,8 @@ function Panel({
  */
 function Result({
   play,
+  finalMark,
+  finalCategory,
   rank,
   field,
   streak,
@@ -670,6 +1151,8 @@ function Result({
   board,
 }: {
   play: LocalPlay
+  finalMark: DailyClueResult | undefined
+  finalCategory: string
   rank: number
   field: number
   streak: { current: number; best: number }
@@ -692,18 +1175,23 @@ function Result({
   const onBoard =
     !ranked || recorded || !!play.posted || submitted === 'recorded' || submitted === 'already-played'
 
-  /** The grid everyone recognises: three rows of three, no clues given away. */
+  /**
+   * The grid everyone recognises, as the board actually reads: the Jeopardy
+   * round on the left, Double Jeopardy on the right, Final on its own line.
+   * No clues given away.
+   */
   function grid(): string {
-    return [0, 1, 2]
-      .map((r) =>
-        [0, 1, 2]
-          .map((c) => {
-            const o = play.outcomes[c * 3 + r]
-            return o === 'correct' ? '🟩' : o === 'wrong' ? '🟥' : '⬛'
-          })
-          .join(''),
-      )
-      .join('\n')
+    const at = (i: number) => {
+      const o = play.outcomes[i]
+      return o === 'correct' ? '🟩' : o === 'wrong' ? '🟥' : '⬛'
+    }
+    const rows = [0, 1, 2].map(
+      (r) =>
+        [0, 1, 2].map((c) => at(c * 3 + r)).join('') +
+        '  ' +
+        [0, 1, 2].map((c) => at(9 + c * 3 + r)).join(''),
+    )
+    return `${rows.join('\n')}\nFinal ${at(18)}`
   }
 
   async function share() {
@@ -717,7 +1205,7 @@ function Result({
       `${formatMoney(play.score)} · ${play.correct}/${DAILY_CLUES} right${
         ranked && streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''
       }`,
-      `Same nine clues, same day: ${site}`,
+      `Same board, same night: ${site}`,
     ].join('\n')
 
     /* Copy, not the share sheet: this text is built to be PASTED into a group
@@ -746,20 +1234,24 @@ function Result({
             {ranked && streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''}
           </span>
         </p>
-        <span className="flex items-center gap-1.5">
-          <button onClick={share} className="btn-stage btn-copper btn-stage-sm">
-            {copied ? 'Copied!' : '📋 Share result'}
-          </button>
-          <a href={`/challenge/${board.day.boardKey}`} className="btn-stage btn-stage-ghost btn-stage-sm">
-            Full game
-          </a>
-        </span>
+        <button onClick={share} className="btn-stage btn-copper btn-stage-sm">
+          {copied ? 'Copied!' : '📋 Share result'}
+        </button>
       </div>
 
       {/* The emoji grid, right there — people share what they can already see. */}
-      <pre className="mt-2 select-all text-center font-sans text-base leading-[1.15] tracking-[0.12em] text-white/90">
+      <pre className="mt-2 select-all text-center font-sans text-sm leading-[1.2] tracking-[0.1em] text-white/90 sm:text-base">
         {grid()}
       </pre>
+
+      {/* How Final went, which the grid can only say yes or no about. */}
+      {finalMark && (
+        <p className="mt-1 text-center text-[11px] text-blue-100/70">
+          Final · {finalCategory} — wagered{' '}
+          <span className="font-bold text-jeopardy-gold-light">{formatMoney(finalMark.value)}</span>{' '}
+          and {finalMark.outcome === 'correct' ? 'got it' : 'missed'}
+        </p>
+      )}
 
       {/* Not on the public board yet. Signing in is the way to keep it for
           good; a name is the way to skip that. */}
@@ -828,156 +1320,6 @@ function Result({
         {ranked && !tableMissing && left !== null && <>A new board in {untilTomorrowLabel(left)}.</>}
       </p>
       {error && <p className="mt-1 text-[11px] text-copper-glow">{error}</p>}
-    </div>
-  )
-}
-
-/** The clue, the way the game shows one: board blue, nothing else on screen. */
-function ClueOverlay({
-  category,
-  clue,
-  show,
-  airDate,
-  value,
-  stage,
-  typed,
-  setTyped,
-  secondsLeft,
-  outcome,
-  myScore,
-  left,
-  onAnswer,
-  onPass,
-  onClose,
-}: {
-  category: string
-  clue: { q: string; a: string }
-  show: string | null
-  airDate: string | null
-  value: number
-  stage: Stage
-  typed: string
-  setTyped: (s: string) => void
-  secondsLeft: number
-  outcome: ClueOutcome
-  myScore: number
-  left: number
-  onAnswer: () => void
-  onPass: () => void
-  onClose: () => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => { inputRef.current?.focus() }, [stage, clue.q])
-
-  /* On the reveal, Enter takes you back to the board — the same key that just
-     answered, so a whole board can be played without the hands leaving the
-     keyboard. It returns to the BOARD rather than jumping to the next clue:
-     choosing the clue is the game. */
-  useEffect(() => {
-    if (stage !== 'reveal') return
-    /* The Enter that answered the clue is STILL BUBBLING when this listener is
-       added — React handles the key at its root, flushes, and the event then
-       carries on up to window — so without this it dismissed the very reveal it
-       had just opened and nobody ever saw the correct response. An event
-       dispatched before the listener existed has the earlier timestamp. */
-    const since = performance.now()
-    const onKey = (e: KeyboardEvent) => {
-      if (e.timeStamp < since) return
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose() }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [stage, onClose])
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#060CE9] px-5 py-8">
-      <div className="w-full max-w-2xl text-center">
-        <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/80">
-          {category} · <span className="text-jeopardy-gold-light">${value}</span>
-        </p>
-
-        <p
-          className="clue-type mx-auto mt-6 max-w-xl text-xl uppercase text-white md:text-2xl"
-          style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}
-        >
-          {clue.q}
-        </p>
-
-        {stage === 'answering' ? (
-          <>
-            <div className="mx-auto mt-8 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-black/40">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  secondsLeft <= 5 ? 'bg-red-500' : 'bg-jeopardy-gold-light'
-                }`}
-                style={{ width: `${(secondsLeft / CLUE_SECONDS) * 100}%` }}
-              />
-            </div>
-            <p className={`mt-1 text-xs tabular-nums ${secondsLeft <= 5 ? 'text-red-300' : 'text-white/60'}`}>
-              {secondsLeft}s
-            </p>
-            <div className="mx-auto mt-5 max-w-md">
-              <input
-                ref={inputRef}
-                type="text"
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim()) onAnswer() }}
-                placeholder="What is…?"
-                className="field-stage text-center"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-              <div className="mt-3 flex justify-center gap-2">
-                <button onClick={onAnswer} disabled={!typed.trim()} className="btn-stage btn-copper">
-                  Answer
-                </button>
-                <button onClick={onPass} className="btn-stage btn-stage-ghost">
-                  Pass
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="mx-auto mt-8 max-w-md">
-            <p
-              className={`text-2xl font-bold ${
-                outcome === 'correct' ? 'text-green-400' : outcome === 'wrong' ? 'text-red-400' : 'text-white/70'
-              }`}
-            >
-              {outcome === 'correct'
-                ? `Right! +${formatMoney(value)}`
-                : outcome === 'wrong'
-                  ? `No — that's -${formatMoney(value)}`
-                  : 'Time / passed'}
-            </p>
-            <p className="mt-2 text-sm text-white/85">
-              Correct response: <span className="font-bold text-jeopardy-gold-light">{clue.a}</span>
-            </p>
-            <p className="mt-4 text-xs text-white/60">
-              Your total:{' '}
-              <span className="font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(myScore)}</span>
-            </p>
-            <button onClick={onClose} className="btn-stage btn-copper mt-5">
-              {left <= 0 ? 'See how you did' : `Back to the board · ${left} left`}
-            </button>
-            {left > 0 && (
-              <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/40">
-                Press Enter — you pick the next one
-              </p>
-            )}
-          </div>
-        )}
-
-        {(show || airDate) && (
-          <p className="mt-6 text-[10px] uppercase tracking-[0.18em] text-white/45">
-            {show}
-            {show && airDate ? ' · ' : ''}
-            {airDate ? `aired ${formatAirDate(airDate)}` : ''}
-          </p>
-        )}
-      </div>
     </div>
   )
 }

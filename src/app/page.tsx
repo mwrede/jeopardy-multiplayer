@@ -227,8 +227,9 @@ export default function Home() {
         </header>
 
         {/* THE BOARD OF THE DAY. First thing on the page and playable where it
-            stands — nine clues from one night in the show's history, with
-            today's standings, the all-time money and the streaks beside it.
+            stands — a whole game from one night in the show's history, two
+            rounds and a Final, with today's standings, the all-time money and
+            the streaks beside it.
             Everything else on this page is a way to start a different game;
             this is a game. */}
         <DailyBoard />

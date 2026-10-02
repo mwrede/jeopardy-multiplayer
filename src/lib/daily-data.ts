@@ -1,21 +1,24 @@
 /**
  * THE BOARD OF THE DAY — twenty days that matter in Jeopardy! history.
  *
- * One 3×3 board, the same for everyone, changing at local midnight. It's the
- * first thing on the front page: nine real clues from one real night, $200 to
- * $600, no Daily Double and no Final — a board you finish standing up, which
- * is what makes a daily leaderboard worth looking at.
+ * One board, the same for everyone, changing at local midnight. It's the first
+ * thing on the front page, and it's a whole game: a 3×3 Jeopardy round, a 3×3
+ * Double Jeopardy round at doubled values, then Final Jeopardy with a wager —
+ * nineteen real clues from one real night.
  *
  * Every day in the rotation is a day something HAPPENED: Alex Trebek's first
  * show and his last, the biggest one-day total ever won, the night each famous
  * streak began and the night it ended. The clues are pulled from the frozen
  * challenge boards (challenge-boards.json) — real clues from that exact
- * episode, already committed, never regenerated — and each board contributes
- * its two 3×3 rounds separately, so no two days here share a clue.
+ * episode, already committed, never regenerated. One day is one episode, so no
+ * two days here share a clue.
  *
- * Values are normalised to $200/$400/$600 whichever round the clues came
- * from. Every day is therefore worth exactly $3,600, and a score from one day
- * means the same as a score from another — the whole point of a daily.
+ * Values are the show's own: $200–$600, then $400–$1,200, then whatever you
+ * wager. Every day is therefore worth the same $10,800 before Final, and a
+ * score from one day means the same as a score from another — the whole point
+ * of a daily. The hidden Daily Doubles are the one thing left out: a daily
+ * leaderboard decided by who found the wager square is a lottery, and the full
+ * board in the Challenge still has them.
  *
  * Day 21 wraps back to day 1 rather than running dry. Add days to the list
  * and the rotation just gets longer; the dates each board falls on shift, but
@@ -27,19 +30,22 @@ import { getChallengeGame, type ChallengeCategory, type ChallengeGame } from './
 export type DailyDay = {
   /** Which frozen board the clues come from. */
   boardKey: string
-  /** Which of its two 3×3 rounds — each is its own day. */
-  round: 1 | 2
   /** What happened that day, in a headline. */
   occasion: string
   /** Why the day is in here. One or two sentences, no hype. */
   story: string
 }
 
-/** $200/$400/$600, every day, whichever round the clues came from. */
-export const DAILY_VALUES = [200, 400, 600]
-export const DAILY_CLUES = 9
-/** Three categories, three rows, nothing hidden: the perfect game. */
-export const DAILY_MAX = DAILY_VALUES.reduce((a, b) => a + b, 0) * 3
+/** Card values by round, as the show has had them since 2001. */
+export const ROUND_VALUES: [number[], number[]] = [
+  [200, 400, 600],
+  [400, 800, 1200],
+]
+/** 9 + 9 + Final Jeopardy. */
+export const DAILY_CLUES = 19
+/** Every clue right, before Final doubles it: $3,600 + $7,200. */
+export const DAILY_MAX =
+  ROUND_VALUES[0].reduce((a, b) => a + b, 0) * 3 + ROUND_VALUES[1].reduce((a, b) => a + b, 0) * 3
 
 /**
  * The rotation, in the order it runs. Twenty days.
@@ -51,143 +57,111 @@ export const DAILY_MAX = DAILY_VALUES.reduce((a, b) => a + b, 0) * 3
 export const DAILY_DAYS: DailyDay[] = [
   {
     boardKey: 'standard-1',
-    round: 1,
     occasion: 'The first one Alex Trebek ever hosted',
     story:
       'Show #1, September 10, 1984. The revival nobody was sure about, with a brand-new host and $100 on the top row.',
   },
   {
     boardKey: 'standard-9',
-    round: 1,
     occasion: "Alex Trebek's last episode",
     story:
       'Taped October 29, 2020, ten days before he died, and held back to air on January 8, 2021. His 37th season, and his last board.',
   },
   {
     boardKey: 'standard-4',
-    round: 1,
     occasion: 'The biggest one-day total ever won',
     story:
       'James Holzhauer walked out of April 17, 2019 with $131,127 — a record that has not been touched since. This is the board he did it on.',
   },
   {
     boardKey: 'standard-3',
-    round: 1,
     occasion: 'Ken Jennings, night one of 74',
     story:
       'June 2, 2004: a software engineer from Salt Lake City wins his first game. He does not lose again until November.',
   },
   {
     boardKey: 'standard-6',
-    round: 1,
     occasion: 'The night the streak ended',
     story:
       'Game 75, November 30, 2004. Nancy Zerg beats Ken Jennings, and the longest run in the history of the show is over.',
   },
   {
     boardKey: 'standard-7',
-    round: 1,
     occasion: "Roger Craig's $77,000",
     story:
       'September 14, 2010. The single-day record for nine years, until Holzhauer. Craig was a computer science PhD student who had studied the archive to do it.',
   },
   {
     boardKey: 'standard-10',
-    round: 1,
     occasion: "Ken Jennings' first night as host",
     story:
       'January 11, 2021 — the first show after Alex Trebek’s last. The best player the game ever had, standing where Trebek stood.',
   },
   {
     boardKey: 'standard-5',
-    round: 1,
     occasion: "Amy Schneider's debut",
     story:
       'November 17, 2021. Forty straight wins start here — the longest streak by a woman in the show’s history.',
   },
   {
     boardKey: 'standard-12',
-    round: 1,
     occasion: 'The night Amy Schneider lost',
     story:
       'Game 41, January 26, 2022. Rhone Talsma, a Chicago librarian playing his first game, ends the 40-game run.',
   },
   {
     boardKey: 'standard-11',
-    round: 1,
     occasion: 'The night Matt Amodio lost',
     story:
       'Game 39, October 11, 2021. Jonathan Fisher stops a 38-game streak that was second only to Jennings at the time.',
   },
   {
     boardKey: 'standard-8',
-    round: 1,
     occasion: 'Holzhauer, $58,484 short',
     story:
       'June 3, 2019: Emma Boettcher beats James Holzhauer in game 33, leaving him just short of Ken Jennings’ regular-play record.',
   },
   {
     boardKey: 'standard-13',
-    round: 1,
     occasion: "Arthur Chu's debut",
     story:
       'January 28, 2014. Chu hunted Daily Doubles, bounced around the board and wagered for the tie — and the internet argued about it for weeks.',
   },
   {
     boardKey: 'standard-15',
-    round: 1,
     occasion: "Mattea Roach's first of 23",
     story:
       'April 5, 2022. A 23-year-old tutor from Toronto starts the longest run by a Canadian contestant.',
   },
   {
     boardKey: 'standard-14',
-    round: 1,
     occasion: 'The day the money doubled',
     story:
       'November 26, 2001. The top row went from $100 to $200 and every value on the board doubled with it. The scale the show still uses.',
   },
   {
     boardKey: 'standard-2',
-    round: 1,
     occasion: 'A Friday in 1996',
     story:
       'March 15, 1996, Season 12. No record, no streak — just the show at the height of its ordinary powers, which is its own kind of history.',
   },
   {
     boardKey: 'kids',
-    round: 1,
     occasion: 'Kids Week',
     story:
       'December 5, 2014. The clues are written for ten-year-olds, which is no guarantee of anything.',
   },
   {
     boardKey: 'teen',
-    round: 1,
     occasion: 'The 1994 Teen Tournament',
     story:
       'February 14, 1994. Teenagers playing for the title, back when a champion still retired after five wins.',
   },
   {
     boardKey: 'college',
-    round: 1,
     occasion: 'The National College Championship',
     story:
       'February 22, 2022. The primetime college tournament, down to its last few games.',
-  },
-  {
-    boardKey: 'standard-4',
-    round: 2,
-    occasion: 'The round that made the record',
-    story:
-      'Double Jeopardy from April 17, 2019 — the half of the night where Holzhauer’s $131,127 actually came together.',
-  },
-  {
-    boardKey: 'standard-1',
-    round: 2,
-    occasion: 'Double Jeopardy, September 10, 1984',
-    story:
-      'The back half of Show #1 \u2014 forty-two years and more than nine thousand episodes ago.',
   },
 ]
 
@@ -203,8 +177,9 @@ export type DailyBoard = {
   cycle: number
   day: DailyDay
   game: ChallengeGame
-  /** Exactly three, in board order. */
-  categories: ChallengeCategory[]
+  /** [Jeopardy, Double Jeopardy] — three categories each. */
+  rounds: [ChallengeCategory[], ChallengeCategory[]]
+  final: ChallengeGame['finalJeopardy']
   /** The episode these clues aired in. */
   show: string | null
   airDate: string | null
@@ -242,17 +217,18 @@ export function boardForDate(dateISO: string): DailyBoard | null {
   const day = DAILY_DAYS[i]
   const game = getChallengeGame(day.boardKey)
   if (!game) return null
-  const categories = game.rounds[day.round - 1]
-  if (!categories || categories.length < 3) return null
+  const [j, dj] = game.rounds
+  if (!j || j.length < 3 || !dj || dj.length < 3) return null
   return {
     date: dateISO,
     dayNumber: i + 1,
     cycle: Math.floor(offset / n) + 1,
     day,
     game,
-    categories: categories.slice(0, 3),
-    show: game.episode?.show ?? categories[0]?.show ?? null,
-    airDate: game.episode?.airDate ?? categories[0]?.airDate ?? null,
+    rounds: [j.slice(0, 3), dj.slice(0, 3)],
+    final: game.finalJeopardy,
+    show: game.episode?.show ?? j[0]?.show ?? null,
+    airDate: game.episode?.airDate ?? j[0]?.airDate ?? null,
   }
 }
 

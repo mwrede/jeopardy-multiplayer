@@ -13,9 +13,11 @@
 -- the one-shot rule: a second insert for the same person on the same date
 -- fails, whatever tab or device it comes from, and a day is never replayable.
 --
--- clue_results keeps the nine clues:
---   [{"c": 0, "r": 1, "outcome": "correct" | "wrong" | "pass", "value": 400}, ...]
--- (c = category 0-2, r = row 0-2), which is what draws the shareable grid.
+-- clue_results keeps all nineteen:
+--   [{"rd": 1, "c": 0, "r": 1, "outcome": "correct" | "wrong" | "pass", "value": 400}, ...]
+-- rd 1 = Jeopardy, 2 = Double Jeopardy, 3 = Final (c and r are 0 there and
+-- value is the wager); c = category 0-2, r = row 0-2. It is what draws the
+-- shareable grid.
 --
 -- Safe to run once. Nothing else needs changing: the front page plays the
 -- board with or without this table and only the standings wait on it.

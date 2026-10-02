@@ -43,9 +43,9 @@ export function DailyCatchUp() {
     <div id="catch-up" className="scroll-mt-4">
       <div className="eyebrow-copper mb-1">Board of the Day</div>
       <p className="mb-4 text-center text-xs text-ink-stage-2">
-        One 3×3 a day, each from a day that mattered — Trebek&apos;s first show and his last, the
-        biggest one-day total ever won, the night each famous streak ended. Today&apos;s is ranked;
-        the ones below are here to be caught up on.
+        One night a day, played end to end — Trebek&apos;s first show and his last, the biggest
+        one-day total ever won, the night each famous streak ended. Two rounds and a Final each.
+        Today&apos;s is ranked; the ones below are here to be caught up on.
         {days && days.length > 0 && (
           <> You&apos;ve played <span className="text-jeopardy-gold-light">{done} of {days.length}</span>.</>
         )}

@@ -9,9 +9,9 @@ import { boardForDate, daysBetween, shortDate, todayISO, DAILY_EPOCH } from '@/l
 /**
  * A PAST board of the day — the catch-up shelf.
  *
- * The same nine clues everyone else got on that date, played the same way, but
- * off the books: no leaderboard, no streak. Today's board is the one that
- * counts, and it lives on the front page.
+ * The same board everyone else got on that date — both rounds and the Final —
+ * played the same way, but off the books: no leaderboard, no streak. Today's
+ * board is the one that counts, and it lives on the front page.
  */
 export default function PastDailyPage() {
   const params = useParams<{ date: string }>()

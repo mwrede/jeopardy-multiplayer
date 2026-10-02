@@ -28,8 +28,13 @@ import { getChallengeIdentity } from './challenge'
 import { addDays, todayISO } from './daily-data'
 import type { ClueOutcome } from './challenge'
 
-/** One clue of one person's day. c = category 0–2, r = row 0–2. */
+/**
+ * One clue of one person's day. rd 1 = Jeopardy, 2 = Double Jeopardy, 3 =
+ * Final Jeopardy (where c and r are 0 and value is the wager). c = category
+ * 0–2, r = row 0–2.
+ */
 export type DailyClueResult = {
+  rd: number
   c: number
   r: number
   outcome: ClueOutcome
@@ -267,8 +272,15 @@ export type LocalPlay = {
   boardKey: string
   score: number
   correct: number
-  /** The nine outcomes in board order, for the shareable grid. */
+  /**
+   * The nineteen outcomes in board order — Jeopardy round category by
+   * category, then Double Jeopardy, then Final — for the shareable grid and
+   * for rebuilding the day after a refresh. (Days played before the board
+   * became a full game have nine; the reader pads the rest.)
+   */
   outcomes: ClueOutcome[]
+  /** What was wagered on Final, which the outcome list can't carry. */
+  finalValue?: number
   /**
    * Set once the day is on the public board. It's what stops a guest's score
    * being posted a second time under their account when they sign in after
