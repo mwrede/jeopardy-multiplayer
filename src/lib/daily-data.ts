@@ -30,6 +30,21 @@ import { getChallengeGame, type ChallengeCategory, type ChallengeGame } from './
 export type DailyDay = {
   /** Which frozen board the clues come from. */
   boardKey: string
+  /**
+   * The episode on J-Archive, which is what lets the page show the three
+   * people who actually played this board and what they made on it. Verified
+   * against each board's own categories, so it is the right night and not just
+   * the show that aired that date — the College board in particular is a
+   * primetime game, not the daytime show from 2022-02-22.
+   */
+  gameId: number
+  /**
+   * Who won, when the night's own scores don't say. A tournament final played
+   * over two games carries each player's first-game total into the second, so
+   * the biggest score ON THIS BOARD isn't the winner — set this to the name
+   * J-Archive's results use and the crown goes to the right person.
+   */
+  winner?: string
   /** What happened that day, in a headline. */
   occasion: string
   /** Why the day is in here. One or two sentences, no hype. */
@@ -57,108 +72,129 @@ export const DAILY_MAX =
 export const DAILY_DAYS: DailyDay[] = [
   {
     boardKey: 'standard-1',
+    gameId: 173,
     occasion: 'The first one Alex Trebek ever hosted',
     story:
       'Show #1, September 10, 1984. The revival nobody was sure about, with a brand-new host and $100 on the top row.',
   },
   {
     boardKey: 'standard-9',
+    gameId: 6900,
     occasion: "Alex Trebek's last episode",
     story:
       'Taped October 29, 2020, ten days before he died, and held back to air on January 8, 2021. His 37th season, and his last board.',
   },
   {
     boardKey: 'standard-4',
+    gameId: 6266,
     occasion: 'The biggest one-day total ever won',
     story:
       'James Holzhauer walked out of April 17, 2019 with $131,127 — a record that has not been touched since. This is the board he did it on.',
   },
   {
     boardKey: 'standard-3',
+    gameId: 224,
     occasion: 'Ken Jennings, night one of 74',
     story:
       'June 2, 2004: a software engineer from Salt Lake City wins his first game. He does not lose again until November.',
   },
   {
     boardKey: 'standard-6',
+    gameId: 62,
     occasion: 'The night the streak ended',
     story:
       'Game 75, November 30, 2004. Nancy Zerg beats Ken Jennings, and the longest run in the history of the show is over.',
   },
   {
     boardKey: 'standard-7',
+    gameId: 3459,
     occasion: "Roger Craig's $77,000",
     story:
       'September 14, 2010. The single-day record for nine years, until Holzhauer. Craig was a computer science PhD student who had studied the archive to do it.',
   },
   {
     boardKey: 'standard-10',
+    gameId: 6901,
     occasion: "Ken Jennings' first night as host",
     story:
       'January 11, 2021 — the first show after Alex Trebek’s last. The best player the game ever had, standing where Trebek stood.',
   },
   {
     boardKey: 'standard-5',
+    gameId: 7194,
     occasion: "Amy Schneider's debut",
     story:
       'November 17, 2021. Forty straight wins start here — the longest streak by a woman in the show’s history.',
   },
   {
     boardKey: 'standard-12',
+    gameId: 7250,
     occasion: 'The night Amy Schneider lost',
     story:
       'Game 41, January 26, 2022. Rhone Talsma, a Chicago librarian playing his first game, ends the 40-game run.',
   },
   {
     boardKey: 'standard-11',
+    gameId: 7163,
     occasion: 'The night Matt Amodio lost',
     story:
       'Game 39, October 11, 2021. Jonathan Fisher stops a 38-game streak that was second only to Jennings at the time.',
   },
   {
     boardKey: 'standard-8',
+    gameId: 6304,
     occasion: 'Holzhauer, $58,484 short',
     story:
       'June 3, 2019: Emma Boettcher beats James Holzhauer in game 33, leaving him just short of Ken Jennings’ regular-play record.',
   },
   {
     boardKey: 'standard-13',
+    gameId: 4408,
     occasion: "Arthur Chu's debut",
     story:
       'January 28, 2014. Chu hunted Daily Doubles, bounced around the board and wagered for the tie — and the internet argued about it for weeks.',
   },
   {
     boardKey: 'standard-15',
+    gameId: 7324,
     occasion: "Mattea Roach's first of 23",
     story:
       'April 5, 2022. A 23-year-old tutor from Toronto starts the longest run by a Canadian contestant.',
   },
   {
     boardKey: 'standard-14',
+    gameId: 1062,
     occasion: 'The day the money doubled',
     story:
       'November 26, 2001. The top row went from $100 to $200 and every value on the board doubled with it. The scale the show still uses.',
   },
   {
     boardKey: 'standard-2',
+    gameId: 8073,
     occasion: 'A Friday in 1996',
     story:
       'March 15, 1996, Season 12. No record, no streak — just the show at the height of its ordinary powers, which is its own kind of history.',
   },
   {
     boardKey: 'kids',
+    gameId: 4742,
     occasion: 'Kids Week',
     story:
       'December 5, 2014. The clues are written for ten-year-olds, which is no guarantee of anything.',
   },
   {
     boardKey: 'teen',
+    gameId: 8187,
     occasion: 'The 1994 Teen Tournament',
     story:
       'February 14, 1994. Teenagers playing for the title, back when a champion still retired after five wins.',
   },
   {
     boardKey: 'college',
+    gameId: 7294,
+    /* The College Championship final ran over two games: Jaskaran took it with
+       $51,700 across both, though Raymond outscored him on this board alone. */
+    winner: 'Jaskaran',
     occasion: 'The National College Championship',
     story:
       'February 22, 2022. The primetime college tournament, down to its last few games.',

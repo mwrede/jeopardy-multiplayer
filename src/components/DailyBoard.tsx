@@ -17,6 +17,8 @@ import {
   DAILY_DAYS,
   type DailyBoard as Board,
 } from '@/lib/daily-data'
+import { loadDailyNight, type DailyNight } from '@/lib/daily-night'
+import type { ClueResponse } from '@/lib/episode'
 import {
   allTimeStandings,
   dailyIdentity,
@@ -91,6 +93,8 @@ export function DailyBoard({
 
   const [rows, setRows] = useState<DailyResult[] | null>(null)
   const [tableMissing, setTableMissing] = useState(false)
+  /** The three people who actually played this board, on television. */
+  const [night, setNight] = useState<DailyNight | null>(null)
 
   const [active, setActive] = useState<{ rd: number; c: number; r: number } | null>(null)
   const [stage, setStage] = useState<Stage>('answering')
@@ -162,6 +166,18 @@ export function DailyBoard({
   }, [])
 
   useEffect(() => { loadRows() }, [loadRows])
+
+  /* The real contestants, off J-Archive via our own cached route. Late, quiet
+     and entirely optional: the board plays the same whether this lands or not,
+     so a failure here is swallowed rather than surfaced. */
+  useEffect(() => {
+    if (!board) return
+    let gone = false
+    loadDailyNight(board)
+      .then((n) => { if (!gone) setNight(n) })
+      .catch(() => {})
+    return () => { gone = true }
+  }, [board])
 
   /* Progress. One clue per cell per round; Final is rd 3. */
   const r1Count = resolved.filter((x) => x.rd === 1).length
@@ -405,6 +421,9 @@ export function DailyBoard({
       </h2>
       <p className="mt-1.5 text-[11px] leading-snug text-blue-100/75 sm:text-xs">{day.story}</p>
 
+      {/* Who played it on television, and what they made on exactly these clues. */}
+      {night && <ScoreToBeat night={night} mine={mine} />}
+
       <div
         className={`mt-2.5 grid items-start gap-2.5 md:gap-3 ${
           ranked ? 'md:grid-cols-[minmax(0,1fr)_296px]' : ''
@@ -453,6 +472,7 @@ export function DailyBoard({
                 show={board.rounds[active.rd - 1][active.c].show}
                 airDate={board.rounds[active.rd - 1][active.c].airDate}
                 value={ROUND_VALUES[active.rd - 1][active.r]}
+                responses={night?.responsesFor(active.rd, active.c, active.r) ?? null}
                 stage={stage}
                 typed={typed}
                 setTyped={setTyped}
@@ -469,6 +489,7 @@ export function DailyBoard({
             ) : finalStage ? (
               <FinalPanel
                 final={board.final}
+                finalResponses={night?.finalResponses ?? null}
                 stage={finalStage}
                 typed={typed}
                 setTyped={setTyped}
@@ -539,6 +560,7 @@ export function DailyBoard({
           {mine ? (
             <Result
               play={mine}
+              night={night}
               finalMark={finalMark}
               finalCategory={board.final.category}
               rank={myRank}
@@ -586,22 +608,45 @@ export function DailyBoard({
                 field={todayRows.length}
                 daysPlayed={daysPlayed}
               />
+              {/* Today's table, with the three people who actually played this
+                  board in it. They are the field you're really up against —
+                  especially on a day nobody else has played yet — and they're
+                  dimmed and labelled so nobody reads them as site players. */}
               <Panel
                 title="🏆 Today"
                 note={todayRows.length ? `${todayRows.length} ${todayRows.length === 1 ? 'player' : 'players'}` : ''}
-                rows={todayRows.slice(0, 20).map((r) => ({
-                  key: r.identityKey,
-                  name: r.name,
-                  value: formatMoney(r.score),
-                  sub: `${r.correct}/${DAILY_CLUES} right`,
-                  you: r.identityKey === identity,
-                }))}
+                rows={[
+                  ...todayRows.slice(0, 20).map((r) => ({
+                    key: r.identityKey,
+                    name: r.name,
+                    value: formatMoney(r.score),
+                    sub: `${r.correct}/${DAILY_CLUES} right`,
+                    you: r.identityKey === identity,
+                    score: r.score,
+                  })),
+                  ...(night?.contestants ?? []).map((c) => ({
+                    key: `tv:${c.name}`,
+                    name: `📺 ${c.name}${c.won ? ' 👑' : ''}`,
+                    value: formatMoney(c.onBoard),
+                    sub: 'that night',
+                    you: false,
+                    tv: true,
+                    score: c.onBoard,
+                  })),
+                ].sort((a, b) => b.score - a.score)}
                 empty={
                   tableMissing
                     ? 'Standings go live once supabase-migration-daily.sql is run.'
                     : rows === null
                       ? 'Counting…'
                       : 'Nobody has played today yet. Set the number.'
+                }
+                footnote={
+                  night
+                    ? tableMissing
+                      ? 'Contestant money is their real answers re-scored on this board. Standings go live once supabase-migration-daily.sql is run.'
+                      : 'Contestant money is their real answers re-scored on this board.'
+                    : undefined
                 }
               />
               <Panel
@@ -652,6 +697,60 @@ export function DailyBoard({
 }
 
 /* ─────────────────────────── small parts ─────────────────────────── */
+
+/**
+ * The three people who played this board on television, and what they made on
+ * the eighteen clues that are on yours. The winner's real total rides along as
+ * context — it is a much bigger number, off a board three times the size, and
+ * saying so is the difference between a target and a lie.
+ */
+function ScoreToBeat({ night, mine }: { night: DailyNight; mine: LocalPlay | null }) {
+  const champ = night.contestants.find((c) => c.won)
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5">
+      <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-copper">
+        {mine ? 'That night' : 'Score to beat'}
+      </span>
+      {[...night.contestants]
+        .sort((a, b) => b.onBoard - a.onBoard)
+        .map((c) => (
+          <span key={c.name} className="text-[11px] leading-tight text-blue-100/70">
+            {c.won && <span aria-label="won that night">👑 </span>}
+            <span className="font-semibold text-white">{c.name}</span>{' '}
+            <span className="tabular-nums text-jeopardy-gold-light">{formatMoney(c.onBoard)}</span>
+          </span>
+        ))}
+      <span className="text-[10px] leading-tight text-blue-100/45">
+        on these clues
+        {champ ? ` · 👑 ${champ.name} scored ${formatMoney(champ.night)} across the whole night` : ''}
+      </span>
+    </div>
+  )
+}
+
+/** What the people on television did with the clue you just played. */
+function ThatNight({ responses }: { responses: ClueResponse[] | null }) {
+  if (!responses) return null
+  return (
+    <p className="mt-2 text-[11px] text-white/55">
+      {responses.length === 0 ? (
+        'That night: nobody got it'
+      ) : (
+        <>
+          That night:{' '}
+          {responses.map((r, i) => (
+            <span key={`${r.name}-${i}`}>
+              {i > 0 && ', '}
+              <span className={r.right ? 'text-green-300' : 'text-red-300'}>
+                {r.name} {r.right ? 'got it' : 'missed'}
+              </span>
+            </span>
+          ))}
+        </>
+      )}
+    </p>
+  )
+}
 
 /** The board's own footprint, so a clue or a curtain doesn't move the page. */
 const PANEL = 'flex min-h-[236px] flex-col items-center justify-center bg-[#060CE9] px-4 py-5 text-center sm:min-h-[276px] md:min-h-[312px]'
@@ -742,6 +841,7 @@ function CluePanel({
   show,
   airDate,
   value,
+  responses,
   stage,
   typed,
   setTyped,
@@ -758,6 +858,8 @@ function CluePanel({
   show: string | null
   airDate: string | null
   value: number
+  /** Who rang in on this clue the night it aired; null until that's known. */
+  responses: ClueResponse[] | null
   stage: Stage
   typed: string
   setTyped: (s: string) => void
@@ -852,6 +954,7 @@ function CluePanel({
             Correct response:{' '}
             <span className="font-bold text-jeopardy-gold-light">{clue.a}</span>
           </p>
+          <ThatNight responses={responses} />
           <p className="mt-2 text-[11px] text-white/60">
             Your total:{' '}
             <span className="font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(myScore)}</span>
@@ -881,6 +984,7 @@ function CluePanel({
 /** Final Jeopardy: the category, your wager, the clue, the damage. */
 function FinalPanel({
   final,
+  finalResponses,
   stage,
   typed,
   setTyped,
@@ -896,6 +1000,8 @@ function FinalPanel({
   onClose,
 }: {
   final: Board['final']
+  /** How the three of them wagered and answered Final that night. */
+  finalResponses: { name: string; right: boolean; wager: number }[] | null
   stage: FinalStage
   typed: string
   setTyped: (s: string) => void
@@ -1016,6 +1122,20 @@ function FinalPanel({
           <p className="mt-1.5 text-sm text-white/85">
             Correct response: <span className="font-bold text-jeopardy-gold-light">{final.a}</span>
           </p>
+          {finalResponses && finalResponses.length > 0 && (
+            <p className="mt-2 text-[11px] text-white/55">
+              That night:{' '}
+              {finalResponses.map((f, i) => (
+                <span key={`${f.name}-${i}`}>
+                  {i > 0 && ', '}
+                  <span className={f.right ? 'text-green-300' : 'text-red-300'}>
+                    {f.name} {f.right ? 'got it' : 'missed'}
+                  </span>
+                  <span className="text-white/40"> ({formatMoney(f.wager)})</span>
+                </span>
+              ))}
+            </p>
+          )}
           <p className="mt-2 text-xs text-white/70">
             Final total:{' '}
             <span className="text-base font-bold tabular-nums text-jeopardy-gold-light">
@@ -1074,11 +1194,13 @@ function Panel({
   note,
   rows,
   empty,
+  footnote,
 }: {
   title: string
   note: string
-  rows: { key: string; name: string; value: string; sub: string; you: boolean }[]
+  rows: { key: string; name: string; value: string; sub: string; you: boolean; tv?: boolean }[]
   empty: string
+  footnote?: string
 }) {
   return (
     <div>
@@ -1093,7 +1215,9 @@ function Panel({
           {rows.map((r, i) => (
             <li
               key={r.key}
-              className={`flex items-center gap-2 px-3 py-1 ${r.you ? 'bg-jeopardy-gold/10' : ''}`}
+              className={`flex items-center gap-2 px-3 py-1 ${
+                r.you ? 'bg-jeopardy-gold/10' : r.tv ? 'bg-white/[0.02]' : ''
+              }`}
             >
               <span
                 className={`w-3.5 shrink-0 text-center text-[10px] font-black tabular-nums ${
@@ -1102,12 +1226,20 @@ function Panel({
               >
                 {i + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white">
+              <span
+                className={`min-w-0 flex-1 truncate text-[12px] font-semibold ${
+                  r.tv ? 'text-blue-100/70' : 'text-white'
+                }`}
+              >
                 {r.name}
                 {r.you && <span className="ml-1 text-[8px] uppercase tracking-wider text-jeopardy-gold-light">you</span>}
               </span>
               <span className="shrink-0 text-right">
-                <span className="block text-[12px] font-bold leading-tight tabular-nums text-jeopardy-gold-light">
+                <span
+                  className={`block text-[12px] font-bold leading-tight tabular-nums ${
+                    r.tv ? 'text-jeopardy-gold-light/70' : 'text-jeopardy-gold-light'
+                  }`}
+                >
                   {r.value}
                 </span>
                 <span className="block text-[8px] leading-none text-blue-100/50">{r.sub}</span>
@@ -1115,6 +1247,9 @@ function Panel({
             </li>
           ))}
         </ol>
+      )}
+      {footnote && (
+        <p className="px-3 pb-1.5 pt-1 text-[9px] leading-snug text-blue-100/45">{footnote}</p>
       )}
     </div>
   )
@@ -1131,6 +1266,7 @@ function Panel({
  */
 function Result({
   play,
+  night,
   finalMark,
   finalCategory,
   rank,
@@ -1151,6 +1287,7 @@ function Result({
   board,
 }: {
   play: LocalPlay
+  night: DailyNight | null
   finalMark: DailyClueResult | undefined
   finalCategory: string
   rank: number
@@ -1253,6 +1390,9 @@ function Result({
         </p>
       )}
 
+      {/* You against the three who actually played it. */}
+      {night && <AgainstTheRoom play={play} night={night} />}
+
       {/* Not on the public board yet. Signing in is the way to keep it for
           good; a name is the way to skip that. */}
       {!onBoard && !tableMissing && (
@@ -1320,6 +1460,70 @@ function Result({
         {ranked && !tableMissing && left !== null && <>A new board in {untilTomorrowLabel(left)}.</>}
       </p>
       {error && <p className="mt-1 text-[11px] text-copper-glow">{error}</p>}
+    </div>
+  )
+}
+
+/**
+ * Where you finished among the people who played this board on television.
+ *
+ * Their money is re-scored on YOUR board — the same eighteen clues at the same
+ * values, their real answers — because comparing your nineteen clues to a
+ * sixty-one-clue night would flatter nobody and mean nothing. The real total
+ * is still named underneath, so the estimate never pretends to be the record.
+ */
+function AgainstTheRoom({ play, night }: { play: LocalPlay; night: DailyNight }) {
+  const field = [
+    ...night.contestants.map((c) => ({
+      name: c.name,
+      score: c.onBoard,
+      you: false,
+      won: c.won,
+      night: c.night,
+      correct: c.correct,
+    })),
+    { name: 'You', score: play.score, you: true, won: false, night: 0, correct: play.correct },
+  ].sort((a, b) => b.score - a.score)
+
+  const mine = field.findIndex((r) => r.you) + 1
+  const champ = night.contestants.find((c) => c.won)
+
+  return (
+    <div className="mt-2 border-t border-white/10 pt-2">
+      <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-copper">
+        On these clues · you finished {mine === 1 ? 'first' : mine === 2 ? 'second' : mine === 3 ? 'third' : 'fourth'} of {field.length}
+      </p>
+      <ol className="space-y-0.5">
+        {field.map((r, i) => (
+          <li
+            key={r.name + i}
+            className={`flex items-center gap-2 rounded px-1.5 py-0.5 text-[12px] ${
+              r.you ? 'bg-jeopardy-gold/15 text-white' : 'text-blue-100/80'
+            }`}
+          >
+            <span className="w-3 shrink-0 text-center text-[10px] font-black tabular-nums text-blue-100/45">
+              {i + 1}
+            </span>
+            <span className="min-w-0 flex-1 truncate font-semibold">
+              {r.won && <span aria-label="won that night">👑 </span>}
+              {r.name}
+              {!r.you && (
+                <span className="ml-1.5 text-[10px] font-normal text-blue-100/45">
+                  {r.correct} right
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 font-bold tabular-nums text-jeopardy-gold-light">
+              {formatMoney(r.score)}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-1 text-[10px] leading-snug text-blue-100/45">
+        Their real answers, re-scored on this board — three of the night\u2019s six categories, at
+        these values.
+        {champ ? ` ${champ.name} scored ${formatMoney(champ.night)} across the whole night.` : ''}
+      </p>
     </div>
   )
 }
