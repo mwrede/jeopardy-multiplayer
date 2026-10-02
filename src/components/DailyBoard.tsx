@@ -198,20 +198,6 @@ export function DailyBoard({
   }
 
   /**
-   * Straight on to the next clue without going back through the board.
-   * Answering nine clues should be nine actions, not eighteen — the board is
-   * there to be looked at, not to be tapped through twice per clue.
-   */
-  function nextClue() {
-    const next = firstUnplayed(resolved)
-    if (!next) { closeClue(); return }
-    setTyped('')
-    setStage('answering')
-    setSecondsLeft(CLUE_SECONDS)
-    setActive(next)
-  }
-
-  /**
    * The day is over: keep it in this browser whatever happens next, then try to
    * put it on the board. A name we already know goes up without asking.
    */
@@ -521,7 +507,6 @@ export function DailyBoard({
           left={DAILY_CLUES - resolved.length}
           onAnswer={() => resolve('answer', typed)}
           onPass={() => resolve('pass', '')}
-          onNext={nextClue}
           onClose={closeClue}
         />
       )}
@@ -530,17 +515,6 @@ export function DailyBoard({
 }
 
 /* ─────────────────────────── small parts ─────────────────────────── */
-
-/** The next cell nobody has taken, cheapest row first across the three
- *  categories — the order a board is normally worked through. */
-function firstUnplayed(res: DailyClueResult[]): { c: number; r: number } | null {
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      if (!res.some((x) => x.c === c && x.r === r)) return { c, r }
-    }
-  }
-  return null
-}
 
 /** Board order — category by category, cheapest row first. */
 function boardOrder(res: DailyClueResult[]): DailyClueResult[] {
@@ -874,7 +848,6 @@ function ClueOverlay({
   left,
   onAnswer,
   onPass,
-  onNext,
   onClose,
 }: {
   category: string
@@ -891,22 +864,30 @@ function ClueOverlay({
   left: number
   onAnswer: () => void
   onPass: () => void
-  onNext: () => void
   onClose: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => { inputRef.current?.focus() }, [stage, clue.q])
 
-  /* On the reveal, Enter carries on — the same key that just answered, so a
-     whole board can be played without the hands leaving the keyboard. */
+  /* On the reveal, Enter takes you back to the board — the same key that just
+     answered, so a whole board can be played without the hands leaving the
+     keyboard. It returns to the BOARD rather than jumping to the next clue:
+     choosing the clue is the game. */
   useEffect(() => {
     if (stage !== 'reveal') return
+    /* The Enter that answered the clue is STILL BUBBLING when this listener is
+       added — React handles the key at its root, flushes, and the event then
+       carries on up to window — so without this it dismissed the very reveal it
+       had just opened and nobody ever saw the correct response. An event
+       dispatched before the listener existed has the earlier timestamp. */
+    const since = performance.now()
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNext() }
+      if (e.timeStamp < since) return
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [stage, onNext])
+  }, [stage, onClose])
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-[#060CE9] px-5 py-8">
@@ -978,19 +959,12 @@ function ClueOverlay({
               Your total:{' '}
               <span className="font-bold tabular-nums text-jeopardy-gold-light">{formatMoney(myScore)}</span>
             </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              <button onClick={onNext} className="btn-stage btn-copper">
-                {left <= 0 ? 'See how you did' : `Next clue → (${left} left)`}
-              </button>
-              {left > 0 && (
-                <button onClick={onClose} className="btn-stage btn-stage-ghost btn-stage-sm">
-                  Pick my own
-                </button>
-              )}
-            </div>
+            <button onClick={onClose} className="btn-stage btn-copper mt-5">
+              {left <= 0 ? 'See how you did' : `Back to the board · ${left} left`}
+            </button>
             {left > 0 && (
               <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-white/40">
-                Press Enter to keep going
+                Press Enter — you pick the next one
               </p>
             )}
           </div>
