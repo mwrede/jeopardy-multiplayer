@@ -256,6 +256,24 @@ export function boardForDate(dateISO: string): DailyBoard | null {
   }
 }
 
+/**
+ * The days already gone, newest first, back to the epoch — the catch-up shelf.
+ *
+ * Today is never in here: today's board is the ranked one, and it lives on the
+ * front page. Past days are playable but not ranked, which is the only way a
+ * daily leaderboard can mean anything.
+ */
+export function pastDays(today: string = todayISO(), limit = 60): DailyBoard[] {
+  const out: DailyBoard[] = []
+  for (let i = 1; i <= limit; i++) {
+    const date = addDays(today, -i)
+    if (daysBetween(DAILY_EPOCH, date) < 0) break
+    const board = boardForDate(date)
+    if (board) out.push(board)
+  }
+  return out
+}
+
 /** Seconds until the board changes, on the player's own clock. */
 export function secondsUntilTomorrow(now: Date = new Date()): number {
   const next = new Date(now)

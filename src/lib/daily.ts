@@ -253,6 +253,13 @@ export function streakStandings(rows: DailyResult[], today = todayISO()): Streak
 /* ────────────────────── your own record, locally ────────────────────── */
 
 const PLAYS_KEY = 'dailyPlays'
+/**
+ * Days played LATE, kept apart from the real ones on purpose: catching up on
+ * six old boards in an afternoon must not hand you a six-day streak. Streaks
+ * and the all-time table read PLAYS_KEY only; this is just so the catch-up
+ * shelf can show what you've already done.
+ */
+const CATCHUP_KEY = 'dailyCatchUp'
 const runKey = (date: string) => `dailyRun:${date}`
 
 export type LocalPlay = {
@@ -285,6 +292,24 @@ export function noteLocalPlay(play: LocalPlay) {
     const all = readLocalPlays()
     all[play.date] = play
     localStorage.setItem(PLAYS_KEY, JSON.stringify(all))
+  } catch {}
+}
+
+export function readCatchUps(): Record<string, LocalPlay> {
+  try {
+    const raw = localStorage.getItem(CATCHUP_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function noteCatchUp(play: LocalPlay) {
+  try {
+    const all = readCatchUps()
+    all[play.date] = play
+    localStorage.setItem(CATCHUP_KEY, JSON.stringify(all))
   } catch {}
 }
 

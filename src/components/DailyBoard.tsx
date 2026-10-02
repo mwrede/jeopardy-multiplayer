@@ -24,7 +24,9 @@ import {
   fetchDailyResults,
   localStreak,
   markPosted,
+  noteCatchUp,
   noteLocalPlay,
+  readCatchUps,
   readLocalPlays,
   readRun,
   saveRun,
@@ -55,7 +57,19 @@ const CLUE_SECONDS = 30
 
 type Stage = 'answering' | 'reveal'
 
-export function DailyBoard() {
+export function DailyBoard({
+  forDate,
+  ranked = true,
+}: {
+  /** Play a PAST day instead of today — the catch-up shelf. */
+  forDate?: string
+  /**
+   * False for a catch-up board: it is played, kept and shared, but it never
+   * goes on a leaderboard and never touches a streak. A daily leaderboard
+   * anyone can fill in after the fact isn't one.
+   */
+  ranked?: boolean
+} = {}) {
   const { user, profile, loading: userLoading } = useUser()
 
   /* The date is decided on the client. Deciding it during render would let the
@@ -88,20 +102,20 @@ export function DailyBoard() {
 
   // ── Mount: today's board, your record, the standings ─────────────────
   useEffect(() => {
-    const today = todayISO()
-    setDate(today)
-    setBoard(boardForDate(today))
+    const day = forDate || todayISO()
+    setDate(day)
+    setBoard(boardForDate(day))
 
-    const plays = readLocalPlays()
-    setMine(plays[today] ?? null)
-    setMyStreak(localStreak(today))
-    setDaysPlayed(Object.keys(plays).length)
+    const plays = ranked ? readLocalPlays() : readCatchUps()
+    setMine(plays[day] ?? null)
+    setMyStreak(localStreak())
+    setDaysPlayed(Object.keys(readLocalPlays()).length)
 
-    const saved = readRun(today)
-    if (saved && !plays[today]) setResolved(saved.clueResults)
+    const saved = readRun(day)
+    if (saved && !plays[day]) setResolved(saved.clueResults)
 
     setName(localStorage.getItem('playerName') || '')
-  }, [])
+  }, [forDate, ranked])
 
   /* Identity waits for the auth check: minting a guest id first would file a
      signed-in player's day under the wrong person. */
@@ -144,11 +158,11 @@ export function DailyBoard() {
 
   // ── How long today's board has left ──────────────────────────────────
   useEffect(() => {
-    if (!mine) { setLeft(null); return }
+    if (!mine || !ranked) { setLeft(null); return }
     setLeft(secondsUntilTomorrow())
     const t = setInterval(() => setLeft(secondsUntilTomorrow()), 30_000)
     return () => clearInterval(t)
-  }, [mine])
+  }, [mine, ranked])
 
   const myScore = scoreOf(resolved)
   const done = resolved.length >= DAILY_CLUES
@@ -211,10 +225,13 @@ export function DailyBoard() {
       // Category by category, cheapest row first: index = c * 3 + r.
       outcomes: boardOrder(res).map((x) => x.outcome),
     }
-    noteLocalPlay(play)
+    if (ranked) noteLocalPlay(play)
+    else noteCatchUp(play)
     setMine(play)
-    setMyStreak(localStreak(date))
-    setDaysPlayed(Object.keys(readLocalPlays()).length)
+    if (ranked) {
+      setMyStreak(localStreak(date))
+      setDaysPlayed(Object.keys(readLocalPlays()).length)
+    }
     clearRun(date)
     /* Posting is the effect below's job. One way in, so a finished day can't
        be sent twice and come back as 'already played' on its own first go. */
@@ -233,14 +250,14 @@ export function DailyBoard() {
    * another identity's row — so signing in moves tomorrow, not yesterday.
    */
   useEffect(() => {
-    if (!mine || mine.posted || !identity || posting.current) return
+    if (!ranked || !mine || mine.posted || !identity || posting.current) return
     const nm = name.trim()
     if (!nm) return
     posting.current = true
     void record(nm, mine, restoreFromLocal(mine))
   // record() reads the rest off the same render.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mine, identity, name])
+  }, [mine, identity, name, ranked])
 
   async function record(nm: string, play: LocalPlay, res: DailyClueResult[]) {
     if (!board || !date) return
@@ -300,26 +317,33 @@ export function DailyBoard() {
 
   return (
     <section className="mt-4 md:mt-6">
-      <div className="grid items-start gap-2.5 md:grid-cols-[minmax(0,1fr)_278px] md:gap-3">
+      {/* The day, across the top: the board and the standings both hang off
+          this, so neither column has a header of its own and the two line up
+          at exactly the same height. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-copper sm:text-[10px]">
+          ★ Board of the day · {shortDate(date)}
+        </p>
+        <p className="text-[9px] uppercase tracking-[0.16em] text-blue-100/45 sm:text-[10px]">
+          Day {board.dayNumber} of {DAILY_DAYS.length}
+          {board.show ? ` · ${board.show}` : ''}
+          {board.airDate ? ` · aired ${formatAirDate(board.airDate)}` : ''}
+        </p>
+      </div>
+
+      <h2 className="home-cell-title mt-1 !text-[21px] leading-none text-jeopardy-gold-light sm:!text-[25px] md:!text-[28px]">
+        {day.occasion}
+      </h2>
+      <p className="mt-1.5 text-[11px] leading-snug text-blue-100/75 sm:text-xs">{day.story}</p>
+
+      <div
+        className={`mt-2.5 grid items-start gap-2.5 md:gap-3 ${
+          ranked ? 'md:grid-cols-[minmax(0,1fr)_296px]' : ''
+        }`}
+      >
         {/* ── The board ─────────────────────────────────────────────── */}
         <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-copper sm:text-[10px]">
-              ★ Board of the day · {shortDate(date)}
-            </p>
-            <p className="text-[9px] uppercase tracking-[0.16em] text-blue-100/45 sm:text-[10px]">
-              Day {board.dayNumber} of {DAILY_DAYS.length}
-              {board.show ? ` · ${board.show}` : ''}
-              {board.airDate ? ` · aired ${formatAirDate(board.airDate)}` : ''}
-            </p>
-          </div>
-
-          <h2 className="home-cell-title mt-1 !text-[21px] leading-none text-jeopardy-gold-light sm:!text-[25px] md:!text-[28px]">
-            {day.occasion}
-          </h2>
-          <p className="mt-1.5 text-[11px] leading-snug text-blue-100/75 sm:text-xs">{day.story}</p>
-
-          <div className="board-wrapper mt-2.5">
+          <div className="board-wrapper">
             <div className="grid grid-cols-3 gap-1 p-1">
               {categories.map((cat, c) => (
                 <div
@@ -342,7 +366,7 @@ export function DailyBoard() {
                           ? `$${DAILY_VALUES[r]} — ${res.outcome}`
                           : `${categories[c].name}, $${DAILY_VALUES[r]}`
                       }
-                      className={`min-h-[58px] text-xl sm:min-h-[70px] sm:text-2xl md:min-h-[78px] md:text-3xl ${
+                      className={`min-h-[58px] text-xl sm:min-h-[70px] sm:text-2xl md:min-h-[82px] md:text-3xl ${
                         res
                           ? res.outcome === 'correct'
                             ? 'board-cell board-cell-correct'
@@ -376,6 +400,7 @@ export function DailyBoard() {
               rank={myRank}
               field={todayRows.length}
               streak={streak}
+              ranked={ranked}
               name={name}
               setName={setName}
               signedIn={!!user}
@@ -393,7 +418,9 @@ export function DailyBoard() {
             <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1">
               <p className="text-[11px] text-blue-100/70">
                 {resolved.length === 0
-                  ? 'Nine clues, 30 seconds each. One shot — today only.'
+                  ? ranked
+                    ? 'Nine clues, 30 seconds each. One shot — today only.'
+                    : 'Nine clues, 30 seconds each. A day you missed — played for the record, not the leaderboard.'
                   : `${DAILY_CLUES - resolved.length} to go · ${formatMoney(myScore)} so far`}
               </p>
               <p className="text-[10px] uppercase tracking-[0.14em] text-blue-100/45">
@@ -403,67 +430,78 @@ export function DailyBoard() {
           )}
         </div>
 
-        {/* ── The standings, to the right of the board ───────────────── */}
-        <aside className="space-y-2 md:sticky md:top-3">
-          <YourLine
-            streak={streak}
-            play={mine}
-            rank={myRank}
-            field={todayRows.length}
-            daysPlayed={daysPlayed}
-          />
-          <Panel
-            title="🏆 Today"
-            note={`${todayRows.length || ''} ${todayRows.length === 1 ? 'player' : todayRows.length ? 'players' : ''}`.trim()}
-            rows={todayRows.slice(0, 20).map((r) => ({
-              key: r.identityKey,
-              name: r.name,
-              value: formatMoney(r.score),
-              sub: `${r.correct}/${DAILY_CLUES} right`,
-              you: r.identityKey === identity,
-            }))}
-            empty={
-              tableMissing
-                ? 'Standings go live once supabase-migration-daily.sql is run.'
-                : rows === null
-                  ? 'Counting…'
-                  : 'Nobody has played today yet. Set the number.'
-            }
-          />
-          <Panel
-            title="💰 All time"
-            note="every day played"
-            rows={allTime.slice(0, 20).map((r) => ({
-              key: r.identityKey,
-              name: r.name,
-              value: formatMoney(r.total),
-              sub: `${r.days} day${r.days === 1 ? '' : 's'} · best ${formatMoney(r.best)}`,
-              you: r.identityKey === identity,
-            }))}
-            empty={tableMissing ? '—' : rows === null ? 'Counting…' : 'No days on the books yet.'}
-          />
-          <Panel
-            title="🔥 Streaks"
-            note="days in a row"
-            rows={streaks
-              .filter((r) => r.current > 0 || r.best > 1)
-              .slice(0, 20)
-              .map((r) => ({
-                key: r.identityKey,
-                name: r.name,
-                value: `${r.current}`,
-                sub: `best ${r.best}`,
-                you: r.identityKey === identity,
-              }))}
-            empty={
-              tableMissing
-                ? '—'
-                : rows === null
-                  ? 'Counting…'
-                  : 'Nobody has a streak going. Two days in a row starts one.'
-            }
-          />
-        </aside>
+        {/* ── The standings: one panel, top-aligned with the board, and on a
+               phone it falls in underneath it rather than beside it. ────── */}
+        {ranked && (
+          <aside className="md:sticky md:top-3">
+            <div className="banner !block divide-y divide-white/10 overflow-hidden !px-0 !py-0">
+              <YourLine
+                streak={streak}
+                play={mine}
+                rank={myRank}
+                field={todayRows.length}
+                daysPlayed={daysPlayed}
+              />
+              <Panel
+                title="🏆 Today"
+                note={todayRows.length ? `${todayRows.length} ${todayRows.length === 1 ? 'player' : 'players'}` : ''}
+                rows={todayRows.slice(0, 20).map((r) => ({
+                  key: r.identityKey,
+                  name: r.name,
+                  value: formatMoney(r.score),
+                  sub: `${r.correct}/${DAILY_CLUES} right`,
+                  you: r.identityKey === identity,
+                }))}
+                empty={
+                  tableMissing
+                    ? 'Standings go live once supabase-migration-daily.sql is run.'
+                    : rows === null
+                      ? 'Counting…'
+                      : 'Nobody has played today yet. Set the number.'
+                }
+              />
+              <Panel
+                title="💰 All time"
+                note="every day played"
+                rows={allTime.slice(0, 20).map((r) => ({
+                  key: r.identityKey,
+                  name: r.name,
+                  value: formatMoney(r.total),
+                  sub: `${r.days} day${r.days === 1 ? '' : 's'} · best ${formatMoney(r.best)}`,
+                  you: r.identityKey === identity,
+                }))}
+                empty={tableMissing ? '—' : rows === null ? 'Counting…' : 'No days on the books yet.'}
+              />
+              <Panel
+                title="🔥 Streaks"
+                note="days in a row"
+                rows={streaks
+                  .filter((r) => r.current > 0 || r.best > 1)
+                  .slice(0, 20)
+                  .map((r) => ({
+                    key: r.identityKey,
+                    name: r.name,
+                    value: `${r.current}`,
+                    sub: `best ${r.best}`,
+                    you: r.identityKey === identity,
+                  }))}
+                empty={
+                  tableMissing
+                    ? '—'
+                    : rows === null
+                      ? 'Counting…'
+                      : 'Nobody has a streak going. Two days in a row starts one.'
+                }
+              />
+              <a
+                href="/challenge#catch-up"
+                className="block px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-blue-100/55 transition-colors hover:bg-white/5 hover:text-copper"
+              >
+                Missed a day? Past boards →
+              </a>
+            </div>
+          </aside>
+        )}
       </div>
 
       {/* The clue, full screen, the way the game shows one. */}
@@ -555,26 +593,24 @@ function YourLine({
   daysPlayed: number
 }) {
   return (
-    <div className="banner !block !px-0 !py-0 overflow-hidden">
-      <div className="flex items-center gap-2.5 px-3 py-2">
-        <span className="text-xl leading-none">{streak.current > 0 ? '🔥' : '🎯'}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-bold leading-tight text-white">
-            {streak.current > 0
-              ? `${streak.current} day${streak.current === 1 ? '' : 's'} in a row`
-              : 'No streak going'}
-          </span>
-          <span className="block text-[10px] leading-tight text-blue-100/60">
-            {play
-              ? `Today ${formatMoney(play.score)} · ${play.correct}/${DAILY_CLUES}${rank > 0 ? ` · #${rank} of ${field}` : ''}`
-              : streak.current > 0
-                ? 'Play today to keep it going'
-                : 'Play today to start one'}
-            {streak.best > streak.current ? ` · best ${streak.best}` : ''}
-            {daysPlayed > 0 ? ` · ${daysPlayed} played` : ''}
-          </span>
+    <div className="flex items-center gap-2.5 bg-white/[0.04] px-3 py-2">
+      <span className="text-xl leading-none">{streak.current > 0 ? '🔥' : '🎯'}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-bold leading-tight text-white">
+          {streak.current > 0
+            ? `${streak.current} day${streak.current === 1 ? '' : 's'} in a row`
+            : 'No streak going'}
         </span>
-      </div>
+        <span className="block text-[10px] leading-tight text-blue-100/60">
+          {play
+            ? `Today ${formatMoney(play.score)} · ${play.correct}/${DAILY_CLUES}${rank > 0 ? ` · #${rank} of ${field}` : ''}`
+            : streak.current > 0
+              ? 'Play today to keep it going'
+              : 'Play today to start one'}
+          {streak.best > streak.current ? ` · best ${streak.best}` : ''}
+          {daysPlayed > 0 ? ` · ${daysPlayed} played` : ''}
+        </span>
+      </span>
     </div>
   )
 }
@@ -592,8 +628,8 @@ function Panel({
   empty: string
 }) {
   return (
-    <div className="banner !block !px-0 !py-0 overflow-hidden">
-      <div className="flex items-baseline justify-between gap-2 border-b border-white/10 px-3 py-1.5">
+    <div>
+      <div className="flex items-baseline justify-between gap-2 px-3 py-1.5">
         <span className="banner-title text-jeopardy-gold-light">{title}</span>
         {note && <span className="banner-sub shrink-0 text-blue-100/55">{note}</span>}
       </div>
@@ -645,6 +681,7 @@ function Result({
   rank,
   field,
   streak,
+  ranked,
   name,
   setName,
   onRecord,
@@ -662,6 +699,8 @@ function Result({
   rank: number
   field: number
   streak: { current: number; best: number }
+  /** False on a catch-up day: played and shareable, but off the books. */
+  ranked: boolean
   name: string
   setName: (s: string) => void
   onRecord: () => void
@@ -676,7 +715,8 @@ function Result({
   board: Board
 }) {
   const [copied, setCopied] = useState(false)
-  const onBoard = recorded || !!play.posted || submitted === 'recorded' || submitted === 'already-played'
+  const onBoard =
+    !ranked || recorded || !!play.posted || submitted === 'recorded' || submitted === 'already-played'
 
   /** The grid everyone recognises: three rows of three, no clues given away. */
   function grid(): string {
@@ -701,7 +741,7 @@ function Result({
       grid(),
       '',
       `${formatMoney(play.score)} · ${play.correct}/${DAILY_CLUES} right${
-        streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''
+        ranked && streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''
       }`,
       `Same nine clues, same day: ${site}`,
     ].join('\n')
@@ -728,8 +768,8 @@ function Result({
           <span className="text-lg font-bold text-jeopardy-gold-light">{formatMoney(play.score)}</span>
           <span className="text-blue-100/75">
             {' '}· {play.correct} of {DAILY_CLUES} right
-            {onBoard && rank > 0 ? ` · #${rank} of ${field} today` : ''}
-            {streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''}
+            {ranked && onBoard && rank > 0 ? ` · #${rank} of ${field} today` : ''}
+            {ranked && streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''}
           </span>
         </p>
         <span className="flex items-center gap-1.5">
@@ -786,7 +826,7 @@ function Result({
           having, because a guest's streak lives and dies with this browser.
           Days already posted stay where they are — there's no updating another
           identity's row — so this only ever changes where TOMORROW lands. */}
-      {onBoard && !signedIn && !tableMissing && (
+      {ranked && onBoard && !signedIn && !tableMissing && (
         <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
           <p className="min-w-0 flex-1 text-[11px] leading-snug text-blue-100/65">
             Your streak lives in this browser. Sign in and it follows you.
@@ -798,14 +838,20 @@ function Result({
       )}
 
       <p className="mt-1.5 text-[11px] leading-snug text-blue-100/65">
-        {submitted === 'already-played'
+        {!ranked ? (
+          <>
+            A day you missed, so it’s off the books — catch-up boards don’t rank and don’t
+            build a streak. <a href="/" className="text-copper underline">Today’s board</a> does
+            both.
+          </>
+        ) : submitted === 'already-played'
           ? 'You already had a score on today’s board — the first one stands. '
           : tableMissing
             ? 'Your score is kept in this browser. Run supabase-migration-daily.sql to turn the standings on. '
             : onBoard
               ? `On today’s board${name.trim() ? ` as ${name.trim()}` : ''}. `
               : 'Your score is kept in this browser either way. '}
-        {!tableMissing && left !== null && <>A new board in {untilTomorrowLabel(left)}.</>}
+        {ranked && !tableMissing && left !== null && <>A new board in {untilTomorrowLabel(left)}.</>}
       </p>
       {error && <p className="mt-1 text-[11px] text-copper-glow">{error}</p>}
     </div>

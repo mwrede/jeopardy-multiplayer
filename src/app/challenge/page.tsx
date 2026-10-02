@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useUser, signInWithGoogle } from '@/lib/auth'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { ChallengeShare } from '@/components/ChallengeShare'
+import { DailyCatchUp } from '@/components/DailyCatchUp'
 import {
   LINEUP_GAMES,
   MICHAELS_GAMES,
@@ -64,8 +65,9 @@ export default function ChallengePage() {
 
         <h1 className="display-chrome text-3xl leading-none md:text-4xl">Jeopardy Challenge</h1>
         <p className="mt-3 max-w-2xl text-sm text-ink-stage">
-          Solo boards, played like the real show: a 3×3 Jeopardy round, a 3×3 Double
-          Jeopardy round with a hidden Daily Double in each, then a Final Jeopardy
+          The board of the day is nine clues from one famous night, and it changes at
+          midnight. Everything under it is a full solo board: a 3×3 Jeopardy round, a 3×3
+          Double Jeopardy round with a hidden Daily Double in each, then a Final Jeopardy
           wager. Every clue is a real clue from a real episode — the screen shows the
           date it aired. Play a board as many times as you like — the leaderboard
           keeps your <strong className="text-white">best run</strong> on each, so
@@ -88,8 +90,14 @@ export default function ChallengePage() {
           </div>
         )}
 
-        {/* The Lineup */}
+        {/* The board of the day, and every one that's already been: the daily
+            is the thing people come back for, so it sits above the shelves. */}
         <div className="mt-10">
+          <DailyCatchUp />
+        </div>
+
+        {/* The Lineup */}
+        <div className="mt-12">
           <div className="eyebrow-copper mb-1">The Lineup</div>
           <p className="mb-4 text-center text-xs text-ink-stage-2">
             Kids Week, the Teen Tournament, the College Championship — and five
