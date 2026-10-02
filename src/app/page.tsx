@@ -7,6 +7,7 @@ import { useUser } from '@/lib/auth'
 import { getLibrary, forgetBoard, type LibraryBoard } from '@/lib/board-library'
 import { ChromeWordmark } from '@/components/ChromeWordmark'
 import { HomeLeaderboards } from '@/components/HomeLeaderboards'
+import { DailyBoard } from '@/components/DailyBoard'
 import { RoomChat } from '@/components/RoomChat'
 import { HomeCellArt, type HomeArt } from '@/components/HomeCellArt'
 import { CampaignRow, CampaignStandings } from '@/components/CampaignRow'
@@ -201,8 +202,8 @@ export default function Home() {
     },
     {
       column: 'Solo',
-      title: "Today's board",
-      sub: 'One 3×3 · one shot · ranked',
+      title: 'The Challenge',
+      sub: '38 boards · 2 rounds + Final · ranked',
       href: '/challenge',
       art: 'solo' as const,
     },
@@ -225,9 +226,16 @@ export default function Home() {
           </p>
         </header>
 
+        {/* THE BOARD OF THE DAY. First thing on the page and playable where it
+            stands — nine clues from one night in the show's history, with
+            today's standings, the all-time money and the streaks beside it.
+            Everything else on this page is a way to start a different game;
+            this is a game. */}
+        <DailyBoard />
+
         {/* The three games, side by side, each in the campaign row's clothes;
             the campaign itself sits under them as the wide fourth. */}
-        <div className="mt-5 grid gap-2 sm:grid-cols-3 sm:gap-2.5 md:mt-9">
+        <div className="mt-6 grid gap-2 sm:grid-cols-3 sm:gap-2.5 md:mt-8">
           {GAMES.map((g) => (
             <GameCard key={g.title} {...g} />
           ))}
