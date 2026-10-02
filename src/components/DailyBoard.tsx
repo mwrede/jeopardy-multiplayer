@@ -628,7 +628,7 @@ export function DailyBoard({
                     key: `tv:${c.name}`,
                     name: `📺 ${c.name}${c.won ? ' 👑' : ''}`,
                     value: formatMoney(c.onBoard),
-                    sub: 'that night',
+                    sub: 'contestant',
                     you: false,
                     tv: true,
                     score: c.onBoard,
@@ -721,11 +721,18 @@ function ScoreToBeat({ night, mine }: { night: DailyNight; mine: LocalPlay | nul
           </span>
         ))}
       <span className="text-[10px] leading-tight text-blue-100/45">
-        on these clues
+        the night&apos;s contestants, on these clues
         {champ ? ` · 👑 ${champ.name} scored ${formatMoney(champ.night)} across the whole night` : ''}
       </span>
     </div>
   )
+}
+
+/** 1 → "1st". Small enough that a table isn't worth it. */
+function ord(n: number): string {
+  const tens = n % 100
+  if (tens >= 11 && tens <= 13) return `${n}th`
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
 }
 
 /** What the people on television did with the clue you just played. */
@@ -1333,7 +1340,10 @@ function Result({
 
   async function share() {
     const site = typeof window !== 'undefined' ? window.location.origin : 'https://jplay.dev'
-    const text = [
+    /* Everything the result card shows, in the order it shows it — the grid is
+       the hook, but the two rankings are the brag, and a result pasted into a
+       group chat should carry both. */
+    const lines = [
       `JPLAY · Board of the day — ${shortDate(play.date)}`,
       board.day.occasion,
       '',
@@ -1342,8 +1352,22 @@ function Result({
       `${formatMoney(play.score)} · ${play.correct}/${DAILY_CLUES} right${
         ranked && streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''
       }`,
-      `Same board, same night: ${site}`,
-    ].join('\n')
+    ]
+    if (night) {
+      const beat = night.contestants.filter((c) => c.onBoard > play.score).length
+      lines.push(
+        `📺 ${ord(1 + beat)} of ${night.contestants.length + 1} against the contestants — ` +
+          [...night.contestants]
+            .sort((a, b) => b.onBoard - a.onBoard)
+            .map((c) => `${c.won ? '👑 ' : ''}${c.name} ${formatMoney(c.onBoard)}`)
+            .join(' · '),
+      )
+    }
+    if (ranked && onBoard && rank > 0) {
+      lines.push(`👥 ${ord(rank)} of ${field} ${field === 1 ? 'player' : 'players'} today`)
+    }
+    lines.push(`Same board, same night: ${site}`)
+    const text = lines.join('\n')
 
     /* Copy, not the share sheet: this text is built to be PASTED into a group
        chat, and "Copied!" is the whole interaction. The native sheet is used
@@ -1367,7 +1391,6 @@ function Result({
           <span className="text-lg font-bold text-jeopardy-gold-light">{formatMoney(play.score)}</span>
           <span className="text-blue-100/75">
             {' '}· {play.correct} of {DAILY_CLUES} right
-            {ranked && onBoard && rank > 0 ? ` · #${rank} of ${field} today` : ''}
             {ranked && streak.current > 1 ? ` · 🔥 ${streak.current} days` : ''}
           </span>
         </p>
@@ -1375,6 +1398,26 @@ function Result({
           {copied ? 'Copied!' : '📋 Share result'}
         </button>
       </div>
+
+      {/* The two questions anyone asks at the end, answered separately: how did
+          I do against the people on television, and how did I do against the
+          people playing today. They are different fields and one must never be
+          read as the other. */}
+      {(night || (ranked && onBoard)) && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {night && (
+            <span className="rounded-full border border-white/15 bg-black/25 px-2.5 py-1 text-[10px] font-semibold text-blue-100/80">
+              📺 {ord(1 + night.contestants.filter((c) => c.onBoard > play.score).length)} of{' '}
+              {night.contestants.length + 1} against the contestants
+            </span>
+          )}
+          {ranked && onBoard && rank > 0 && (
+            <span className="rounded-full border border-white/15 bg-black/25 px-2.5 py-1 text-[10px] font-semibold text-blue-100/80">
+              👥 {ord(rank)} of {field} {field === 1 ? 'player' : 'players'} today
+            </span>
+          )}
+        </div>
+      )}
 
       {/* The emoji grid, right there — people share what they can already see. */}
       <pre className="mt-2 select-all text-center font-sans text-sm leading-[1.2] tracking-[0.1em] text-white/90 sm:text-base">
@@ -1485,13 +1528,12 @@ function AgainstTheRoom({ play, night }: { play: LocalPlay; night: DailyNight })
     { name: 'You', score: play.score, you: true, won: false, night: 0, correct: play.correct },
   ].sort((a, b) => b.score - a.score)
 
-  const mine = field.findIndex((r) => r.you) + 1
   const champ = night.contestants.find((c) => c.won)
 
   return (
     <div className="mt-2 border-t border-white/10 pt-2">
       <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-copper">
-        On these clues · you finished {mine === 1 ? 'first' : mine === 2 ? 'second' : mine === 3 ? 'third' : 'fourth'} of {field.length}
+        Against the contestants
       </p>
       <ol className="space-y-0.5">
         {field.map((r, i) => (
@@ -1520,8 +1562,8 @@ function AgainstTheRoom({ play, night }: { play: LocalPlay; night: DailyNight })
         ))}
       </ol>
       <p className="mt-1 text-[10px] leading-snug text-blue-100/45">
-        Their real answers, re-scored on this board — three of the night\u2019s six categories, at
-        these values.
+        The three contestants who played this episode, their real answers re-scored on this
+        board — three of the night&rsquo;s six categories, at these values.
         {champ ? ` ${champ.name} scored ${formatMoney(champ.night)} across the whole night.` : ''}
       </p>
     </div>
