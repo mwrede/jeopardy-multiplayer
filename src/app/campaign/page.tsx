@@ -26,6 +26,7 @@ import {
 } from '@/lib/campaign'
 import { useUser } from '@/lib/auth'
 import { getChallengeIdentity } from '@/lib/challenge'
+import { ClueText } from '@/components/ClueText'
 
 /**
  * AGAINST REAL CONTESTANTS — the campaign.
@@ -875,7 +876,7 @@ export default function CampaignPage() {
                 <p className={`text-3xl font-bold ${last.outcome === 'correct' ? 'text-green-400' : last.outcome === 'wrong' ? 'text-red-400' : 'text-white/70'}`}>
                   {last.outcome === 'correct' ? `✓ Right, ${money(last.delta)}` : last.outcome === 'wrong' ? `✗ Wrong, ${money(last.delta)}` : "Didn't ring in"}
                 </p>
-                <p className="mt-2 text-sm text-white/70">The answer: <b className="text-jeopardy-gold-light">{activeClue.answer}</b></p>
+                <p className="mt-2 text-sm text-white/70">The answer: <b className="text-jeopardy-gold-light"><ClueText text={activeClue.answer} variant="compact" /></b></p>
 
                 {/* The night as it happened. */}
                 <div className="mx-auto mt-6 max-w-md rounded-xl border border-copper/50 bg-black/40 p-4 text-left">
@@ -984,7 +985,7 @@ export default function CampaignPage() {
           )}
           {fjStage === 'result' && fjResult && (
             <>
-              <p className="text-sm text-white/70">The answer: <b className="text-jeopardy-gold-light">{fj.answer}</b></p>
+              <p className="text-sm text-white/70">The answer: <b className="text-jeopardy-gold-light"><ClueText text={fj.answer} variant="compact" /></b></p>
               <div className="mx-auto mt-5 max-w-md space-y-2 text-left">
                 <FinalRow name={`${profile.name} (you)`} written={fjResult.typed || '—'} right={fjResult.right} wager={stake} total={myScore} you />
                 {episode.contestants.map((c, i) => {

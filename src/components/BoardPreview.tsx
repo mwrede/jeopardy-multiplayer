@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ClueText } from './ClueText'
 import type { CustomBoard } from '@/types/game'
 
 type OpenClue = {
@@ -136,7 +137,9 @@ export function BoardPreview({ board, round = 0, showAllRounds = false }: Props)
       onClick={() => { setOpenClue(null); setRevealAnswer(false) }}
     >
       <div
-        className="bg-jeopardy-blue border-2 border-jeopardy-gold rounded-2xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl"
+        /* Picture clues can run tall — two images and a long question together
+           overflow a phone — so the card scrolls rather than hanging off. */
+        className="bg-jeopardy-blue border-2 border-jeopardy-gold rounded-2xl p-6 sm:p-8 w-full max-w-2xl max-h-[88vh] overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 mb-4">
@@ -163,14 +166,18 @@ export function BoardPreview({ board, round = 0, showAllRounds = false }: Props)
           style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}
         >
           <p className="text-white text-xl sm:text-2xl font-bold leading-snug">
-            {openClue.question || <span className="italic text-white/60">(no question)</span>}
+            {openClue.question
+              ? <ClueText text={openClue.question} />
+              : <span className="italic text-white/60">(no question)</span>}
           </p>
         </div>
         {revealAnswer ? (
           <div className="mt-4 text-center">
             <p className="text-gray-300 text-xs uppercase tracking-widest mb-1">Answer</p>
             <p className="text-jeopardy-gold-light text-xl sm:text-2xl font-bold">
-              {openClue.answer || <span className="italic text-white/40">(no answer)</span>}
+              {openClue.answer
+                ? <ClueText text={openClue.answer} />
+                : <span className="italic text-white/40">(no answer)</span>}
             </p>
           </div>
         ) : (

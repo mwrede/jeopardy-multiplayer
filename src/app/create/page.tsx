@@ -876,7 +876,7 @@ function CreateBoardContent() {
                               style={{ textShadow: 'none' }}
                             >
                               {cell?.question
-                                ? <ClueText text={cell.question} />
+                                ? <ClueText text={cell.question} variant="compact" />
                                 : <span className="italic text-white/40">(no question yet)</span>}
                             </span>
                           )}

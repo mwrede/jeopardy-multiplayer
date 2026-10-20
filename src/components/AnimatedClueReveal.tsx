@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ClueText } from './ClueText'
+import { ClueText, clueTextLength } from './ClueText'
 import { CLUE_INTRO_MS } from '@/lib/clue-timing'
 
 /**
@@ -69,7 +69,10 @@ export function AnimatedClueReveal({
     : now - mountedAtRef.current
   const inIntro = elapsed < CLUE_INTRO_MS
   const revealElapsed = Math.max(0, elapsed - CLUE_INTRO_MS)
-  const totalChars = question.length
+  // Count what a reader sees, not what is typed into the editor: a picture
+  // clue is mostly URL, and pacing the reveal on the raw string would spend
+  // the reading time writing out `[img:https://…]` instead of the question.
+  const totalChars = clueTextLength(question)
   const visibleChars = Math.min(
     totalChars,
     Math.max(0, Math.floor((revealElapsed / Math.max(1, revealDurationMs)) * totalChars)),
@@ -114,10 +117,11 @@ export function AnimatedClueReveal({
         }`}
       >
         <span className="text-white">
-          <ClueText text={question.slice(0, visibleChars)} />
-        </span>
-        <span className="text-transparent select-none" aria-hidden="true">
-          {question.slice(visibleChars)}
+          <ClueText
+            text={question}
+            variant={isTv ? 'tv' : 'default'}
+            revealChars={visibleChars}
+          />
         </span>
       </p>
     </div>

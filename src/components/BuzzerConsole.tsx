@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { hostOpenBuzzers, hostJudge, hostAdjustScore, getBuzzOrder, type BuzzOrderRow } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import type { Clue, Player } from '@/types/game'
+import { ClueText } from './ClueText'
 
 /**
  * BUZZER CONSOLE — a floating panel on the presenter's own screen.
@@ -163,7 +164,9 @@ export function BuzzerConsole({
                 <p className="mb-2 truncate text-[10px] uppercase tracking-[0.2em] text-gray-400">
                   ${currentClue!.value} · answer
                 </p>
-                <p className="mb-3 text-sm font-bold text-jeopardy-gold-light">{currentClue!.answer}</p>
+                <p className="mb-3 text-sm font-bold text-jeopardy-gold-light">
+                  <ClueText text={currentClue!.answer} variant="compact" />
+                </p>
 
                 <button
                   onClick={toggleBuzzers}

@@ -494,11 +494,11 @@ export default function PresentPage() {
           ) : (
             <>
               <p className="clue-type max-w-6xl text-4xl text-white md:text-6xl">
-                <ClueText text={activeClue.question} />
+                <ClueText text={activeClue.question} variant="tv" />
               </p>
               {phase === 'answer' && (
                 <p className="mt-12 text-4xl font-bold text-jeopardy-gold-light md:text-6xl">
-                  {activeClue.answer}
+                  <ClueText text={activeClue.answer} variant="tv" />
                 </p>
               )}
               {waitingToOpen && (

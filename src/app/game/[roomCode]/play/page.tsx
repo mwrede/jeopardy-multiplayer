@@ -1128,7 +1128,7 @@ export default function PlayPage() {
           </div>
           <div className="mt-4 text-center">
             <p className="text-gray-500 text-sm mb-1">Answer:</p>
-            <p className="text-white text-lg font-bold">{currentClue.answer}</p>
+            <p className="text-white text-lg font-bold"><ClueText text={currentClue.answer} variant="compact" /></p>
           </div>
 
           {/* Every answer given, what each person said, and what it cost them */}
@@ -1210,7 +1210,9 @@ export default function PlayPage() {
       <div className="h-[100dvh] flex flex-col bg-jeopardy-dark overflow-hidden">
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 py-2 overflow-y-auto gap-3">
           <h2 className="text-lg font-bold text-jeopardy-gold mb-1 uppercase flex-shrink-0">{game.final_category_name}</h2>
-          <p className="text-xl text-white text-center leading-relaxed font-serif max-w-lg flex-shrink-0">{game.final_clue_text}</p>
+          <p className="text-xl text-white text-center leading-relaxed font-serif max-w-lg flex-shrink-0">
+            <ClueText text={game.final_clue_text || ''} />
+          </p>
           {finalCountdown !== null && (
             <p className={`text-5xl font-bold font-mono ${finalCountdown <= 5 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
               {finalCountdown}s

@@ -47,6 +47,7 @@ import { formatReaction } from '@/lib/buzz-stats'
 import { ClueAttempts } from '@/components/ClueAttempts'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
 import { GAME_LENGTH_CONFIG } from '@/types/game'
+import { ClueText } from '@/components/ClueText'
 
 /**
  * PLAYER VIEW (Phone)
@@ -968,7 +969,7 @@ export default function PlayerPage() {
                 <span className="ml-1.5 text-blue-300/70">({currentClue.source_year})</span>
               ) : null}
             </p>
-            <p className="text-white text-lg font-bold">{currentClue.answer}</p>
+            <p className="text-white text-lg font-bold"><ClueText text={currentClue.answer} variant="compact" /></p>
           </div>
 
           {/* Every answer given: who said what, and what it cost them */}

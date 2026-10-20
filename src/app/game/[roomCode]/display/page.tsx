@@ -606,7 +606,7 @@ export default function DisplayPage() {
           {game.final_category_name}
         </p>
         <p className="text-4xl md:text-6xl text-white text-center clue-type max-w-5xl">
-          {game.final_clue_text}
+          <ClueText text={game.final_clue_text || ''} variant="tv" />
         </p>
         <p className="text-gray-500 text-xl mt-12 animate-pulse">
           Answer on your phones...
@@ -624,7 +624,7 @@ export default function DisplayPage() {
           {game.final_category_name}
         </p>
         <p className="text-3xl md:text-5xl text-white text-center clue-type max-w-5xl mb-12">
-          {game.final_clue_text}
+          <ClueText text={game.final_clue_text || ''} variant="tv" />
         </p>
 
         <div className="flex gap-4">
@@ -815,7 +815,7 @@ export default function DisplayPage() {
                 ) : null}
               </p>
               <p className="text-3xl md:text-4xl text-white font-bold">
-                {resultClue.answer}
+                <ClueText text={resultClue.answer} variant="tv" />
               </p>
             </div>
           )}

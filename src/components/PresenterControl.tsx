@@ -11,6 +11,7 @@ import {
   type BuzzOrderRow,
 } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
+import { ClueText } from './ClueText'
 
 /**
  * PRESENTER CONTROL — the second screen.
@@ -101,9 +102,11 @@ export function PresenterControl({ roomCode }: { roomCode: string }) {
               <p className="text-[10px] uppercase tracking-[0.22em] text-gray-400">
                 {category?.name} · ${currentClue!.value}
               </p>
-              <p className="clue-type mt-2 text-base text-white">{currentClue!.question}</p>
+              <p className="clue-type mt-2 text-base text-white">
+                <ClueText text={currentClue!.question} variant="compact" />
+              </p>
               <p className="mt-3 border-t border-white/10 pt-3 text-lg font-bold text-jeopardy-gold-light">
-                {currentClue!.answer}
+                <ClueText text={currentClue!.answer} variant="compact" />
               </p>
             </div>
 

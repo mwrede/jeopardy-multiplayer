@@ -40,6 +40,7 @@ import {
   type DailyResult,
   type LocalPlay,
 } from '@/lib/daily'
+import { ClueText } from './ClueText'
 
 /**
  * THE BOARD OF THE DAY — the front page's first thing, and the only thing on
@@ -907,7 +908,7 @@ function CluePanel({
         className="clue-type mx-auto mt-3 max-w-xl text-base uppercase leading-snug text-white sm:text-lg md:text-xl"
         style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.6)' }}
       >
-        {clue.q}
+        <ClueText text={clue.q} />
       </p>
 
       {stage === 'answering' ? (
@@ -959,7 +960,7 @@ function CluePanel({
           </p>
           <p className="mt-1.5 text-sm text-white/85">
             Correct response:{' '}
-            <span className="font-bold text-jeopardy-gold-light">{clue.a}</span>
+            <span className="font-bold text-jeopardy-gold-light"><ClueText text={clue.a} variant="compact" /></span>
           </p>
           <ThatNight responses={responses} />
           <p className="mt-2 text-[11px] text-white/60">
