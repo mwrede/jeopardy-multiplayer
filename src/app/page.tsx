@@ -253,7 +253,7 @@ export default function Home() {
           <Banner
             emoji="✏️"
             title="Create a board"
-            sub="Write your own clues"
+            sub="Write your own clues, or import a CSV"
             href="/create"
             variant="copper"
           />

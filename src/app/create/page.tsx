@@ -6,7 +6,9 @@ import { saveCustomBoard, updateCustomBoard, loadCustomBoard, createPresentation
 import { useUser } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { ClueText } from '@/components/ClueText'
+import { CsvImport } from '@/components/CsvImport'
 import type { CustomBoard } from '@/types/game'
+import type { CsvImportResult } from '@/lib/csv-board'
 import { markAuthored } from '@/lib/board-library'
 
 interface CellData {
@@ -90,6 +92,7 @@ function CreateBoardContent() {
   const [editingValue, setEditingValue] = useState<{ round: 1 | 2; row: number } | null>(null)
   const [valueInput, setValueInput] = useState('')
   const [showImagePicker, setShowImagePicker] = useState(false)
+  const [showCsvImport, setShowCsvImport] = useState(false)
   const [imageUrl, setImageUrl] = useState('')
   const [uploading, setUploading] = useState(false)
   // Drag state: what's being dragged and where it can land.
@@ -143,6 +146,27 @@ function CreateBoardContent() {
     })
   }
 
+  /**
+   * Load a parsed CSV over the editor.
+   *
+   * Pushes history first, so Undo is the way back — an import that wiped a
+   * half-written board with no recourse would be the one unforgivable bug in
+   * this feature.
+   */
+  function applyCsvImport(res: CsvImportResult) {
+    pushHistory()
+    applyCustomBoardToState(res.title, res.board, board.isPublic)
+    // A Final with only one round would be lost on save: the editor only
+    // writes a Final when the board is in full-game mode.
+    if (res.board.rounds.length > 1 || res.board.finalJeopardy) {
+      setBoard((b) => ({ ...b, isFullGame: true }))
+    }
+    // The Final tab may not exist on what just arrived.
+    setActiveRound(1)
+    setShowCsvImport(false)
+    setShowInstructions(false)
+  }
+
   // Load existing board for editing — either a real saved board (?boardId=)
   // or a draft stashed in localStorage by GameBrowser's "fork from real game"
   // flow (?draft=fork). The draft path needs no DB access and no sign-in.
@@ -172,6 +196,12 @@ function CreateBoardContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editBoardId, searchParams])
+
+  // /create?import=csv opens straight into the importer, so a link can say
+  // "bring your spreadsheet" and land somebody in the right place.
+  useEffect(() => {
+    if (searchParams.get('import') === 'csv') setShowCsvImport(true)
+  }, [searchParams])
 
   const pushHistory = useCallback(() => {
     setHistory((h) => [...h.slice(-30), board])
@@ -614,7 +644,12 @@ function CreateBoardContent() {
         <div className="bg-blue-900/40 border-b border-blue-500/30 px-4 py-3 text-sm">
           <strong>Instructions:</strong> Enter your Jeopardy game title and category names.
           Click a cell to enter your question/answer (it&apos;s OK to leave some blank).
-          When you&apos;re done, click Save &amp; Finish.{' '}
+          When you&apos;re done, click Save &amp; Finish. Already have your clues in a
+          spreadsheet?{' '}
+          <button onClick={() => setShowCsvImport(true)} className="text-blue-300 underline font-bold">
+            Import a CSV
+          </button>{' '}
+          instead.{' '}
           <button onClick={() => setShowInstructions(false)} className="text-blue-400 underline">Dismiss</button>
         </div>
       )}
@@ -629,6 +664,8 @@ function CreateBoardContent() {
         <button onClick={addRow} className="btn-secondary px-3 py-1.5 text-xs">+ Add Row</button>
         <button onClick={addColumn} className="btn-secondary px-3 py-1.5 text-xs">+ Add Column</button>
         <div className="w-px h-6 bg-white/20 mx-1" />
+        <button onClick={() => setShowCsvImport(true)} className="btn-secondary px-3 py-1.5 text-xs"
+          title="Load clues from a spreadsheet you already have">⬆ Import CSV</button>
 
         <div className="w-px h-6 bg-white/20 mx-1" />
         <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
@@ -1067,6 +1104,15 @@ function CreateBoardContent() {
           </div>
         </div>
       )}
+      {/* CSV import */}
+      {showCsvImport && (
+        <CsvImport
+          onClose={() => setShowCsvImport(false)}
+          onLoad={applyCsvImport}
+          current={{ title: board.title, board: buildCustomBoard() }}
+        />
+      )}
+
       {/* Image picker modal */}
       {showImagePicker && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4"
