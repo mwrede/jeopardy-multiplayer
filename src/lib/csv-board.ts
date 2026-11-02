@@ -867,6 +867,16 @@ export function boardToCsv(title: string, board: CustomBoard): string {
   return `${lines.join('\n')}\n`
 }
 
+/**
+ * A filename for a board's export. Strips what a filesystem would object to
+ * and keeps the author's own title, so a board they named "Kids Week" comes
+ * back as `Kids Week.csv` rather than `board.csv`.
+ */
+export function csvFilename(title: string): string {
+  const base = (title || '').replace(/[^\w\- ]+/g, '').trim()
+  return `${base || 'board'}.csv`
+}
+
 /** Handed out as a download so an author can start from a file that works. */
 export const CSV_TEMPLATE = `Round,Category,Value,Clue,Answer,Daily Double
 Jeopardy,WORLD CAPITALS,200,This city on the Seine is France's capital,Paris,

@@ -6,9 +6,9 @@ import { saveCustomBoard, updateCustomBoard, loadCustomBoard, createPresentation
 import { useUser } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { ClueText } from '@/components/ClueText'
-import { CsvImport } from '@/components/CsvImport'
+import { CsvImport, downloadCsvFile } from '@/components/CsvImport'
 import type { CustomBoard } from '@/types/game'
-import type { CsvImportResult } from '@/lib/csv-board'
+import { boardToCsv, csvFilename, type CsvImportResult } from '@/lib/csv-board'
 import { markAuthored } from '@/lib/board-library'
 
 interface CellData {
@@ -450,6 +450,16 @@ function CreateBoardContent() {
     setEditingValue(null)
   }
 
+  /**
+   * The board out to a spreadsheet, in the same columns Import CSV reads back.
+   * Export, edit the clues somewhere with a real find-and-replace, re-import.
+   * It was already possible from inside the import dialog, which is the last
+   * place an author looks for it.
+   */
+  function exportCsv() {
+    downloadCsvFile(csvFilename(board.title), boardToCsv(board.title, buildCustomBoard()))
+  }
+
   function buildCustomBoard(): CustomBoard {
     const round1Categories = board.categories.map((name, colIdx) => ({
       name: name || `Category ${colIdx + 1}`,
@@ -666,6 +676,8 @@ function CreateBoardContent() {
         <div className="w-px h-6 bg-white/20 mx-1" />
         <button onClick={() => setShowCsvImport(true)} className="btn-secondary px-3 py-1.5 text-xs"
           title="Load clues from a spreadsheet you already have">⬆ Import CSV</button>
+        <button onClick={exportCsv} className="btn-secondary px-3 py-1.5 text-xs"
+          title="Save this board as a spreadsheet you can edit and import back">⬇ Export CSV</button>
 
         <div className="w-px h-6 bg-white/20 mx-1" />
         <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">

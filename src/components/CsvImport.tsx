@@ -16,6 +16,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   parseBoardCsv,
   boardToCsv,
+  csvFilename,
   CSV_TEMPLATE,
   type CsvImportResult,
 } from '@/lib/csv-board'
@@ -30,7 +31,8 @@ const LAYOUT_LABEL: Record<CsvImportResult['layout'], string> = {
   grid: 'a board grid',
 }
 
-function download(name: string, text: string) {
+/** Hand a CSV to the browser. Shared with the board editor's Export button. */
+export function downloadCsvFile(name: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
   const a = document.createElement('a')
   a.href = url
@@ -284,7 +286,7 @@ export function CsvImport({ onClose, onLoad, current }: Props) {
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs">
             <button
-              onClick={() => download('jeopardy-board-template.csv', CSV_TEMPLATE)}
+              onClick={() => downloadCsvFile('jeopardy-board-template.csv', CSV_TEMPLATE)}
               className="text-copper underline underline-offset-2 hover:text-copper-bright"
             >
               Download a template
@@ -292,8 +294,8 @@ export function CsvImport({ onClose, onLoad, current }: Props) {
             {current && (
               <button
                 onClick={() =>
-                  download(
-                    `${(current.title || 'board').replace(/[^\w\- ]+/g, '').trim() || 'board'}.csv`,
+                  downloadCsvFile(
+                    csvFilename(current.title),
                     boardToCsv(current.title, current.board),
                   )
                 }
