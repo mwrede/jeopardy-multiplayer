@@ -2,7 +2,7 @@
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
-import { ClueText } from '@/components/ClueText'
+import { ClueText, clueTextLength } from '@/components/ClueText'
 import { clampDailyDoubleWager, maxDailyDoubleWager, topClueValue } from '@/lib/wager'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { useState, useEffect, useCallback } from 'react'
@@ -46,6 +46,28 @@ type Scoring = 'manual' | 'buzzers'
 
 /** In a big room only the front of the queue matters — nobody judges #47. */
 const BUZZ_SHOWN = 8
+
+/**
+ * How big a clue gets on the room's screen. Presenting is the one surface
+ * read from across a room rather than from a lap, so a clue should be as
+ * large as it can be and still land whole — a clue the host has to scroll
+ * mid-read is worse than a smaller one.
+ *
+ * Length picks the size, because length is what decides whether it fits:
+ * two thirds of clues are under 90 characters and have room to be enormous,
+ * while the rare 200-character clue has none and stays where it is. The
+ * steps are per-breakpoint too — 96px only breaks into sensible lines on a
+ * wide screen.
+ */
+function clueSizeClass(text: string): string {
+  // A picture clue gives most of the height to the picture (ClueText's `tv`
+  // variant caps it at 45vh), so its words keep the smaller size.
+  if (text.includes('[img:')) return 'text-4xl md:text-6xl'
+  const len = clueTextLength(text)
+  if (len <= 90) return 'text-4xl md:text-6xl lg:text-7xl xl:text-[6rem] xl:leading-[1.08]'
+  if (len <= 170) return 'text-4xl md:text-6xl xl:text-7xl xl:leading-[1.12]'
+  return 'text-4xl md:text-6xl'
+}
 
 export default function PresentPage() {
   const { roomCode } = useParams<{ roomCode: string }>()
@@ -493,11 +515,11 @@ export default function PresentPage() {
             </div>
           ) : (
             <>
-              <p className="clue-type max-w-6xl text-4xl text-white md:text-6xl">
+              <p className={`clue-type max-w-7xl text-white ${clueSizeClass(activeClue.question)}`}>
                 <ClueText text={activeClue.question} variant="tv" />
               </p>
               {phase === 'answer' && (
-                <p className="mt-12 text-4xl font-bold text-jeopardy-gold-light md:text-6xl">
+                <p className={`mt-8 font-bold text-jeopardy-gold-light ${clueSizeClass(activeClue.question)}`}>
                   <ClueText text={activeClue.answer} variant="tv" />
                 </p>
               )}
@@ -541,7 +563,10 @@ export default function PresentPage() {
           >
             {roundCategories.map((cat) => (
               <div key={cat.id} className="board-category min-h-[44px] p-1.5 md:min-h-[60px] md:p-3">
-                <span className="line-clamp-3 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-white md:text-sm">
+                {/* Four lines rather than three: the headers grow with the
+                    screen, and the longest category names need the extra line
+                    before they'd be cut off. */}
+                <span className="line-clamp-4 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-white md:text-sm lg:text-lg xl:text-xl 2xl:text-2xl">
                   {cat.name}
                 </span>
               </div>
