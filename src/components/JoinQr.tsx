@@ -20,16 +20,22 @@ export function JoinQr({
   roomCode,
   size = 'md',
   className = '',
+  suffix = '',
+  label,
 }: {
   roomCode: string
   size?: 'sm' | 'md' | 'lg'
   className?: string
+  /** Appended to /game/<code> — '/play' for everyone-on-their-own-device. */
+  suffix?: string
+  /** Overrides the copy button's wording. */
+  label?: string
 }) {
   const [origin, setOrigin] = useState('')
   const [copied, setCopied] = useState(false)
   useEffect(() => { setOrigin(window.location.origin) }, [])
 
-  const joinUrl = origin ? `${origin}/game/${roomCode}` : ''
+  const joinUrl = origin ? `${origin}/game/${roomCode}${suffix}` : ''
   const px = size === 'lg' ? 320 : size === 'sm' ? 112 : 180
 
   async function copy() {
@@ -58,7 +64,7 @@ export function JoinQr({
           onClick={copy}
           className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
         >
-          {copied ? '✓ Copied' : 'Copy join link'}
+          {copied ? '✓ Copied' : label ?? 'Copy join link'}
         </button>
       )}
     </div>

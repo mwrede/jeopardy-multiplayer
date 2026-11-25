@@ -30,6 +30,7 @@ import {
 } from '@/lib/game-api'
 import { CLUE_INTRO_MS, buzzOpenDelayMs } from '@/lib/clue-timing'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
+import { JoinQr } from '@/components/JoinQr'
 import { ClueAttempts } from '@/components/ClueAttempts'
 import type { Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
@@ -43,37 +44,14 @@ import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound
  * /game/<code>/play. Sending everyone to /play was wrong for party games.
  */
 function JoinPanel({ roomCode, isMultiplayer }: { roomCode: string; isMultiplayer: boolean }) {
-  const [origin, setOrigin] = useState('')
-  const [copied, setCopied] = useState(false)
-  useEffect(() => { setOrigin(window.location.origin) }, [])
-  if (!origin) return null
-
-  const url = `${origin}/game/${roomCode}${isMultiplayer ? '/play' : ''}`
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(url)
-    } catch {
-      window.prompt('Copy this link:', url)
-    }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
+  // The QR is drawn in the page rather than fetched from a QR web service.
+  // On a TV in a room with patchy wifi, the fetched version failed in exactly
+  // the moment it was needed and left a blank white square where the way into
+  // the game should be.
   return (
     <div className="flex flex-col items-center gap-3">
-      <img
-        src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`}
-        alt={`Scan to join room ${roomCode}`}
-        className="w-48 h-48 rounded-xl bg-white p-2"
-      />
+      <JoinQr roomCode={roomCode} suffix={isMultiplayer ? '/play' : ''} label="Copy invite link" />
       <p className="text-gray-400 text-sm">Scan to join</p>
-      <button
-        onClick={copy}
-        className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-semibold transition-colors"
-      >
-        {copied ? '✓ Link copied' : 'Copy invite link'}
-      </button>
     </div>
   )
 }
