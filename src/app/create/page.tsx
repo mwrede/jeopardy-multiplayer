@@ -10,6 +10,7 @@ import { CsvImport, downloadCsvFile } from '@/components/CsvImport'
 import type { CustomBoard } from '@/types/game'
 import { boardToCsv, csvFilename, type CsvImportResult } from '@/lib/csv-board'
 import { markAuthored } from '@/lib/board-library'
+import { youtubeId, youtubeToken } from '@/lib/youtube'
 
 interface CellData {
   question: string
@@ -92,6 +93,8 @@ function CreateBoardContent() {
   const [editingValue, setEditingValue] = useState<{ round: 1 | 2; row: number } | null>(null)
   const [valueInput, setValueInput] = useState('')
   const [showImagePicker, setShowImagePicker] = useState(false)
+  const [showVideoPicker, setShowVideoPicker] = useState(false)
+  const [videoUrl, setVideoUrl] = useState('')
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [imageUrl, setImageUrl] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -380,6 +383,22 @@ function CreateBoardContent() {
     setImageUrl('')
   }
 
+  /**
+   * Put a YouTube link in the clue.
+   *
+   * Stored as a `[yt:id]` token rather than the pasted URL: a share link
+   * carries tracking parameters and a Short carries a different path shape,
+   * and a board that keeps the raw string renders differently depending on
+   * which of those the author happened to copy.
+   */
+  function insertVideoUrl(url: string) {
+    const token = youtubeToken(url)
+    if (!token) return
+    setCellQuestion((q) => (q.trim() ? `${q.trimEnd()}\n${token}` : token))
+    setShowVideoPicker(false)
+    setVideoUrl('')
+  }
+
   async function handleFileUpload(file: File) {
     if (!file.type.startsWith('image/')) return
     setUploading(true)
@@ -407,6 +426,13 @@ function CreateBoardContent() {
         if (file) handleFileUpload(file)
         return
       }
+    }
+    // A YouTube link pasted on its own is a video clue — normalise it to the
+    // token on the way in so the cell doesn't carry utm parameters around.
+    const text = e.clipboardData?.getData('text/plain')?.trim()
+    if (text && !/\s/.test(text) && youtubeId(text)) {
+      e.preventDefault()
+      insertVideoUrl(text)
     }
   }
 
@@ -1095,7 +1121,10 @@ function CreateBoardContent() {
                 <button type="button" onClick={() => insertTag('img')}
                   className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-sm transition-colors"
                   title="Insert image URL">🖼️</button>
-                <span className="text-gray-600 text-[10px] ml-2">**bold** *italic* [big]...[/big] [img:url]</span>
+                <button type="button" onClick={() => setShowVideoPicker(true)}
+                  className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-sm transition-colors"
+                  title="Add a YouTube video">📺</button>
+                <span className="text-gray-600 text-[10px] ml-2">**bold** *italic* [big]...[/big] [img:url] [yt:link]</span>
               </div>
               <textarea id="clue-editor" value={cellQuestion} onChange={(e) => setCellQuestion(e.target.value)}
                 onPaste={handlePaste}
@@ -1123,6 +1152,47 @@ function CreateBoardContent() {
           onLoad={applyCsvImport}
           current={{ title: board.title, board: buildCustomBoard() }}
         />
+      )}
+
+      {/* YouTube picker modal */}
+      {showVideoPicker && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowVideoPicker(false) }}>
+          <div className="bg-jeopardy-dark border border-white/20 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-bold text-white">Add a YouTube video</h3>
+            <p className="text-gray-400 text-sm">
+              Paste any YouTube link — a watch page, a share link, a Short. The clue shows a
+              play button, and the clip plays right on the board when you click it.
+            </p>
+            <div className="flex gap-2">
+              <input type="text" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="input-base text-sm flex-1"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') insertVideoUrl(videoUrl.trim()) }} />
+              <button onClick={() => insertVideoUrl(videoUrl.trim())}
+                disabled={!youtubeId(videoUrl.trim())}
+                className="btn-primary px-4 py-2 text-sm disabled:opacity-40">Add</button>
+            </div>
+
+            {/* Say so straight away when a link won't work, rather than letting
+                a dead clue sit on the board until game night. */}
+            {videoUrl.trim() && !youtubeId(videoUrl.trim()) && (
+              <p className="text-red-400 text-xs">
+                That doesn&apos;t look like a YouTube video link. A channel or playlist URL
+                won&apos;t play — open the video itself and copy that address.
+              </p>
+            )}
+            {youtubeId(videoUrl.trim()) && (
+              <div className="rounded-lg border border-white/10 bg-black/30 p-2">
+                <ClueText text={`[yt:${videoUrl.trim()}]`} />
+              </div>
+            )}
+
+            <button onClick={() => setShowVideoPicker(false)}
+              className="btn-secondary w-full py-2 text-sm">Cancel</button>
+          </div>
+        </div>
       )}
 
       {/* Image picker modal */}

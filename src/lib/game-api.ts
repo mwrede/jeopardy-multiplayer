@@ -118,13 +118,17 @@ export async function joinGame(
     .select('*', { count: 'exact', head: true })
     .eq('game_id', game.id)
 
-  // Community Play is deliberately three-handed — that's the format. Every
-  // other mode takes as many as will fit on a scoreboard.
+  // Community Play is deliberately three-handed — that's the format.
+  //
+  // Nothing else has a cap. There used to be a ceiling of fifteen, which is a
+  // number that means nothing to a room: a classroom of thirty scanning the
+  // same QR code watched the sixteenth person get told the game was full,
+  // with no way for the host to let them in. The scoreboard is built to
+  // shrink instead, so the limit is the host's screen rather than a constant.
   const isCommunity = (game.settings as any)?.community === true
   const isMultiplayerMode = (game.settings as any)?.gameMode === 'multiplayer'
-  const maxPlayers = isCommunity ? 3 : 15
-  if ((count ?? 0) >= maxPlayers) {
-    throw new Error(`Game is full (max ${maxPlayers} players)`)
+  if (isCommunity && (count ?? 0) >= 3) {
+    throw new Error('Game is full (max 3 players)')
   }
 
   // For mid-game joins, auto-set ready and start with 0 score
@@ -2170,6 +2174,120 @@ export async function hostJudge(
   }
 
   await advanceAfterFailedAnswer(gameId, clueId, playerId)
+}
+
+/**
+ * Hand the floor to a player: they're the one answering now.
+ *
+ * In a hosted game the race picks the fastest buzzer automatically, and this
+ * is how the host overrides that — giving it to the second in line because
+ * the first one stepped back, or to somebody who never buzzed at all because
+ * they said it out loud and the host wants it on the record.
+ *
+ * Granting the floor is not a verdict. It unlocks that player's phone so
+ * they can type what they're saying, and nothing else: scoring stays with
+ * the host.
+ */
+export async function hostGrantFloor(gameId: string, clueId: string, playerId: string) {
+  const { error } = await supabase
+    .from('games')
+    .update({
+      phase: 'player_answering',
+      current_player_id: playerId,
+      current_clue_id: clueId,
+      buzz_window_open: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+  if (error) throw error
+
+  // Make sure there's a row to hang their answer on, so a player who never
+  // buzzed can still be given the floor and still show up in the queue.
+  await supabase
+    .from('buzzes')
+    .upsert(
+      {
+        game_id: gameId,
+        clue_id: clueId,
+        player_id: playerId,
+        server_timestamp: new Date().toISOString(),
+        is_winner: true,
+        is_pass: false,
+      },
+      { onConflict: 'game_id,clue_id,player_id', ignoreDuplicates: true },
+    )
+}
+
+/**
+ * Take the floor back without ruling on it — the host misclicked, or the
+ * player who had it has gone quiet. Returns to the live clue with the
+ * buzzers where the host left them.
+ */
+export async function hostTakeBackFloor(gameId: string) {
+  const { error } = await supabase
+    .from('games')
+    .update({
+      phase: 'clue_reading',
+      current_player_id: null,
+      buzz_window_open: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', gameId)
+  if (error) throw error
+}
+
+/**
+ * A player's answer in a HOSTED game — recorded, never graded.
+ *
+ * The host is the judge, so this writes the words down and stops. It's
+ * called as the player types, which is the point: the host watches the
+ * answer appear and can tell a near-miss from a different answer entirely
+ * before ruling, instead of asking the room to repeat itself.
+ */
+export async function recordSpokenAnswer(
+  gameId: string,
+  clueId: string,
+  playerId: string,
+  answer: string,
+) {
+  // Update first, insert only if there was nothing to update. An upsert would
+  // rewrite server_timestamp and is_pass on every keystroke, and those two
+  // columns are the buzz's timing and its standing in the race — a typed
+  // answer must not disturb either.
+  const { data: updated, error } = await supabase
+    .from('buzzes')
+    .update({ answer })
+    .eq('game_id', gameId)
+    .eq('clue_id', clueId)
+    .eq('player_id', playerId)
+    .select('id')
+  if (error) throw error
+  if (updated?.length) return
+
+  await supabase.from('buzzes').insert({
+    game_id: gameId,
+    clue_id: clueId,
+    player_id: playerId,
+    server_timestamp: new Date().toISOString(),
+    is_pass: false,
+    answer,
+  })
+}
+
+/**
+ * Set a score outright.
+ *
+ * The +/- buttons move by the clue's value, which is the right step nine
+ * times in ten and useless for the tenth — a scorekeeping mistake three
+ * clues back, or a round that started with carried-over totals. Typing the
+ * number is the only way to fix those without arithmetic.
+ */
+export async function hostSetScore(playerId: string, score: number) {
+  const { error } = await supabase
+    .from('players')
+    .update({ score: Math.round(score) })
+    .eq('id', playerId)
+  if (error) throw error
 }
 
 /** Manual score nudge — the host always gets the last word. */

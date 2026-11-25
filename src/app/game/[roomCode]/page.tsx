@@ -36,6 +36,7 @@ import {
   reopenAfterWrongAnswer,
   WRONG_ANSWER_HOLD_MS,
   submitOpenAnswer,
+  recordSpokenAnswer,
   closeOpenClue,
   getBuzzOrder,
   isUnlimitedBuzzer,
@@ -128,6 +129,17 @@ export default function PlayerPage() {
     refreshState,
   } = useGameChannel(roomCode)
 
+  /**
+   * A HOSTED game — a person with a microphone runs it.
+   *
+   * Three things change on this phone when it's true, and they all come from
+   * the same principle: the host owns the clock and the verdict, so nothing
+   * here may move the game on by itself. The buzzers don't open on a timer,
+   * the answer clock doesn't time anyone out, and a typed answer is passed to
+   * the host rather than graded.
+   */
+  const isHostRunGame = (game?.settings as any)?.gameMode === 'host'
+
   const [answer, setAnswer] = useState('')
   const [wager, setWager] = useState('')
   const [finalWagerInput, setFinalWagerInput] = useState('')
@@ -146,6 +158,10 @@ export default function PlayerPage() {
     setMyBuzz(null)
     setOpenEligible(false)
     setOpenLockedIn(false)
+    // Last clue's typing must not be sitting in the box for this one — in a
+    // hosted game that text is relayed to the host as it's typed, and a
+    // leftover answer would show up under the next clue as if it were new.
+    setAnswer('')
   }, [game?.current_clue_id])
 
   // A miss ends the race I was in — my reaction from it stops being the thing
@@ -250,6 +266,12 @@ export default function PlayerPage() {
   // because the UPDATE is idempotent (last write wins).
   const phaseTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    // Except in a hosted game, where this fallback was actively wrong: the
+    // host selects a clue, the phase goes to clue_reading, and a few seconds
+    // later every phone in the room independently decided to open the
+    // buzzers — revealing the clue before the host had read it and taking the
+    // "Open Buzzers" decision away from the person whose decision it is.
+    if (isHostRunGame) return
     if (!game || game.phase !== 'clue_reading') {
       if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
       return
@@ -268,7 +290,7 @@ export default function PlayerPage() {
     return () => {
       if (phaseTransitionRef.current) clearTimeout(phaseTransitionRef.current)
     }
-  }, [game?.phase, game?.id, game?.current_clue_id, game?.updated_at, clues, game?.settings?.reading_period_ms])
+  }, [game?.phase, game?.id, game?.current_clue_id, game?.updated_at, clues, game?.settings?.reading_period_ms, isHostRunGame])
 
   // Buzz window countdown + arming. Scheduled against buzz_window_start (a
   // ~700ms-future timestamp) so every phone arms at the same moment.
@@ -314,9 +336,16 @@ export default function PlayerPage() {
     }
   }, [game?.phase, game?.id, game?.buzz_window_start])
 
-  // Answer countdown timer when it's your turn to answer
+  // Answer countdown timer when it's your turn to answer.
+  //
+  // Not in a hosted game. There the host decides when someone has had long
+  // enough, and a 20-second auto-pass would yank the floor away mid-sentence
+  // and charge the player for a clue the host hadn't ruled on yet.
   useEffect(() => {
-    const isAnswering = game?.phase === 'player_answering' && game?.current_player_id === myPlayerId
+    const isAnswering =
+      game?.phase === 'player_answering' &&
+      game?.current_player_id === myPlayerId &&
+      !isHostRunGame
 
     if (!isAnswering || !game) {
       setAnswerCountdown(null)
@@ -347,7 +376,7 @@ export default function PlayerPage() {
       if (answerIntervalRef.current) clearInterval(answerIntervalRef.current)
       if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current)
     }
-  }, [game?.phase, game?.id, game?.current_player_id, myPlayerId])
+  }, [game?.phase, game?.id, game?.current_player_id, myPlayerId, isHostRunGame])
 
   // ===== UNLIMITED BUZZER: everyone who rang in answers at once =====
 
@@ -409,6 +438,40 @@ export default function PlayerPage() {
     const t = setTimeout(() => { reopenAfterWrongAnswer(game.id, clueId) }, Math.max(0, at - Date.now()))
     return () => clearTimeout(t)
   }, [game?.phase, game?.id, game?.updated_at, game?.current_clue_id])
+
+  /**
+   * HOSTED GAME: show the host what's being typed, as it's typed.
+   *
+   * Typing is optional — most rooms say the answer out loud and the host
+   * rules on what they hear. But when someone does type, the host should see
+   * it arrive rather than waiting for a submit that may never come, because
+   * the whole point is to help them tell "Roosevelt" from "Theodore
+   * Roosevelt" before they rule. Debounced so a long answer is a handful of
+   * writes rather than one per keystroke.
+   *
+   * Nothing here grades anything. The words are recorded and that's all.
+   */
+  const relayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** The clue we've already relayed something for — see the empty-text guard. */
+  const relayedClueRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!isHostRunGame || !game || !myPlayerId) return
+    if (game.phase !== 'player_answering' || game.current_player_id !== myPlayerId) return
+    const clueId = game.current_clue_id
+    if (!clueId) return
+    const text = answer
+    // Don't write an empty answer before there's been a real one: that's just
+    // the box opening. Once something has been typed, clearing it is a real
+    // edit and does get sent.
+    if (!text.trim() && relayedClueRef.current !== clueId) return
+
+    if (relayTimerRef.current) clearTimeout(relayTimerRef.current)
+    relayTimerRef.current = setTimeout(() => {
+      relayedClueRef.current = clueId
+      recordSpokenAnswer(game.id, clueId, myPlayerId, text.trim()).catch(() => {})
+    }, 350)
+    return () => { if (relayTimerRef.current) clearTimeout(relayTimerRef.current) }
+  }, [answer, isHostRunGame, game?.id, game?.phase, game?.current_player_id, game?.current_clue_id, myPlayerId])
 
   // Play tick sounds on countdown changes
   const prevBuzzRef2 = useRef<number | null>(null)
@@ -621,7 +684,7 @@ export default function PlayerPage() {
 
   // Host-run games surface the clue on phones, but only once the host opens
   // the buzzers — so nobody reads ahead of the room.
-  const isHostRun = (game.settings as any)?.gameMode === 'host'
+  const isHostRun = isHostRunGame
   const currentClue = game.current_clue_id
     ? clues.find((c) => c.id === game.current_clue_id)
     : null
@@ -1147,7 +1210,9 @@ export default function PlayerPage() {
             announceLatest
             value={currentClue.value}
           />
-          {game.phase === 'buzz_window' && buzzCountdown !== null && (
+          {/* No clock in a hosted game: the buzzers stay open until the host
+              locks them, so a number counting to zero would be a lie. */}
+          {game.phase === 'buzz_window' && buzzCountdown !== null && !isHostRun && (
             <p className={`text-7xl font-bold font-mono ${
               buzzCountdown <= 5 ? 'text-red-400' : 'text-white/60'
             }`}>
@@ -1287,6 +1352,53 @@ export default function PlayerPage() {
   // ===== ANSWERING =====
   if (game.phase === 'player_answering' && currentClue) {
     const isAnswering = game.current_player_id === myPlayerId
+
+    /* HOSTED: the host gave this player the floor.
+       Say it out loud is the primary instruction, because that's what rooms
+       actually do and because this phone has no way to end the clue. Typing
+       is offered underneath for the host's benefit: it lands on their console
+       as it's written, so a close answer can be read rather than guessed at.
+       No clock and no submit-and-be-judged — the host rules when they rule. */
+    if (isAnswering && isHostRun) {
+      return (
+        <div className="min-h-screen flex flex-col bg-jeopardy-dark">
+          <PlayerHeader myPlayer={myPlayer} game={game} />
+
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <p className="text-jeopardy-gold text-3xl font-bold">You&apos;re in!</p>
+            <p className="text-white text-lg mt-3">Say your answer out loud</p>
+            <p className="text-gray-500 text-sm mt-2">
+              The host is ruling on this one. Typing it below is optional — it just shows
+              them what you said.
+            </p>
+            {answer.trim() && (
+              <p className="mt-6 text-[11px] uppercase tracking-[0.2em] text-green-400">
+                The host can see this
+              </p>
+            )}
+          </div>
+
+          <div className="sticky bottom-0 bg-jeopardy-dark/95 backdrop-blur-sm border-t border-white/10 p-4 pb-[env(safe-area-inset-bottom,16px)]">
+            <div className="w-full max-w-sm mx-auto">
+              <GameKeyboard
+                value={answer}
+                onChange={setAnswer}
+                onSubmit={() => {
+                  if (!game.current_clue_id || !myPlayerId) return
+                  recordSpokenAnswer(game.id, game.current_clue_id, myPlayerId, answer.trim())
+                    .catch(() => {})
+                }}
+                mode="letters"
+                placeholder="Type or 🎤 speak it (optional)..."
+                submitLabel="Show the host"
+                submitDisabled={!answer.trim()}
+                maxLength={200}
+              />
+            </div>
+          </div>
+        </div>
+      )
+    }
 
     if (isAnswering) {
       return (

@@ -18,6 +18,8 @@ import { supabase } from '@/lib/supabase'
 import type { Category, Clue } from '@/types/game'
 import { PresenterControl } from '@/components/PresenterControl'
 import { BuzzerConsole } from '@/components/BuzzerConsole'
+import { hasYouTube } from '@/lib/youtube'
+import { JoinQr, JoinQrOverlay } from '@/components/JoinQr'
 
 /**
  * PRESENT — the host's screen.
@@ -44,9 +46,6 @@ interface Team {
 type PresentPhase = 'setup' | 'board' | 'clue' | 'answer' | 'daily_double'
 type Scoring = 'manual' | 'buzzers'
 
-/** In a big room only the front of the queue matters — nobody judges #47. */
-const BUZZ_SHOWN = 8
-
 /**
  * How big a clue gets on the room's screen. Presenting is the one surface
  * read from across a room rather than from a lap, so a clue should be as
@@ -60,9 +59,10 @@ const BUZZ_SHOWN = 8
  * wide screen.
  */
 function clueSizeClass(text: string): string {
-  // A picture clue gives most of the height to the picture (ClueText's `tv`
-  // variant caps it at 45vh), so its words keep the smaller size.
-  if (text.includes('[img:')) return 'text-4xl md:text-6xl'
+  // A picture or video clue gives most of the height to the media (ClueText's
+  // `tv` variant caps a photo at 45vh and a player at a 16:9 frame), so its
+  // words keep the smaller size.
+  if (text.includes('[img:') || hasYouTube(text)) return 'text-3xl md:text-5xl'
   const len = clueTextLength(text)
   if (len <= 90) return 'text-4xl md:text-6xl lg:text-7xl xl:text-[6rem] xl:leading-[1.08]'
   if (len <= 170) return 'text-4xl md:text-6xl xl:text-7xl xl:leading-[1.12]'
@@ -84,14 +84,17 @@ export default function PresentPage() {
     { name: 'Player 2', score: 0 },
     { name: 'Player 3', score: 0 },
   ])
-  /** Fewer than two isn't a game; past a dozen the score cards are unreadable
-   *  and ScoreRow switches to a top-ten leaderboard anyway. */
+  /**
+   * One player is a game of solitaire but it's still a game. There's no upper
+   * limit: a classroom is thirty, and a cap that stops the host typing the
+   * thirty-first name is a cap on the room, not on the software. ScoreRow
+   * shrinks the cards to fit instead.
+   */
   const MIN_PLAYERS = 1
-  const MAX_PLAYERS = 12
 
   /** Grow or shrink the list to exactly n, keeping any names already typed. */
   const setPlayerCount = (n: number) => {
-    const size = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, n))
+    const size = Math.max(MIN_PLAYERS, n)
     setTeams((prev) =>
       Array.from({ length: size }, (_, i) => prev[i] || { name: `Player ${i + 1}`, score: 0 }),
     )
@@ -108,11 +111,8 @@ export default function PresentPage() {
   // NOT local state: with the board on a laptop and the buzzer controls on a
   // phone, whichever device acted last is the truth, and that's the game row.
   const buzzersOpen = game?.phase === 'buzz_window'
-  const [origin, setOrigin] = useState('')
-  const [copied, setCopied] = useState(false)
   const [justScored, setJustScored] = useState<string | null>(null)
-
-  useEffect(() => { setOrigin(window.location.origin) }, [])
+  const [showJoinCode, setShowJoinCode] = useState(false)
 
   // Hooks above run unconditionally; the control screen owns its own state.
   if (isControl) return <PresenterControl roomCode={roomCode} />
@@ -121,8 +121,13 @@ export default function PresentPage() {
   // createPresentationGame seeds a placeholder "Presenter" row so the board
   // can be built before anyone joins. It isn't a contestant — keep it out of
   // the scoreboard and the buzz queue.
-  const contestants = players.filter((p) => p.name !== 'Presenter')
-  const joinUrl = origin ? `${origin}/game/${roomCode}` : ''
+  // Sorted by join order, not by whatever order realtime delivered them in:
+  // a late joiner is appended to the end of the local list, and without a
+  // stable sort every score card on the strip shuffles the moment somebody
+  // new scans in — mid-clue, under the host's cursor.
+  const contestants = players
+    .filter((p) => p.name !== 'Presenter')
+    .sort((a, b) => a.join_order - b.join_order)
 
   const roundCategories = categories
     .filter((c) => c.round_number === currentRound)
@@ -310,39 +315,28 @@ export default function PresentPage() {
                 <p className="mb-3 text-sm text-gray-300">
                   Show this to the room. Everyone who joins becomes a team.
                 </p>
-                {joinUrl && (
-                  <div className="flex flex-col items-center gap-3">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}`}
-                      alt={`Scan to join room ${roomCode}`}
-                      className="h-40 w-40 rounded-lg bg-white p-2"
-                    />
-                    <p className="font-mono text-2xl font-bold tracking-[0.3em] text-white">{roomCode}</p>
-                    <button
-                      onClick={async () => {
-                        try { await navigator.clipboard.writeText(joinUrl) }
-                        catch { window.prompt('Copy this link:', joinUrl) }
-                        setCopied(true); setTimeout(() => setCopied(false), 2000)
-                      }}
-                      className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
-                    >
-                      {copied ? '✓ Copied' : 'Copy contestant link'}
-                    </button>
-                  </div>
-                )}
+                <JoinQr roomCode={roomCode} />
               </div>
 
+              {/* However many turn up. The list scrolls rather than the page,
+                  so the Start button stays where the host left it. */}
               <div className="space-y-1.5">
                 <p className="text-[10px] uppercase tracking-[0.24em] text-gray-400">
                   Joined ({contestants.length})
                 </p>
-                {contestants.length === 0 && <p className="text-sm italic text-gray-500">Waiting for players…</p>}
-                {contestants.map((p, i) => (
-                  <div key={p.id} className="flex items-center gap-3 rounded bg-white/5 px-3 py-2">
-                    <span className="w-5 text-xs tabular-nums text-jeopardy-gold-light">{i + 1}</span>
-                    <span className="font-semibold text-white">{p.name}</span>
-                  </div>
-                ))}
+                {contestants.length === 0 && (
+                  <p className="text-sm italic text-gray-500">
+                    Waiting for players… you can start without them and let people join as they arrive.
+                  </p>
+                )}
+                <div className="max-h-56 space-y-1.5 overflow-y-auto">
+                  {contestants.map((p, i) => (
+                    <div key={p.id} className="flex items-center gap-3 rounded bg-white/5 px-3 py-2">
+                      <span className="w-6 shrink-0 text-xs tabular-nums text-jeopardy-gold-light">{i + 1}</span>
+                      <span className="truncate font-semibold text-white">{p.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
@@ -365,9 +359,8 @@ export default function PresentPage() {
                       than six, so the count isn't capped at the buttons. */}
                   <button
                     onClick={() => setPlayerCount(teams.length + 1)}
-                    disabled={teams.length >= MAX_PLAYERS}
-                    title={teams.length >= MAX_PLAYERS ? `${MAX_PLAYERS} is the most` : 'Add another player'}
-                    className={`w-11 shrink-0 rounded-lg py-2 font-bold transition-colors disabled:opacity-30 ${
+                    title="Add another player"
+                    className={`w-11 shrink-0 rounded-lg py-2 font-bold transition-colors ${
                       teams.length > 6 ? 'bg-jeopardy-gold text-black' : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
@@ -375,10 +368,7 @@ export default function PresentPage() {
                   </button>
                 </div>
                 {teams.length > 6 && (
-                  <p className="mt-1.5 text-[11px] text-gray-400">
-                    {teams.length} players
-                    {teams.length > 10 && ' — the score strip shows the top ten'}
-                  </p>
+                  <p className="mt-1.5 text-[11px] text-gray-400">{teams.length} players</p>
                 )}
               </div>
               <div className="space-y-2">
@@ -409,8 +399,7 @@ export default function PresentPage() {
                 ))}
                 <button
                   onClick={() => setPlayerCount(teams.length + 1)}
-                  disabled={teams.length >= MAX_PLAYERS}
-                  className="w-full rounded-lg border border-dashed border-white/20 py-2 text-sm font-semibold text-gray-400 transition-colors hover:border-jeopardy-gold/60 hover:text-white disabled:opacity-30"
+                  className="w-full rounded-lg border border-dashed border-white/20 py-2 text-sm font-semibold text-gray-400 transition-colors hover:border-jeopardy-gold/60 hover:text-white"
                 >
                   + Add a player
                 </button>
@@ -429,10 +418,9 @@ export default function PresentPage() {
               }
               setPhase('board')
             }}
-            disabled={usingBuzzers && contestants.length === 0}
-            className="btn-primary w-full py-4 text-lg disabled:opacity-40"
+            className="btn-primary w-full py-4 text-lg"
           >
-            {usingBuzzers && contestants.length === 0 ? 'Waiting for players…' : 'Start Presenting'}
+            Start Presenting
           </button>
         </div>
       </div>
@@ -447,13 +435,16 @@ export default function PresentPage() {
       players={contestants}
       currentClue={activeClue}
       phase={game.phase}
+      currentPlayerId={game.current_player_id}
+      // The wager is typed on this screen, so the console has to be told it
+      // or a Daily Double settles at the cell's face value.
+      dailyDoubleWager={activeClue?.is_daily_double ? parseInt(ddWager) || undefined : undefined}
     />
   ) : null
 
   /* ── CLUE / ANSWER ────────────────────────────────────────────────────── */
   if ((phase === 'clue' || phase === 'answer' || phase === 'daily_double') && activeClue) {
     const waitingToOpen = usingBuzzers && phase === 'clue' && !buzzersOpen
-    const untried = buzzOrder.filter((b) => b.is_correct === null)
 
     return (
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-jeopardy-blue-cell">
@@ -609,6 +600,16 @@ export default function PresentPage() {
         >
           MENU
         </button>
+        {usingBuzzers && (
+          <button
+            onClick={() => setShowJoinCode(true)}
+            className="rounded border-2 border-jeopardy-gold/50 bg-jeopardy-blue-cell px-2 py-3 text-xs font-bold leading-none tracking-widest text-jeopardy-gold-light"
+            style={{ writingMode: 'vertical-lr' }}
+            title="Put the join code on screen"
+          >
+            JOIN
+          </button>
+        )}
         <ScoreRow
           bare
           usingBuzzers={usingBuzzers}
@@ -640,6 +641,14 @@ export default function PresentPage() {
 
       {console_}
 
+      {showJoinCode && (
+        <JoinQrOverlay
+          roomCode={roomCode}
+          joined={contestants.length}
+          onClose={() => setShowJoinCode(false)}
+        />
+      )}
+
       {showMenu && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowMenu(false)}>
           <div className="w-full max-w-xs space-y-3 rounded-2xl border border-white/20 bg-jeopardy-dark p-6" onClick={(e) => e.stopPropagation()}>
@@ -647,6 +656,14 @@ export default function PresentPage() {
             <button onClick={() => { setPhase('setup'); setShowMenu(false) }} className="btn-secondary w-full py-2 text-sm">
               {usingBuzzers ? 'Scoring & players' : 'Edit players'}
             </button>
+            {usingBuzzers && (
+              <button
+                onClick={() => { setShowJoinCode(true); setShowMenu(false) }}
+                className="btn-secondary w-full py-2 text-sm"
+              >
+                Show join code
+              </button>
+            )}
             <button
               onClick={() => {
                 setAnsweredClueIds(new Set()); setCurrentRound(1)
@@ -685,42 +702,50 @@ function ScoreRow({
   onPlayer: (playerId: string, delta: number) => void
   bare?: boolean
 }) {
-  const all = usingBuzzers
+  const rows = usingBuzzers
     ? players.map((p) => ({ key: p.id, name: p.name, score: p.score, bump: (d: number) => onPlayer(p.id, d) }))
     : teams.map((t, i) => ({ key: String(i), name: t.name, score: t.score, bump: (d: number) => onManual(i, d) }))
 
-  // A big room can't show everyone — 150 cards is unreadable and unclickable.
-  // Past ten, show the leaderboard: top ten by score, and say how many are
-  // hidden so nobody thinks they vanished.
-  const LIMIT = 10
-  const overflow = all.length > LIMIT
-  const rows = overflow
-    ? [...all].sort((a, b) => b.score - a.score).slice(0, LIMIT)
-    : all
+  /**
+   * EVERY player, always.
+   *
+   * This used to cut to a top-ten leaderboard past ten players, with a
+   * "+5 more" card standing in for the rest. That is precisely backwards: the
+   * reason to look at this strip is to add or correct somebody's points, and
+   * the people who need correcting are the ones who aren't in the top ten. A
+   * host with fifteen in the room could see ten of them and had no way to
+   * reach the other five at all.
+   *
+   * So the cards shrink instead of disappearing. Fifteen narrow cards fit
+   * across a laptop; past that the strip scrolls sideways, which is a
+   * nuisance but never a dead end.
+   */
+  const n = rows.length
+  const cardW =
+    n <= 6 ? 'w-[110px] md:w-[140px]'
+    : n <= 10 ? 'w-[96px] md:w-[116px]'
+    : n <= 16 ? 'w-[80px] md:w-[94px]'
+    : 'w-[70px] md:w-[78px]'
+  const nameSize = n <= 10 ? 'text-sm md:text-base' : 'text-[11px] md:text-xs'
+  const scoreSize = n <= 6 ? 'text-lg md:text-xl' : n <= 16 ? 'text-base md:text-lg' : 'text-sm'
 
   const cards = (
     <>
       {rows.length === 0 && <p className="text-sm text-gray-500">No players yet</p>}
       {rows.map((r) => (
-        <div key={r.key} className="w-[110px] shrink-0 overflow-hidden rounded-lg bg-white text-center md:w-[140px]">
-          <p className="border-b-2 border-jeopardy-blue-cell px-3 py-1 text-sm font-bold italic text-black md:text-base">
+        <div key={r.key} className={`${cardW} shrink-0 overflow-hidden rounded-lg bg-white text-center`}>
+          <p className={`truncate border-b-2 border-jeopardy-blue-cell px-1.5 py-1 font-bold italic text-black ${nameSize}`}>
             {r.name}
           </p>
-          <p className="border-b border-gray-300 px-3 py-1 text-lg font-bold tabular-nums text-black md:text-xl">
+          <p className={`border-b border-gray-300 px-1 py-1 font-bold tabular-nums text-black ${scoreSize}`}>
             {r.score < 0 ? `-$${Math.abs(r.score).toLocaleString()}` : `$${r.score.toLocaleString()}`}
           </p>
           <div className="flex">
-            <button onClick={() => r.bump(step)} className="flex-1 py-0.5 text-lg font-bold text-green-600 transition-colors hover:bg-green-50">+</button>
-            <button onClick={() => r.bump(-step)} className="flex-1 py-0.5 text-lg font-bold text-red-600 transition-colors hover:bg-red-50">−</button>
+            <button onClick={() => r.bump(step)} className="flex-1 py-0.5 text-lg font-bold leading-none text-green-600 transition-colors hover:bg-green-50">+</button>
+            <button onClick={() => r.bump(-step)} className="flex-1 py-0.5 text-lg font-bold leading-none text-red-600 transition-colors hover:bg-red-50">−</button>
           </div>
         </div>
       ))}
-      {overflow && (
-        <div className="self-center rounded-lg bg-white/10 px-3 py-2 text-center">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-blue-200/70">Top {LIMIT}</p>
-          <p className="text-sm font-bold text-white">+{all.length - LIMIT} more</p>
-        </div>
-      )}
     </>
   )
 
