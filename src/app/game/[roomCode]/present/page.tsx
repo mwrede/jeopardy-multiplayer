@@ -592,7 +592,7 @@ export default function PresentPage() {
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center justify-center gap-3 overflow-x-auto border-t-2 border-black bg-black/50 px-4 py-2">
+      <div className="flex shrink-0 items-center justify-center gap-3 border-t-2 border-black bg-black/50 px-4 py-2">
         <button
           onClick={() => setShowMenu(!showMenu)}
           className="rounded border-2 border-white/30 bg-jeopardy-blue-cell px-2 py-3 text-xs font-bold leading-none tracking-widest text-white"
@@ -724,8 +724,12 @@ function ScoreRow({
   const cardW =
     n <= 6 ? 'w-[110px] md:w-[140px]'
     : n <= 10 ? 'w-[96px] md:w-[116px]'
-    : n <= 16 ? 'w-[80px] md:w-[94px]'
-    : 'w-[70px] md:w-[78px]'
+    : n <= 16 ? 'w-[64px] md:w-[78px]'
+    : n <= 24 ? 'w-[56px] md:w-[62px]'
+    : 'w-[48px] md:w-[52px]'
+  // The gap closes up as the row fills, which is what buys the last two or
+  // three cards their place on screen rather than just off the right edge.
+  const gap = n <= 10 ? 'gap-3' : n <= 16 ? 'gap-1.5' : 'gap-1'
   const nameSize = n <= 10 ? 'text-sm md:text-base' : 'text-[11px] md:text-xs'
   const scoreSize = n <= 6 ? 'text-lg md:text-xl' : n <= 16 ? 'text-base md:text-lg' : 'text-sm'
 
@@ -750,11 +754,19 @@ function ScoreRow({
   )
 
   // One row, scrolled sideways if it has to be — wrapping would make the
-  // footer taller and steal height from the board above it.
-  if (bare) return <>{cards}</>
-  return (
-    <div className="flex shrink-0 items-center justify-center gap-3 overflow-x-auto border-t-2 border-black bg-black/60 px-4 py-2">
+  // footer taller and steal height from the board above it. The cards get
+  // their own scroll box rather than sharing the footer's, so the MENU and
+  // JOIN buttons beside them stay put instead of scrolling away with the
+  // scores.
+  const strip = (
+    <div className={`flex min-w-0 flex-1 items-center justify-center overflow-x-auto ${gap}`}>
       {cards}
+    </div>
+  )
+  if (bare) return strip
+  return (
+    <div className="flex shrink-0 items-center justify-center gap-3 border-t-2 border-black bg-black/60 px-4 py-2">
+      {strip}
     </div>
   )
 }
