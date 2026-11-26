@@ -57,7 +57,7 @@ import {
   isUnlimitedBuzzer,
 } from '@/lib/game-api'
 import { leaveCommunityLobby } from '@/lib/community'
-import { GAME_LENGTH_CONFIG } from '@/types/game'
+import { GAME_LENGTH_CONFIG, finalAnswerMs, finalWagerMs } from '@/types/game'
 import { buzzOpenDelayMs, computeReadingMs } from '@/lib/clue-timing'
 import { formatReaction } from '@/lib/buzz-stats'
 import {
@@ -595,7 +595,7 @@ export default function PlayPage() {
     // reload showed more time than it had, and the round moved on before the
     // wager it was still promising could be submitted.
     const startedAt = Date.parse(game.updated_at ?? '')
-    const totalMs = game.settings?.final_wager_ms ?? 15000
+    const totalMs = finalWagerMs(game.settings)
     const deadline = (isNaN(startedAt) ? Date.now() : startedAt) + totalMs
     const remaining = () => Math.max(0, deadline - Date.now())
 
@@ -633,7 +633,7 @@ export default function PlayPage() {
       finalIntervalRef.current = null
       return
     }
-    const totalMs = game.settings?.final_answer_ms ?? 30000
+    const totalMs = finalAnswerMs(game.settings)
     setFinalCountdown(Math.ceil(totalMs / 1000))
     finalIntervalRef.current = setInterval(() => {
       setFinalCountdown((n) => (n !== null && n > 0 ? n - 1 : 0))

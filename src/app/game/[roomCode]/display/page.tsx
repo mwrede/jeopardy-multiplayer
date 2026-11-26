@@ -32,7 +32,7 @@ import { CLUE_INTRO_MS, buzzOpenDelayMs } from '@/lib/clue-timing'
 import { AnimatedClueReveal } from '@/components/AnimatedClueReveal'
 import { JoinQr } from '@/components/JoinQr'
 import { ClueAttempts } from '@/components/ClueAttempts'
-import type { Player } from '@/types/game'
+import { finalAnswerMs, type Player } from '@/types/game'
 import { playCorrectSound, playWrongSound, playTimeUpSound, playDailyDoubleSound, playBuzzSound, playTickSound, playSelectSound } from '@/lib/sounds'
 
 /**
@@ -384,7 +384,7 @@ export default function DisplayPage() {
       finalAnswerRef.current = null
       return
     }
-    const windowMs = game.settings?.final_answer_ms ?? 30000
+    const windowMs = finalAnswerMs(game.settings)
     const gameId = game.id
     finalAnswerRef.current = setTimeout(() => {
       startFinalReveal(gameId).catch((e) =>

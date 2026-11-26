@@ -94,6 +94,40 @@ export interface GameSettings {
   buzz_collect_ms?: number
 }
 
+/**
+ * FINAL JEOPARDY'S TWO CLOCKS.
+ *
+ * The show gives 30 seconds of think music to write an answer on a card, and
+ * a whole commercial break to settle on a wager. This isn't the show: the
+ * wager has to be read, reasoned about and typed on a phone, and so does the
+ * answer. Both ran on 30 seconds, and both were short.
+ *
+ * Nothing is lost by being generous. Both phases end the moment everyone has
+ * locked in (see useFinalAutoAdvance), so these are ceilings for the slowest
+ * person in the room, not a wait everyone sits through.
+ */
+export const FINAL_WAGER_MS = 60000
+export const FINAL_ANSWER_MS = 60000
+
+/**
+ * The wager clock for a game, never shorter than the current floor.
+ *
+ * `Math.max` rather than a plain fallback because these durations have never
+ * been settable: whatever sits in a game's settings is just the default
+ * frozen at the moment that row was created, so it carries no intent to
+ * honour. Without the floor, raising the number here would only reach games
+ * created afterwards, and every game already in play would keep the old
+ * 30 seconds. A game that somehow asks for longer still gets longer.
+ */
+export function finalWagerMs(settings?: Partial<GameSettings> | null): number {
+  return Math.max(FINAL_WAGER_MS, settings?.final_wager_ms ?? 0)
+}
+
+/** The answer clock for a game, never shorter than the current floor. */
+export function finalAnswerMs(settings?: Partial<GameSettings> | null): number {
+  return Math.max(FINAL_ANSWER_MS, settings?.final_answer_ms ?? 0)
+}
+
 export const GAME_LENGTH_CONFIG: Record<GameLength, {
   categories: number
   cluesPerCat: number
@@ -119,8 +153,8 @@ export const DEFAULT_CASUAL_SETTINGS: GameSettings = {
   answer_time_ms: 20000,
   daily_double_answer_ms: 20000,
   daily_double_wager_ms: 20000,
-  final_answer_ms: 30000,
-  final_wager_ms: 30000,
+  final_answer_ms: FINAL_ANSWER_MS,
+  final_wager_ms: FINAL_WAGER_MS,
   unlimitedBuzzer: false,
   buzz_collect_ms: 1200,
 }
@@ -158,8 +192,8 @@ export const DEFAULT_STRICT_SETTINGS: GameSettings = {
   answer_time_ms: 20000,
   daily_double_answer_ms: 20000,
   daily_double_wager_ms: 20000,
-  final_answer_ms: 30000,
-  final_wager_ms: 30000,
+  final_answer_ms: FINAL_ANSWER_MS,
+  final_wager_ms: FINAL_WAGER_MS,
   unlimitedBuzzer: false,
   buzz_collect_ms: 1200,
 }

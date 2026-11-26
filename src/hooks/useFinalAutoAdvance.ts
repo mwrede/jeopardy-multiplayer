@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { advanceToFinalClue, startFinalReveal } from '@/lib/game-api'
-import type { Game, Player } from '@/types/game'
+import { finalAnswerMs, finalWagerMs, type Game, type Player } from '@/types/game'
 
 /**
  * How long Final Jeopardy waits on a player who isn't there any more.
@@ -89,9 +89,7 @@ export function useFinalAutoAdvance(opts: {
     // noticed it, so every screen targets the same instant and a reload
     // doesn't buy anyone a fresh window.
     const startedAt = Date.parse(game.updated_at ?? '')
-    const windowMs = isWager
-      ? game.settings?.final_wager_ms ?? 30000
-      : game.settings?.final_answer_ms ?? 30000
+    const windowMs = isWager ? finalWagerMs(game.settings) : finalAnswerMs(game.settings)
     const windowDeadline =
       (isNaN(startedAt) ? Date.now() : startedAt) +
       windowMs +

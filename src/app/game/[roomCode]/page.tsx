@@ -47,7 +47,7 @@ import { buzzOpenDelayMs } from '@/lib/clue-timing'
 import { formatReaction } from '@/lib/buzz-stats'
 import { ClueAttempts } from '@/components/ClueAttempts'
 import { playBuzzSound, playCorrectSound, playWrongSound, playTickSound } from '@/lib/sounds'
-import { GAME_LENGTH_CONFIG } from '@/types/game'
+import { GAME_LENGTH_CONFIG, finalAnswerMs, finalWagerMs } from '@/types/game'
 import { ClueText } from '@/components/ClueText'
 
 /**
@@ -191,7 +191,7 @@ export default function PlayerPage() {
       finalIntervalRef.current = null
       return
     }
-    const totalMs = game.settings?.final_answer_ms ?? 30000
+    const totalMs = finalAnswerMs(game.settings)
     setFinalCountdown(Math.ceil(totalMs / 1000))
     finalIntervalRef.current = setInterval(() => {
       setFinalCountdown((n) => (n !== null && n > 0 ? n - 1 : 0))
@@ -642,7 +642,7 @@ export default function PlayerPage() {
       !finalWagerLocked &&
       myPlayer?.final_wager == null,
     anchorAt: game?.updated_at ? Date.parse(game.updated_at) : undefined,
-    totalMs: game?.settings?.final_wager_ms ?? 30000,
+    totalMs: finalWagerMs(game?.settings),
     onExpire: async () => {
       if (!myPlayer) return
       await submitFinalWager(myPlayer.id, clampFinalWager(parseInt(finalWagerInputRef.current), myPlayer.score))
