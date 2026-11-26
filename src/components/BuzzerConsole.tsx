@@ -14,7 +14,6 @@ import {
 } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
 import type { Clue, Player } from '@/types/game'
-import { ClueText } from './ClueText'
 import { JoinQr } from './JoinQr'
 
 /**
@@ -234,11 +233,14 @@ export function BuzzerConsole({
               </p>
             ) : (
               <>
-                <p className="mb-2 truncate text-[10px] uppercase tracking-[0.2em] text-gray-400">
-                  ${currentClue!.value} · answer
-                </p>
-                <p className="mb-3 text-sm font-bold text-jeopardy-gold-light">
-                  <ClueText text={currentClue!.answer} variant="compact" />
+                {/* The clue's value, and deliberately NOT its answer.
+                    The console floats over the board, and the board is the
+                    thing on the projector — so anything printed here is
+                    printed in front of the room. The host reads the correct
+                    response off the clue screen with Reveal, where showing it
+                    is the point. */}
+                <p className="mb-3 truncate text-[10px] uppercase tracking-[0.2em] text-gray-400">
+                  ${currentClue!.value} clue
                 </p>
 
                 <button
