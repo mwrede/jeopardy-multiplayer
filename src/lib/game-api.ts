@@ -813,36 +813,67 @@ async function checkRoundComplete(gameId: string, currentRound: number) {
 
   if ((count ?? 1) > 0) return false
 
-  // All clues answered — advance!
-  if (currentRound === 1) {
-    // Move to round_end, then Double Jeopardy
-    // Find the player with the lowest score to go first in Double Jeopardy
+  /**
+   * All clues answered — so what comes next?
+   *
+   * That is a question about the board, not a constant. Round 1 was assumed
+   * to be followed by round 2, and round 2 by a Final, which holds for a real
+   * episode and need not hold for a custom board. A one-round board sent the
+   * room to a Double Jeopardy board with no categories on it and no way off,
+   * and a two-round board with no Final sent it to a blank Final. Ask the
+   * board instead of assuming.
+   */
+  const { data: nextCats } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('game_id', gameId)
+    .eq('round_number', currentRound + 1)
+    .limit(1)
+
+  const { data: g } = await supabase
+    .from('games')
+    .select('final_clue_text')
+    .eq('id', gameId)
+    .maybeSingle()
+  const hasFinal = !!(g?.final_clue_text || '').trim()
+
+  if (nextCats && nextCats.length > 0) {
+    // Lowest score picks first in the next round.
     const { data: players } = await supabase
       .from('players')
       .select('id, score')
       .eq('game_id', gameId)
       .order('score', { ascending: true })
 
-    const nextPlayer = players?.[0]?.id || null
-
     await supabase
       .from('games')
       .update({
         phase: 'round_end',
-        current_round: 2,
+        current_round: currentRound + 1,
         current_clue_id: null,
-        current_player_id: nextPlayer,
+        current_player_id: players?.[0]?.id || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', gameId)
-  } else if (currentRound === 2) {
-    // Move to Final Jeopardy
+  } else if (hasFinal) {
     await supabase
       .from('games')
       .update({
         status: 'final_jeopardy',
         phase: 'final_category',
         current_round: 3,
+        current_clue_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+  } else {
+    // Last round done and no Final written. Somebody has won; say so, rather
+    // than leaving the room on a spent board.
+    await supabase
+      .from('games')
+      .update({
+        status: 'finished',
+        phase: 'game_over',
         current_clue_id: null,
         updated_at: new Date().toISOString(),
       })

@@ -3,7 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useGameChannel } from '@/hooks/useGameChannel'
 import { ClueText, clueTextLength } from '@/components/ClueText'
-import { clampDailyDoubleWager, maxDailyDoubleWager, topClueValue } from '@/lib/wager'
+import { clampDailyDoubleWager, clampFinalWager, maxDailyDoubleWager, maxFinalWager, topClueValue } from '@/lib/wager'
 import { ScoreToBeat } from '@/components/ScoreToBeat'
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -15,7 +15,7 @@ import {
   type BuzzOrderRow,
 } from '@/lib/game-api'
 import { supabase } from '@/lib/supabase'
-import type { Category, Clue } from '@/types/game'
+import { finalAnswerMs, type Category, type Clue } from '@/types/game'
 import { PresenterControl } from '@/components/PresenterControl'
 import { BuzzerConsole } from '@/components/BuzzerConsole'
 import { hasYouTube } from '@/lib/youtube'
@@ -43,7 +43,17 @@ interface Team {
   score: number
 }
 
-type PresentPhase = 'setup' | 'board' | 'clue' | 'answer' | 'daily_double'
+type PresentPhase =
+  | 'setup'
+  | 'board'
+  | 'clue'
+  | 'answer'
+  | 'daily_double'
+  /** Final Jeopardy, in the order the host says the words. */
+  | 'final_category'
+  | 'final_clue'
+  | 'final_reveal'
+  | 'final_scores'
 type Scoring = 'manual' | 'buzzers'
 
 /**
@@ -113,6 +123,21 @@ export default function PresentPage() {
   const buzzersOpen = game?.phase === 'buzz_window'
   const [justScored, setJustScored] = useState<string | null>(null)
   const [showJoinCode, setShowJoinCode] = useState(false)
+  /**
+   * FINAL JEOPARDY.
+   *
+   * The host types the wagers. A room hosted this way already says its
+   * answers out loud, and collecting fifteen wagers through fifteen phones
+   * would mean building a whole second input flow onto devices that are,
+   * deliberately, nothing but a buzzer. One grid on the host's screen does
+   * the same job and the host can fix a mistyped number in place.
+   *
+   * Keyed the way the roster is keyed: by player id when phones are in play,
+   * by row index when the host is keeping score for the room.
+   */
+  const [finalWagers, setFinalWagers] = useState<Record<string, string>>({})
+  const [finalRuled, setFinalRuled] = useState<Record<string, boolean>>({})
+  const [finalLeft, setFinalLeft] = useState<number | null>(null)
 
   // Hooks above run unconditionally; the control screen owns its own state.
   if (isControl) return <PresenterControl roomCode={roomCode} />
@@ -135,6 +160,19 @@ export default function PresentPage() {
   const roundClues = clues.filter((c) => roundCategories.some((cat) => cat.id === c.category_id))
   const allAnswered = roundClues.length > 0 && roundClues.every((c) => answeredClueIds.has(c.id))
   const hasRound2 = categories.some((c) => c.round_number === 2)
+  /**
+   * Whether this board has a Final, and whether the room is standing at the
+   * end of the last round. Both are asked of the board rather than assumed,
+   * because a custom board is one round or two, with a Final or without.
+   */
+  const hasFinal = !!(game?.final_clue_text || '').trim()
+  const isLastRound = currentRound === 2 || !hasRound2
+  const finalReady = allAnswered && isLastRound && hasFinal
+
+  /** One row per contestant, however the room is being scored. */
+  const finalRoster = usingBuzzers
+    ? contestants.map((pl) => ({ key: pl.id, name: pl.name, score: pl.score ?? 0 }))
+    : teams.map((t, i) => ({ key: String(i), name: t.name, score: t.score }))
 
   // Daily Double caps. In buzzer mode the wager belongs to whoever uncovered
   // the clue; in manual mode the host hasn't said whose it is yet, so the
@@ -201,6 +239,49 @@ export default function PresentPage() {
     }
   }, [game?.phase, usingBuzzers, activeClue, liveClueId])
 
+  /**
+   * The Final's clock. It runs only while the clue is up, and it is allowed
+   * to reach zero and sit there — in a hosted room the clock is a prop for
+   * the think music, not the thing that ends the round. The host ends it.
+   */
+  useEffect(() => {
+    if (phase !== 'final_clue') { setFinalLeft(null); return }
+    setFinalLeft(Math.round(finalAnswerMs(game?.settings) / 1000))
+    const t = setInterval(() => setFinalLeft((n) => (n === null ? null : Math.max(0, n - 1))), 1000)
+    return () => clearInterval(t)
+  }, [phase, game?.settings?.final_answer_ms])
+
+  /** A contestant's typed wager, forced into the legal range. */
+  function finalWagerOf(key: string, score: number) {
+    return clampFinalWager(parseInt(finalWagers[key] ?? '', 10), score)
+  }
+
+  /**
+   * Rule on one contestant's Final. This moves their score by their wager and
+   * then locks the row: the mistake a host can't see coming is a second tap
+   * on the same person, which would charge them twice. The +/- buttons under
+   * the scores are still live for a real correction.
+   */
+  function ruleFinal(key: string, correct: boolean) {
+    const row = finalRoster.find((r) => r.key === key)
+    if (!row || finalRuled[key]) return
+    const wager = finalWagerOf(key, row.score)
+    const delta = correct ? wager : -wager
+    if (usingBuzzers) hostAdjustScore(key, delta).catch(() => {})
+    else setTeams((prev) => prev.map((t, i) => (String(i) === key ? { ...t, score: t.score + delta } : t)))
+    setFinalRuled((prev) => ({ ...prev, [key]: true }))
+  }
+
+  /** Open the Final, clearing any rulings left over from an earlier run. */
+  function startFinal() {
+    setActiveClue(null)
+    setActiveCategory(null)
+    setBuzzOrder([])
+    setFinalRuled({})
+    setShowMenu(false)
+    setPhase('final_category')
+  }
+
   function handleCellClick(clue: Clue) {
     if (answeredClueIds.has(clue.id)) return
     const cat = categories.find((c) => c.id === clue.category_id)
@@ -258,12 +339,26 @@ export default function PresentPage() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (phase === 'setup') return
+      /**
+       * Hands off the keys while the host is typing. A wager box or a score
+       * box takes the spacebar and the return key as text, and this handler
+       * was reading them as "reveal the answer" — so editing a score mid-clue
+       * could put the correct response on the room's screen.
+       */
+      const el = document.activeElement
+      const typing =
+        !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as HTMLElement).isContentEditable)
+      if (typing && e.key !== 'Escape') return
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         if (phase === 'clue') {
           if (usingBuzzers && !buzzersOpen) openBuzzers()
           else setPhase('answer')
         } else if (phase === 'answer') backToBoard()
+        // One key walks the Final forward, same as it walks a clue forward.
+        else if (phase === 'final_category') setPhase('final_clue')
+        else if (phase === 'final_clue') setPhase('final_reveal')
+        else if (phase === 'final_reveal') setPhase('final_scores')
       }
       if (e.key === 'Escape' && phase !== 'board') backToBoard()
       const num = parseInt(e.key)
@@ -537,6 +632,206 @@ export default function PresentPage() {
     )
   }
 
+  /* ── FINAL JEOPARDY ─────────────────────────────────────────
+     Four screens in the order the host says the words: the category, while
+     the room writes down wagers; the clue, with the clock; the correct
+     response, with a verdict per contestant; and the standings. */
+  if (
+    phase === 'final_category' ||
+    phase === 'final_clue' ||
+    phase === 'final_reveal' ||
+    phase === 'final_scores'
+  ) {
+    const categoryName = game?.final_category_name || 'Final Jeopardy'
+    const clueText = game?.final_clue_text || ''
+    const answerText = game?.final_answer || ''
+
+    const next =
+      phase === 'final_category' ? { label: 'Show the Clue', go: () => setPhase('final_clue') }
+      : phase === 'final_clue' ? { label: 'Reveal Correct Response', go: () => setPhase('final_reveal') }
+      : phase === 'final_reveal' ? { label: 'Final Scores', go: () => setPhase('final_scores') }
+      : null
+
+    const back =
+      phase === 'final_clue' ? { label: 'Wagers', go: () => setPhase('final_category') }
+      : phase === 'final_reveal' ? { label: 'Clue', go: () => setPhase('final_clue') }
+      : phase === 'final_scores' ? { label: 'Response', go: () => setPhase('final_reveal') }
+      : { label: 'Board', go: backToBoard }
+
+    const ranked = [...finalRoster].sort((a, b) => b.score - a.score)
+    const topScore = ranked[0]?.score ?? 0
+
+    return (
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-jeopardy-blue-cell">
+        <div className="flex shrink-0 items-center justify-between gap-4 bg-jeopardy-dark px-4 py-2.5 text-white">
+          <button onClick={back.go} className="flex items-center gap-2 text-sm hover:opacity-80">
+            ← {back.label}
+          </button>
+          <span className="truncate text-sm font-bold uppercase tracking-[0.18em] text-jeopardy-gold-light">
+            Final Jeopardy!
+          </span>
+          {next ? (
+            <button
+              onClick={next.go}
+              className="flex items-center gap-2 text-sm font-bold text-jeopardy-gold-light hover:text-white"
+            >
+              {next.label} <Kbd>Spacebar</Kbd>
+            </button>
+          ) : (
+            <button onClick={backToBoard} className="text-sm hover:opacity-80">
+              Back to board
+            </button>
+          )}
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-8 py-6 text-center">
+          {phase === 'final_category' && (
+            <>
+              <p className="text-xs uppercase tracking-[0.35em] text-blue-200/70">The category is</p>
+              <p className="clue-type mt-4 max-w-5xl text-4xl font-bold uppercase text-white md:text-6xl xl:text-7xl">
+                {categoryName}
+              </p>
+              {finalRoster.length > 0 && (
+                <div className="mt-10 w-full max-w-5xl">
+                  <p className="mb-3 text-[11px] uppercase tracking-[0.28em] text-blue-200/60">
+                    Wagers · type what each one bets
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {finalRoster.map((r) => (
+                      <div key={r.key} className="w-[136px] rounded-lg bg-black/30 p-2 text-left">
+                        <p className="truncate text-xs font-bold text-white">{r.name}</p>
+                        <p className="mb-1.5 text-[10px] tabular-nums text-blue-200/70">
+                          ${r.score.toLocaleString()} · max ${maxFinalWager(r.score).toLocaleString()}
+                        </p>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={finalWagers[r.key] ?? ''}
+                          onChange={(e) =>
+                            setFinalWagers((prev) => ({ ...prev, [r.key]: e.target.value }))
+                          }
+                          placeholder="0"
+                          className="input-base w-full py-1 text-center text-base tabular-nums"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-[11px] text-blue-200/50">
+                    Left blank is a wager of nothing — the clue can&apos;t move their score.
+                    Over the cap is pulled down to it.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {phase === 'final_clue' && (
+            <>
+              <p className="text-xs uppercase tracking-[0.35em] text-blue-200/70">{categoryName}</p>
+              <p className={`clue-type mt-6 max-w-7xl text-white ${clueSizeClass(clueText)}`}>
+                <ClueText text={clueText} variant="tv" />
+              </p>
+              {finalLeft !== null && (
+                <p
+                  className={`mt-10 text-5xl font-bold tabular-nums ${
+                    finalLeft <= 5 ? 'animate-pulse text-red-400' : 'text-jeopardy-gold-light'
+                  }`}
+                >
+                  {finalLeft}
+                </p>
+              )}
+            </>
+          )}
+
+          {phase === 'final_reveal' && (
+            <>
+              <p className="max-w-4xl text-base text-blue-100/80 md:text-xl">
+                <ClueText text={clueText} variant="default" />
+              </p>
+              <p className="clue-type mt-6 max-w-6xl text-3xl font-bold text-jeopardy-gold-light md:text-5xl xl:text-6xl">
+                <ClueText text={answerText} variant="tv" />
+              </p>
+              {finalRoster.length > 0 && (
+                <div className="mt-8 flex w-full max-w-5xl flex-wrap justify-center gap-2">
+                  {finalRoster.map((r) => {
+                    const wager = finalWagerOf(r.key, r.score)
+                    const done = !!finalRuled[r.key]
+                    return (
+                      <div
+                        key={r.key}
+                        className={`w-[146px] rounded-lg p-2 text-left ${done ? 'bg-black/20 opacity-50' : 'bg-black/40'}`}
+                      >
+                        <p className="truncate text-xs font-bold text-white">{r.name}</p>
+                        <p className="mb-1.5 text-[10px] tabular-nums text-blue-200/70">
+                          bet ${wager.toLocaleString()}
+                        </p>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => ruleFinal(r.key, true)}
+                            disabled={done}
+                            className="flex-1 rounded bg-green-600 py-1 text-xs font-bold text-white hover:bg-green-500 disabled:opacity-40"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => ruleFinal(r.key, false)}
+                            disabled={done}
+                            className="flex-1 rounded bg-red-600 py-1 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-40"
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {phase === 'final_scores' && (
+            <div className="w-full max-w-2xl">
+              <p className="text-xs uppercase tracking-[0.35em] text-blue-200/70">Final scores</p>
+              <div className="mt-6 space-y-2">
+                {ranked.map((r, i) => (
+                  <div
+                    key={r.key}
+                    className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left ${
+                      r.score === topScore && topScore > 0
+                        ? 'bg-jeopardy-gold text-black'
+                        : 'bg-black/35 text-white'
+                    }`}
+                  >
+                    <span className="w-6 text-sm font-bold tabular-nums opacity-70">{i + 1}</span>
+                    <span className="flex-1 truncate text-lg font-bold">{r.name}</span>
+                    <span className="text-xl font-bold tabular-nums">
+                      {r.score < 0 ? '-' : ''}${Math.abs(r.score).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* The scores stay reachable through the whole Final: the wager grid
+            collects the bets but the host still gets the last word. */}
+        {phase !== 'final_scores' && (
+          <ScoreRow
+            usingBuzzers={usingBuzzers}
+            players={contestants}
+            teams={teams}
+            step={100}
+            onManual={(i, d) =>
+              setTeams((prev) => prev.map((t, j) => (j === i ? { ...t, score: t.score + d } : t)))
+            }
+            onPlayer={(id, d) => hostAdjustScore(id, d).catch(() => {})}
+          />
+        )}
+      </div>
+    )
+  }
+
   /* ── BOARD ────────────────────────────────────────────────────────────── */
   const cols = roundCategories.length || 1
   const rows = Math.max(...roundCategories.map((cat) => getCluesForCategory(cat.id).length), 1)
@@ -624,6 +919,14 @@ export default function PresentPage() {
             Double Jeopardy! →
           </button>
         )}
+        {/* The last round is spent and this board has a Final written. Without
+            this button the host was left on a board of dead cells with nowhere
+            to go, which is what "the Final doesn't play" was. */}
+        {finalReady && (
+          <button onClick={startFinal} className="btn-primary ml-2 px-4 py-2 text-sm">
+            Final Jeopardy! →
+          </button>
+        )}
         {/* Only renders on a board taken from a real episode. The host's own
             round tracker drives it, not games.current_round, since a hosted
             game moves rounds on this screen. */}
@@ -664,9 +967,17 @@ export default function PresentPage() {
                 Show join code
               </button>
             )}
+            {/* A room that has run out of time should be able to jump
+                straight to the Final rather than clear the board first. */}
+            {hasFinal && (
+              <button onClick={startFinal} className="btn-secondary w-full py-2 text-sm">
+                Go to Final Jeopardy
+              </button>
+            )}
             <button
               onClick={() => {
                 setAnsweredClueIds(new Set()); setCurrentRound(1)
+                setFinalWagers({}); setFinalRuled({})
                 setTeams((prev) => prev.map((t) => ({ ...t, score: 0 })))
                 setShowMenu(false)
               }}
