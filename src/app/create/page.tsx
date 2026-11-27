@@ -159,9 +159,9 @@ function CreateBoardContent() {
   function applyCsvImport(res: CsvImportResult) {
     pushHistory()
     applyCustomBoardToState(res.title, res.board, board.isPublic)
-    // A Final with only one round would be lost on save: the editor only
-    // writes a Final when the board is in full-game mode.
-    if (res.board.rounds.length > 1 || res.board.finalJeopardy) {
+    // A second round in the CSV means the board needs its round 2 tab. A
+    // Final doesn't — those save either way now.
+    if (res.board.rounds.length > 1) {
       setBoard((b) => ({ ...b, isFullGame: true }))
     }
     // The Final tab may not exist on what just arrived.
@@ -518,13 +518,22 @@ function CreateBoardContent() {
         }),
       }))
       customBoard.rounds.push({ categories: round2Categories })
+    }
 
-      if (board.fj_question.trim()) {
-        customBoard.finalJeopardy = {
-          categoryName: board.fj_category || 'Final Jeopardy',
-          question: board.fj_question,
-          answer: board.fj_answer,
-        }
+    /**
+     * A Final is its own thing, not a feature of a two-round game.
+     *
+     * This block used to sit INSIDE the full-game branch, so a one-round
+     * board dropped the Final its author had written — on save, silently, with
+     * the editor still showing it. Everything downstream was then correct
+     * about a board that had no Final in it, which is why the Final "didn't
+     * play".
+     */
+    if (board.fj_question.trim()) {
+      customBoard.finalJeopardy = {
+        categoryName: board.fj_category || 'Final Jeopardy',
+        question: board.fj_question,
+        answer: board.fj_answer,
       }
     }
 
@@ -708,9 +717,15 @@ function CreateBoardContent() {
         <div className="w-px h-6 bg-white/20 mx-1" />
         <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
           <input type="checkbox" checked={board.isFullGame}
-            onChange={(e) => { pushHistory(); setBoard((b) => ({ ...b, isFullGame: e.target.checked })) }}
+            onChange={(e) => {
+              pushHistory()
+              setBoard((b) => ({ ...b, isFullGame: e.target.checked }))
+              // Turning it off while editing round 2 used to leave the editor
+              // showing a round with no tab to leave it by.
+              if (!e.target.checked) setActiveRound((r) => (r === 2 ? 1 : r))
+            }}
             className="accent-jeopardy-gold" />
-          Full Game (J! + DJ! + FJ!)
+          Double Jeopardy round
         </label>
         <div className="flex-1" />
         {autoSavedAt && (
@@ -726,23 +741,26 @@ function CreateBoardContent() {
 
       {error && <p className="text-red-400 text-center text-sm py-2">{error}</p>}
 
-      {/* Round tabs (only if full game) */}
-      {board.isFullGame && (
-        <div className="flex gap-1 px-4 pt-3">
-          <button onClick={() => setActiveRound(1)}
-            className={`px-4 py-1.5 rounded-t-lg text-sm font-bold transition-colors ${
-              activeRound === 1 ? 'bg-jeopardy-blue-cell text-white' : 'bg-white/5 text-gray-500 hover:text-white'
-            }`}>Jeopardy!</button>
+      {/* Round tabs. Always here, because the Final is always available —
+          only the Double Jeopardy tab waits on the checkbox. */}
+      <div className="flex gap-1 px-4 pt-3">
+        <button onClick={() => setActiveRound(1)}
+          className={`px-4 py-1.5 rounded-t-lg text-sm font-bold transition-colors ${
+            activeRound === 1 ? 'bg-jeopardy-blue-cell text-white' : 'bg-white/5 text-gray-500 hover:text-white'
+          }`}>Jeopardy!</button>
+        {board.isFullGame && (
           <button onClick={() => setActiveRound(2)}
             className={`px-4 py-1.5 rounded-t-lg text-sm font-bold transition-colors ${
               activeRound === 2 ? 'bg-jeopardy-blue-cell text-white' : 'bg-white/5 text-gray-500 hover:text-white'
             }`}>Double Jeopardy!</button>
-          <button onClick={() => setActiveRound('fj')}
-            className={`px-4 py-1.5 rounded-t-lg text-sm font-bold transition-colors ${
-              activeRound === 'fj' ? 'bg-jeopardy-blue-cell text-white' : 'bg-white/5 text-gray-500 hover:text-white'
-            }`}>Final Jeopardy</button>
-        </div>
-      )}
+        )}
+        <button onClick={() => setActiveRound('fj')}
+          className={`px-4 py-1.5 rounded-t-lg text-sm font-bold transition-colors ${
+            activeRound === 'fj' ? 'bg-jeopardy-blue-cell text-white' : 'bg-white/5 text-gray-500 hover:text-white'
+          }`}>
+          Final Jeopardy{board.fj_question.trim() ? '' : ' +'}
+        </button>
+      </div>
 
       {/* Title */}
       <div className="text-center py-4">
