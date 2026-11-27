@@ -1024,16 +1024,23 @@ export default function PlayerPage() {
             )}
           </div>
 
-          {/* Correct answer — always shown on the result screen */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-500 text-sm mb-1">
-              Correct answer:
-              {currentClue.source_year ? (
-                <span className="ml-1.5 text-blue-300/70">({currentClue.source_year})</span>
-              ) : null}
-            </p>
-            <p className="text-white text-lg font-bold"><ClueText text={currentClue.answer} variant="compact" /></p>
-          </div>
+          {/* THE CORRECT ANSWER — except in a hosted game.
+              There the host owns what the room sees and when: they rule by
+              ear and put the correct response on the board screen with
+              Reveal. Printing it on every phone the instant a clue resolves
+              takes that away, and hands the next clue's answer to anyone
+              still looking down. The host's own screens are where it shows. */}
+          {!isHostRun && (
+            <div className="mt-6 text-center">
+              <p className="text-gray-500 text-sm mb-1">
+                Correct answer:
+                {currentClue.source_year ? (
+                  <span className="ml-1.5 text-blue-300/70">({currentClue.source_year})</span>
+                ) : null}
+              </p>
+              <p className="text-white text-lg font-bold"><ClueText text={currentClue.answer} variant="compact" /></p>
+            </div>
+          )}
 
           {/* Every answer given: who said what, and what it cost them */}
           <ClueAttempts
