@@ -100,7 +100,9 @@ export function GameBoard({
             {values.map((value) =>
               roundCategories.map((cat) => {
                 const clue = getClue(cat.id, value)
-                const isAnswered = clue?.is_answered ?? false
+                // An empty cell on a custom board counts as already spent —
+                // there is nothing written in it to play.
+                const isAnswered = (clue?.is_answered ?? false) || !(clue?.question || '').trim()
                 const wasCorrect = clue?.answered_correct === true
                 const wasWrong = clue?.answered_correct === false
                 const answeredByPlayer =

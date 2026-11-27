@@ -804,12 +804,15 @@ async function checkRoundComplete(gameId: string, currentRound: number) {
 
   const catIds = roundCats.map((c) => c.id)
 
-  // Count unanswered clues
+  // Count unanswered clues. Blank cells don't count: a custom board is
+  // saved as a full grid whether or not its author filled every square, and
+  // waiting on squares with nothing written in them means waiting forever.
   const { count } = await supabase
     .from('clues')
     .select('*', { count: 'exact', head: true })
     .in('category_id', catIds)
     .eq('is_answered', false)
+    .neq('question', '')
 
   if ((count ?? 1) > 0) return false
 

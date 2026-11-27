@@ -1105,7 +1105,7 @@ export default function PlayerPage() {
           {values.map((value) =>
             roundCats.map((cat) => {
               const clue = clues.find((c) => c.category_id === cat.id && c.value === value)
-              const answered = clue?.is_answered ?? false
+              const answered = (clue?.is_answered ?? false) || !(clue?.question || '').trim()
               const wasCorrect = clue?.answered_correct === true
               const answeredByPlayer =
                 answered && clue?.answered_by

@@ -158,7 +158,18 @@ export default function PresentPage() {
     .filter((c) => c.round_number === currentRound)
     .sort((a, b) => a.position - b.position)
   const roundClues = clues.filter((c) => roundCategories.some((cat) => cat.id === c.category_id))
-  const allAnswered = roundClues.length > 0 && roundClues.every((c) => answeredClueIds.has(c.id))
+  /**
+   * A cell nobody wrote a clue into is not an unplayed clue.
+   *
+   * The editor saves every cell of its grid, blanks included, so a board with
+   * six real clues on it arrives as thirty rows — and a board is mostly
+   * blanks until its author fills it. Counting them meant the round was never
+   * finished, so the Final button never appeared, and clicking one put an
+   * empty clue on the room's screen.
+   */
+  const playable = (c: Clue) => !!(c.question || '').trim()
+  const livingClues = roundClues.filter(playable)
+  const allAnswered = livingClues.length > 0 && livingClues.every((c) => answeredClueIds.has(c.id))
   const hasRound2 = categories.some((c) => c.round_number === 2)
   /**
    * Whether this board has a Final, and whether the room is standing at the
@@ -862,7 +873,9 @@ export default function PresentPage() {
               Array.from({ length: rows }).map((_, rowIdx) =>
                 roundCategories.map((cat) => {
                   const clue = getCluesForCategory(cat.id)[rowIdx]
-                  if (!clue) return <div key={`e-${cat.id}-${rowIdx}`} className="board-cell board-cell-answered" />
+                  // A blank cell reads as a spent one: dead, and not clickable.
+                  if (!clue || !playable(clue))
+                    return <div key={`e-${cat.id}-${rowIdx}`} className="board-cell board-cell-answered" />
                   const answered = answeredClueIds.has(clue.id)
                   return (
                     <button
